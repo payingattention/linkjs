@@ -50,8 +50,8 @@ there are a number of specific goals which Link should seek to fulfill:
 
 ## Project Design
 
-Link provides two fundamental systems: the proxying file-system web service and a shell HTML application
-which creates a (sandboxed) execution environment for 3rd-party javascripts.
+Link provides two fundamental systems: the file-system proxy and a shell HTML application
+which builds a (sandboxed) execution environment for 3rd-party javascripts.
 
 ### ProxyFS
 
@@ -65,6 +65,37 @@ which creates a (sandboxed) execution environment for 3rd-party javascripts.
 
 ### Browser Env
 
-[Sandboxing with google caja]
+**Sandboxing.** Javascripts should be made safe to execute from a remote server without any system
+configuration. This could present several security issues (such as tracking or data-theft) so scripts
+will require locks on access to remote resources and other scripts in execution. [Google Caja](http://code.google.com/p/google-caja/)
+is a strong candidate for accomplishing this.
 
-[Proposals for data structures/flows & command execution]
+Resources are only acceptable through the file system, which manages any credentials the endpoint
+requires without involving the executed Javascript. Conventions should be determined for common paths.
+
+**Multi-tasking.** A single tab represents a single contained instance of the execution environment.
+This provides some separation between multiple workspaces, and can allow changes to the environment
+which are temporary and isolated to the tab. This might be used to follow Plan9's contained changes to
+the namespace, so long as its usefulness is greater than its complexity. If not, Link can still
+separate areas of memory or state.
+
+It should be possible for scripts to execute script sub-processes which, after any computation, either
+die or register callbacks and sleep. All scripts can then communicate through an event system. Rather than
+manage those scripts through the browser environment, it should be possible for users to run window-manager
+apps which provide multi-tasking through the sub-process tools.
+
+**Data Flow.** The events model is a natural choice for cross-script communication, though there
+are issues of precedence which may need adressing. If an event goes unhandled, Link can fall back to executing
+scripts located in conventional areas of the file-system. This should make it possible for tools to automatically
+trigger when needed, rather than waiting for the user to explicitly open them.
+
+Data piping is a large facet of computing, and there may be an opportunity to experiment with callbacks
+or the event system to see if there is any advantage over stdin/out/err. Doing so could create
+a greater variety of channels for data to flow through, but that may not be a good thing.
+
+Using JSON as the core data-type could provide useful meta-data. For instance, a JSON object might list links to
+commands which the UI can present to the user. Alternatively, rules about the structure of the object could
+determine default behavior, similar to Plan9's plumber.
+
+Another use for metadata might be to track links to previous object states. This might be used to make versioning
+core to the environment with a minimal burden to the tools.
