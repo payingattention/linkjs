@@ -50,6 +50,8 @@ there are a number of specific goals which Link should seek to fulfill:
 
 ## Project Design
 
+*The following is in development and contains proposals which may change in the future.*
+
 Link provides two fundamental systems: the file-system proxy and a shell HTML application
 which builds a (sandboxed) execution environment for 3rd-party javascripts.
 
@@ -70,24 +72,33 @@ configuration. This could present several security issues (such as tracking or d
 will require locks on access to remote resources and other scripts in execution. [Google Caja](http://code.google.com/p/google-caja/)
 is a strong candidate for accomplishing this.
 
-Resources are only acceptable through the file system, which manages any credentials the endpoint
-requires without involving the executed Javascript. Conventions should be determined for common paths.
+Resources are only available through the file system, which manages any credentials the endpoint
+requires without involving the executed Javascript. (For instance, access to an email REST service may
+require authentication, which the proxy & environment should handle without involving the requesting
+application.) If necessary, the environment can confirm requests to the filesystem with the user
+before executing them, caching the user's decision.
 
-**Multi-tasking.** A single tab represents a single contained instance of the execution environment.
-This provides some separation between multiple workspaces, and can allow changes to the environment
-which are temporary and isolated to the tab. This might be used to follow Plan9's contained changes to
-the namespace, so long as its usefulness is greater than its complexity. If not, Link can still
-separate areas of memory or state.
+**Multi-tasking.** A single tab represents one isolated instance of the execution environment.
+This can provide multiple workspaces which allow temporary, contained changes to the environment.
+Workspaces might be used to follow Plan9's per-process namespace paradigm (if its useful) or simply
+to separate memory & state.
 
 It should be possible for scripts to execute script sub-processes which, after any computation, either
-die or register callbacks and sleep. All scripts can then communicate through an event system. Rather than
-manage those scripts through the browser environment, it should be possible for users to run window-manager
-apps which provide multi-tasking through the sub-process tools.
+die or register callbacks and sleep. All scripts would then communicate through an event system which is
+core to the browser environment.
+
+Rather than manage windows with the env, it should be possible for users to run window-manager
+apps which then utilize the sub-process tools. The default, unmanaged behavior would be for invoked scripts
+take ownership of the environment and to push a new state to the browser history. The parent script may choose
+to end and replace itself with the child script, or it may sleep and remain in the process stack. The user can
+press the back button to move up the process stack; likewise, a finished script might execute the back action to
+return to the parent. Whether the forward button should bring scripts back onto the stack will require some
+exploration.
 
 **Data Flow.** The events model is a natural choice for cross-script communication, though there
 are issues of precedence which may need adressing. If an event goes unhandled, Link can fall back to executing
 scripts located in conventional areas of the file-system. This should make it possible for tools to automatically
-trigger when needed, rather than waiting for the user to explicitly open them.
+trigger when needed without remaining in memory.
 
 Data piping is a large facet of computing, and there may be an opportunity to experiment with callbacks
 or the event system to see if there is any advantage over stdin/out/err. Doing so could create
@@ -98,4 +109,4 @@ commands which the UI can present to the user. Alternatively, rules about the st
 determine default behavior, similar to Plan9's plumber.
 
 Another use for metadata might be to track links to previous object states. This might be used to make versioning
-core to the environment with a minimal burden to the tools.
+(undo/redo) core to the environment with a minimal burden to the tools.
