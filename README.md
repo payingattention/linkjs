@@ -9,6 +9,43 @@ over their data and a lower barrier to deploying new applications.
 
 *Link is only a proof of concept at this time, and is not ready for use.*
 
+## Running the Demo
+
+This is currently 66% painless.
+
+First run ```npm install -d``` to install dependencies. Next, open /node_modules/restify/lib/request.js
+and remove lines 28 & 29 (to keep trailing slashes on request URLs) like so:
+
+```javascript
+function sanitizePath(path) {
+  assert.ok(path);
+
+  // Be nice like apache and strip out any //my//foo//bar///blah
+  path = path.replace(/\/\/+/g, '/');
+
+  // DONT Kill a trailing '/' - Link uses it to differentiate between collections and elements
+  /*if (path.lastIndexOf('/') === (path.length - 1) && path.length > 1)
+    path = path.substr(0, path.length - 1);*/
+
+  return path;
+}
+```
+
+(A pull request is forthcoming)
+
+Finally, run ```sudo npm start``` (sudo to get access to port 80, or edit conf.json to use another port).
+You can now navigate to localhost and browse your simple filesystem.
+
+To execute commands, open your browser console and try the following commands:
+
+```javascript
+env.exec("helloworld")
+env.exec("forecast", "/services/weatherbug/daily-forecast")
+env.exec("forecast", "/services/weatherbug/daily-forecast", 10001) // 10001 = any zipcode you like
+```
+
+In each case, the aliased javascript will be downloaded and executed.
+
 ## Basic Theory
 
 From the [Plan9 overview paper](http://plan9.bell-labs.com/sys/doc/9.html):
