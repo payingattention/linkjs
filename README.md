@@ -1,7 +1,7 @@
 Link
 ====
 
-Link is an experimental browser-based computing environment for running client-side JS apps on a
+Link is an experimental browser environment for running client-side JS apps on a
 "filesystem" comprised of web services. It builds from some of the principles of Plan9
 ([the operating system from Bell Labs](http://plan9.bell-labs.com/plan9/)) with the
 goal of separating apps from the online services they consume. This should give users more control
@@ -71,17 +71,26 @@ complete single tasks and provide the services as read-and-writable "files" in a
 
 ## Project Goals
 
-Link was originally conceived to support web apps which only have to do one thing well. It follows that
-all of [Eric Raymond's Rules of Design](http://en.wikipedia.org/wiki/Unix_philosophy) apply as well, but
-there are a number of specific goals which Link should seek to fulfill:
+Link is an environment for running multiple small, reusable javascripts in concert with a set of RESTful
+api services. Depending on how the environment is configured, it can be used to create a personal computing
+environment (a "web operating system") or a single application (the env as a framework).
 
-*This list is only a proposal, and will need refining as the needs are better understood.*
+The primary goals are to:
 
- 1. It should provide tools for manipulating the content and flow of data.
- 2. It should seek to enable lossless computing, sacrificing efficiency for availability & recoverability.
- 3. It should leverage existing practices, protocols, and technologies whenever possible.
- 4. It should offer what is missing and nothing more.
- 4. It should prefer the mouse to the keyboard, and a click to a drag.
+ 1. Transport data between services & scripts without exposing origin or destination.
+ 2. Build a browser script-execution environment which unifies resource-access by convention.
+
+For developers, this should allow a cleaner separation of concerns, which, in turn, leads to easier
+reuse. For instance, rather than build a traditional e-commerce site, a vendor should be able to configure
+a Link environment to use a storefront app, a cart app, and a payment processing app in cooperation with
+inventory and payment services; so long as the data structures are compatible between the components, the
+environment should cooperate. To add features, the vendor should only have to "install" (aka configure)
+new apps, then add links which execute them (such as "/bin/ratings/view/shoe439").
+
+When using Link as a PC env, this should offer finer control over data. Link behaves as a middle-man on
+behalf of the user, asking where data should go, then conducting the transaction without exposing the two
+ends to each other. This should, for instance, allow users to give an app their social graph without giving
+access to their wall.
 
 ## Project Design
 
@@ -102,7 +111,7 @@ which builds a (sandboxed) execution environment for 3rd-party javascripts.
 
 ### Browser Env
 
-**Sandboxing.** Javascripts should be made safe to execute from a remote server without any mandatory
+**Sandboxing.** Javascripts should be made safe to execute from a remote server with minimal
 configuration. This could present several security issues (such as tracking or data-theft) so scripts
 will require locks on access to remote resources and other scripts in execution. [Google Caja](http://code.google.com/p/google-caja/)
 is a strong candidate for accomplishing this.
