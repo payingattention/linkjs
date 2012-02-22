@@ -79,11 +79,11 @@ there are a number of specific goals which Link should seek to fulfill:
 
 *This list is only a proposal, and will need refining as the needs are better understood.*
 
- 1. It should provide robust tools for manipulating the content and flow of data. (**No Barriers**)
- 2. It should seek to enable lossless computing, sacrificing efficiency for availability & recoverability. (**No Fear**)
- 3. It should leverage existing practices, protocols, and technologies whenever possible. (**No Surprises**)
- 4. It should offer only what is needed and nothing more. (**No Reinvention**)
- 4. It should prefer the mouse to the keyboard. (**No Carpal Tunnel**)
+ 1. It should provide tools for manipulating the content and flow of data.
+ 2. It should seek to enable lossless computing, sacrificing efficiency for availability & recoverability.
+ 3. It should leverage existing practices, protocols, and technologies whenever possible.
+ 4. It should offer what is missing and nothing more.
+ 4. It should prefer the mouse to the keyboard, and a click to a drag.
 
 ## Project Design
 
@@ -104,7 +104,7 @@ which builds a (sandboxed) execution environment for 3rd-party javascripts.
 
 ### Browser Env
 
-**Sandboxing.** Javascripts should be made safe to execute from a remote server without any system
+**Sandboxing.** Javascripts should be made safe to execute from a remote server without any mandatory
 configuration. This could present several security issues (such as tracking or data-theft) so scripts
 will require locks on access to remote resources and other scripts in execution. [Google Caja](http://code.google.com/p/google-caja/)
 is a strong candidate for accomplishing this.
@@ -116,34 +116,27 @@ application.) If necessary, the environment can confirm requests to the filesyst
 before executing them, caching the user's decision.
 
 **Multi-tasking.** A single tab represents one isolated instance of the execution environment.
-This can provide multiple workspaces which allow temporary, contained changes to the environment.
-Workspaces might be used to follow Plan9's per-process namespace paradigm (if its useful) or simply
-to separate memory & state.
-
-It should be possible for scripts to execute script sub-processes which, after any computation, either
-die or register callbacks and sleep. All scripts would then communicate through an event system which is
-core to the browser environment.
+This can provide multiple workspaces which allow temporary, contained changes to the environment, as well
+as different process-stacks.
 
 Rather than manage windows with the env, it should be possible for users to run window-manager
-apps which then utilize the sub-process tools. The default, unmanaged behavior would be for invoked scripts
-take ownership of the environment and to push a new state to the browser history. The parent script may choose
+apps which then utilize the sub-process tools. The default, unmanaged behavior would give invoked scripts
+ownership of the environment and to push a new state to the browser history. The parent script may choose
 to end and replace itself with the child script, or it may sleep and remain in the process stack. The user can
-press the back button to move up the process stack; likewise, a finished script might execute the back action to
+press the back button to move up the process stack; likewise, a finished script might trigger the back action to
 return to the parent. Whether the forward button should bring scripts back onto the stack will require some
-exploration.
+consideration.
 
-**Data Flow.** The events model is a natural choice for cross-script communication, though there
-are issues of precedence which may need adressing. If an event goes unhandled, Link can fall back to executing
-scripts located in conventional areas of the file-system. This should make it possible for tools to automatically
-trigger when needed without remaining in memory.
+**Communication.** All processes communicate using the file-system and HTTP methods, whether interacting
+with a resource or with another process. Pattern-matching may be used to allow multiple request targets; for
+instance, ```GET /proc/*/name``` to retrieve the names of active processes (assuming /proc/ is dynamically
+populated with running scripts). Scripts can then files to callbacks which  handle the request (eg
+```/proc/15/text/insert```). Paths can be passed between processes (as links) if discovery is needed.
 
-Data piping is a large facet of computing, and there may be an opportunity to experiment with callbacks
-or the event system to see if there is any advantage over stdin/out/err. Doing so could create
-a greater variety of channels for data to flow through, but that may not be a good thing.
-
-Using JSON as the core data-type could provide useful meta-data. For instance, a JSON object might list links to
-commands which the UI can present to the user. Alternatively, rules about the structure of the object could
-determine default behavior, similar to Plan9's plumber.
-
-Another use for metadata might be to track links to previous object states. This might be used to make versioning
-(undo/redo) core to the environment with a minimal burden to the tools.
+This, of course, requires the browser env to populate the file-system with a number of virtual names. Alterations
+to the fs should be possible on a per-process basis, to limit scripts to the resources required for execution.
+Permissions are enforced by object capabilities, so, if a resource is visible in the namespace, it's authorized
+for use. (This is called "authorization by designation," as [discussed by Mark Miller in this talk on Secure
+Distributed Programming with OCaps](http://www.youtube.com/watch?v=w9hHHvhZ_HY&feature=related To grant access
+to a non-standard resource, an alias could be written to the script's private folder, with the option to make
+the alias remain for latter executions.
