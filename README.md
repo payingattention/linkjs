@@ -1,112 +1,77 @@
-Link
-====
+I wanted:
+ - 1) A simple way to build web apps which don't care WHERE the data comes from or goes...
+      ...so long as it comes and goes
+ - 1) Total user control over where my data comes from or goes
+ - 1) Total user control over which tools & interfaces I use for my services
 
-Link is an experimental browser-based computing environment for running client-side JS apps on a
-"filesystem" comprised of web services. It builds from some of the principles of Plan9
-([the operating system from Bell Labs](http://plan9.bell-labs.com/plan9/)) with the
-goal of separating apps from the online services they consume. This should give users more control
-over their data and a lower barrier to deploying new applications.
+Turns out, it might not be that hard
 
-*Link is only a proof of concept at this time, and is not ready for use.*
+-
 
-## Basic Theory
+ HEAD /
 
-From the [Plan9 overview paper](http://plan9.bell-labs.com/sys/doc/9.html):
+  A platform for running client-side JS apps on a filesystem comprised of websites.
 
- > The view of the system is built upon three principles. First, resources are named and accessed like
- > files in a hierarchical file system. Second, there is a standard protocol, called 9P, for accessing
- > these resources. Third, the disjoint hierarchies provided by different services are joined together
- > into a single private hierarchical file name space. The unusual properties of Plan 9 stem from the
- > consistent, aggressive application of these principles.
- 
-Using these principles, the Bell Labs team placed the window manager, peripherals, network, hard-drive,
-etc, into the filesystem-- a simple common interface for reads and writes. By controlling which "files"
-(resources) a process could view, users could manipulate the flow of data through their tools.
+## ...what
 
-Interestingly, RESTful API end-points are comparible to Plan9's resources, and should be able to follow
-a similar set of concepts built over HTTP (instead of 9P). While browsers already provide well-established
-toolsets for accessing the peripherals of the local machine, it remains difficult to coordinate a user's
-web services without a common computing environment. Often, services must provide explicit tools to
-communicate with each other-- gaining privileged credentials in the process-- or remain walled
-from one another. Moreover, due to the history of the web, most services are heavily tied into their
-provider's interfaces, removing choice from the user and leading to a lot of repeated work. With modern
-browsers, it should now be possible to to separate interfaces into contained Javascript tools which
-complete single tasks, similar to how traditional computing environments operate, and provide the
-services as read-and-writable "files" in a proxying namespace.
+Basically, I ripped off Plan9, the awesome OS that the founders of unix built (after unix).
 
-## Project Goals
+REST APIs operate under the philosophy that each access point is just a resource. That's the 
+same idea that Plan9 used for file-systems: each file is just a resource. 
 
-Link was originally conceived to support web apps which only have to do one thing well. It follows that
-all of [Eric Raymond's Rules of Design](http://en.wikipedia.org/wiki/Unix_philosophy) apply as well, but
-there are a number of specific goals which Link should seek to fulfill:
+The window manager, the mouse, the network, hard-drive data collections (you know, files) -- 
+they're just resources which do reads & writes 
 
-*This list is only a proposal, and will need refining as the needs are better understood.*
+(or, in our case, GETS, PUTS and POSTS).
 
- 1. It should provide robust tools for manipulating the content and flow of data. (**No Barriers**)
- 2. It should seek to enable lossless computing, sacrificing efficiency for availability & recoverability. (**No Fear**)
- 3. It should leverage existing practices, protocols, and technologies whenever possible. (**No Surprises**)
- 4. It should offer only what is needed and nothing more. (**No Reinvention**)
- 4. It should prefer the mouse to the keyboard. (**No Carpal Tunnel**)
 
-## Project Design
+So If a piece of software knows how to read/write with a given resource, then it's just a matter
+of which resources are available. Thus: the bindable namespace.
 
-*The following is in development and contains proposals which may change in the future.*
+-
 
-Link provides two fundamental systems: the file-system proxy and a shell HTML application
-which builds a (sandboxed) execution environment for 3rd-party javascripts.
+## How? ##
 
-### ProxyFS
+ - HEAD / provides a proxy which routes traffic according to a user-defined namespace 
+   (the "filesystem"). 
 
-**todo**
+ - Your javascript apps only know the paths within that proxy namespace, and, due to a
+   sandbox (probably google-caja) can only interact with those resources via provided 
+   functions (proxy.request, namespace.ls, etc). NO REQUESTS OUTSIDE OF NAMESPACE!
 
-[The name server]
+ - Credentials are stored in the proxy service when the user aliases the service in, 
+   so your JS apps can come from anywhere, safely operate on your data, then forget 
+   all about you.
 
-[The proxy]
+ - This is currently done in nodejs, and can be viewed as 3 components (at the moment): the 
+   namespace web api, the proxy server, and the browser api.
 
-[File system conventions and intended features]
 
-### Browser Env
+## What I plan to do with this ##
 
-**Sandboxing.** Javascripts should be made safe to execute from a remote server without any system
-configuration. This could present several security issues (such as tracking or data-theft) so scripts
-will require locks on access to remote resources and other scripts in execution. [Google Caja](http://code.google.com/p/google-caja/)
-is a strong candidate for accomplishing this.
 
-Resources are only available through the file system, which manages any credentials the endpoint
-requires without involving the executed Javascript. (For instance, access to an email REST service may
-require authentication, which the proxy & environment should handle without involving the requesting
-application.) If necessary, the environment can confirm requests to the filesystem with the user
-before executing them, caching the user's decision.
+**A contained sharing-service running on the Frazee family server.**
 
-**Multi-tasking.** A single tab represents one isolated instance of the execution environment.
-This can provide multiple workspaces which allow temporary, contained changes to the environment.
-Workspaces might be used to follow Plan9's per-process namespace paradigm (if its useful) or simply
-to separate memory & state.
+    If messaging & sharing apps work with contacts provided from any source...
+    ...then the sources are swappable, while the tools stay the same.
 
-It should be possible for scripts to execute script sub-processes which, after any computation, either
-die or register callbacks and sleep. All scripts would then communicate through an event system which is
-core to the browser environment.
+    We'll store our own contact lists, photos, events, etc
 
-Rather than manage windows with the env, it should be possible for users to run window-manager
-apps which then utilize the sub-process tools. The default, unmanaged behavior would be for invoked scripts
-take ownership of the environment and to push a new state to the browser history. The parent script may choose
-to end and replace itself with the child script, or it may sleep and remain in the process stack. The user can
-press the back button to move up the process stack; likewise, a finished script might execute the back action to
-return to the parent. Whether the forward button should bring scripts back onto the stack will require some
-exploration.
+    We'll probably also have secure tools for reaching private family data in emergencies.
+    
+    
+**A multi-interface message transport**
 
-**Data Flow.** The events model is a natural choice for cross-script communication, though there
-are issues of precedence which may need adressing. If an event goes unhandled, Link can fall back to executing
-scripts located in conventional areas of the file-system. This should make it possible for tools to automatically
-trigger when needed without remaining in memory.
+    I want to deploy new interfaces with as little up-front effort as possible.
 
-Data piping is a large facet of computing, and there may be an opportunity to experiment with callbacks
-or the event system to see if there is any advantage over stdin/out/err. Doing so could create
-a greater variety of channels for data to flow through, but that may not be a good thing.
+    If I have a messaging transport that sets interface on a per-conversation level...
+    ...I'll never be limited by the medium I started with.
 
-Using JSON as the core data-type could provide useful meta-data. For instance, a JSON object might list links to
-commands which the UI can present to the user. Alternatively, rules about the structure of the object could
-determine default behavior, similar to Plan9's plumber.
 
-Another use for metadata might be to track links to previous object states. This might be used to make versioning
-(undo/redo) core to the environment with a minimal burden to the tools.
+    Friend: Oh crap, we need to decide on an event date.
+    Me: So? Here's a calendar interface. I say tomorrow at three.
+    Friend: OMFG.
+
+As a bonus, HEAD / can behave like a private nameserver by caching DNS resolutions
+
+which is good if somebody decides to wipe out a DNS record.
