@@ -61,15 +61,13 @@ etc, into the filesystem-- a simple common interface for reads and writes. By co
 (resources) a process could view, users could manipulate the flow of data through their tools.
 
 Interestingly, RESTful API end-points are comparible to Plan9's resources, and should be able to follow
-a similar set of concepts built over HTTP (instead of 9P). While browsers already provide well-established
-toolsets for accessing the peripherals of the local machine, it remains difficult to coordinate a user's
-web services without a common computing environment. Often, services must provide explicit tools to
-communicate with each other-- gaining privileged credentials in the process-- or remain walled
+a similar set of concepts built over HTTP (instead of 9P). While browsers already handle local peripherals
+well, it remains difficult to coordinate a user's web services. Often, the services must provide vendor-specific
+tools to communicate with each other-- gaining privileged credentials in the process-- or remain walled
 from one another. Moreover, due to the history of the web, most services are heavily tied into their
 provider's interfaces, removing choice from the user and leading to a lot of repeated work. With modern
 browsers, it should now be possible to to separate interfaces into contained Javascript tools which
-complete single tasks, similar to how traditional computing environments operate, and provide the
-services as read-and-writable "files" in a proxying namespace.
+complete single tasks and provide the services as read-and-writable "files" in a proxying namespace.
 
 ## Project Goals
 
@@ -115,28 +113,29 @@ require authentication, which the proxy & environment should handle without invo
 application.) If necessary, the environment can confirm requests to the filesystem with the user
 before executing them, caching the user's decision.
 
-**Multi-tasking.** A single tab represents one isolated instance of the execution environment.
-This can provide multiple workspaces which allow temporary, contained changes to the environment, as well
-as different process-stacks.
+**Multi-tasking.** A single tab represents a contained instance of the execution environment.
+This can provide multiple workspaces with separate sets of active scripts ("process-stacks").
 
 Rather than manage windows with the env, it should be possible for users to run window-manager
 apps which then utilize the sub-process tools. The default, unmanaged behavior would give invoked scripts
-ownership of the environment and to push a new state to the browser history. The parent script may choose
-to end and replace itself with the child script, or it may sleep and remain in the process stack. The user can
-press the back button to move up the process stack; likewise, a finished script might trigger the back action to
-return to the parent. Whether the forward button should bring scripts back onto the stack will require some
-consideration.
+ownership of the environment and push a new state to the browser history. The parent script may choose
+to end and replace itself with the child script, or it may sleep and remain in the process stack. Likewise, a
+script can register callbacks, then return control to its parent.
+
+The user could then press the back button to move up the process stack; likewise, a finished script might trigger
+the back action to return to the parent. Whether the forward button should bring scripts back onto the stack
+would require some consideration.
 
 **Communication.** All processes communicate using the file-system and HTTP methods, whether interacting
 with a resource or with another process. Pattern-matching may be used to allow multiple request targets; for
 instance, ```GET /proc/*/name``` to retrieve the names of active processes (assuming /proc/ is dynamically
-populated with running scripts). Scripts can then files to callbacks which  handle the request (eg
+populated with running scripts). Scripts can then alias files to callbacks which handle the request (eg
 ```/proc/15/text/insert```). Paths can be passed between processes (as links) if discovery is needed.
 
 This, of course, requires the browser env to populate the file-system with a number of virtual names. Alterations
 to the fs should be possible on a per-process basis, to limit scripts to the resources required for execution.
 Permissions are enforced by object capabilities, so, if a resource is visible in the namespace, it's authorized
 for use. (This is called "authorization by designation," as [discussed by Mark Miller in this talk on Secure
-Distributed Programming with OCaps](http://www.youtube.com/watch?v=w9hHHvhZ_HY&feature=related To grant access
+Distributed Programming with OCaps](http://www.youtube.com/watch?v=w9hHHvhZ_HY&feature=related)). To grant access
 to a non-standard resource, an alias could be written to the script's private folder, with the option to make
 the alias remain for latter executions.
