@@ -61,53 +61,62 @@ etc, into the filesystem-- a simple common interface for reads and writes. By co
 (resources) a process could view, users could manipulate the flow of data through their tools.
 
 Interestingly, RESTful API end-points are comparible to Plan9's resources, and should be able to follow
-a similar set of concepts built over HTTP (instead of 9P). While browsers already handle local peripherals
-well, it remains difficult to coordinate a user's web services. Often, the services must provide vendor-specific
-tools to communicate with each other-- gaining privileged credentials in the process-- or remain walled
-from one another. Moreover, due to the history of the web, most services are heavily tied into their
-provider's interfaces, removing choice from the user and leading to a lot of repeated work. With modern
-browsers, it should now be possible to to separate interfaces into contained Javascript tools which
-complete single tasks and provide the services as read-and-writable "files" in a proxying namespace.
+a similar set of concepts built over HTTP (instead of 9P). The "filesystem" needs only to be a proxy which
+routes traffic according to bindings between local paths and the remote URLs. Javascripts can then read
+& write to the files as if executing on a local machine, making the filesystem a configurable interface for
+executing code with remote services.
 
-## Project Goals
+The filesystem can also act as a private names server by caching DNS resolutions, which provides an
+worth-while layer of redundancy for web-users.
 
-Link is an environment for running multiple small, reusable javascripts in concert with a set of RESTful
+## Project Description
+
+Fundamentally: an environment for running multiple small, reusable javascripts in concert with a set of RESTful
 api services. Depending on how the environment is configured, it can be used to create a personal computing
-environment (a "web operating system") or a single application (the env as a framework).
+environment (a "web operating system") or a single application (using the env as a framework).
 
-The primary goals are to:
+**Core Responsibilities:**
 
  1. Transport data between services & scripts without exposing origin or destination.
- 2. Build a browser script-execution environment which unifies resource-access by convention.
+ 2. Build a document-level JS environment which unifies resource-access with a convention-heavy API.
 
-For developers, this should allow a cleaner separation of concerns, which, in turn, leads to easier
-reuse. For instance, rather than build a traditional e-commerce site, a vendor should be able to configure
-a Link environment to use a storefront app, a cart app, and a payment processing app in cooperation with
-inventory and payment services; so long as the data structures are compatible between the components, the
-environment should cooperate. To add features, the vendor should only have to "install" (aka configure)
-new apps, then add links which execute them (such as "/bin/ratings/view/shoe439").
+For developers, this should allow a cleaner separation of concerns, which, in turn, leads to better reuse. For
+instance, rather than build a traditional e-commerce site, a vendor could build a Link environment to use a
+storefront interface, a cart app, and a payment processing app in cooperation with inventory and payment
+services; so long as the data structures are compatible between the components, the environment should
+cooperate. To add features, the vendor should only have to "install" (configure) new apps/services,
+then add links which execute them (such as "/bin/ratings/view/shoe439").
 
-When using Link as a PC env, this should offer finer control over data. Link behaves as a middle-man on
-behalf of the user, asking where data should go, then conducting the transaction without exposing the two
-ends to each other. This should, for instance, allow users to give an app their social graph without giving
-access to their wall.
+If using Link as a personal environment, the toolset should offer finer control over data. Link behaves as
+a middle-man on behalf of the user by asking where data should go, then conducting the transaction without
+exposing the two ends to each other. This should, for instance, allow users to give an app their social graph
+without giving access to their wall. Web services will be able to inter-communicate without much
+server-side preparation, as the (perhaps user-built) glue code will live on the client-side.
 
 ## Project Design
 
 *The following is in development and contains proposals which may change in the future.*
 
-Link provides two fundamental systems: the file-system proxy and a shell HTML application
-which builds a (sandboxed) execution environment for 3rd-party javascripts.
-
 ### ProxyFS
 
-**todo**
+**Protocol.** RESTful services should be able to cooperate with minimal changes to their implementation.
+The only data that Link might use is the sub-names of a resource, to enable discovery. This data can
+easily be packed into the ['link' response header](http://tools.ietf.org/html/rfc5988), which supports
+k/v lists of attributes. Thus, it would be simple to expect HEAD requests to include a set of links which
+are typed by the "rel" attribute; for instance:
 
-[The name server]
+```
+ </root/resource/subres1>; rel="ns-child",
+ </root/resource/subres2>; rel="ns-child",
+ </root/resource/subres3>; rel="ns-child"...
+```
 
-[The proxy]
+If those headers are not supplied, Link will not be able to populate children until they are used. Otherwise,
+the only requirement is to use true REST practices.
 
-[File system conventions and intended features]
+**Name Server.** The requests to alter the filesystem structure should be separated from the proxy
+itself, so that the proxy can pass unaltered requests & responses. Those requests break down into a simple
+set of core interactions: resolving an entry, retrieving name lists, aliasing a name, and removing a name.
 
 ### Browser Env
 
@@ -117,10 +126,9 @@ will require locks on access to remote resources and other scripts in execution.
 is a strong candidate for accomplishing this.
 
 Resources are only available through the file system, which manages any credentials the endpoint
-requires without involving the executed Javascript. (For instance, access to an email REST service may
-require authentication, which the proxy & environment should handle without involving the requesting
-application.) If necessary, the environment can confirm requests to the filesystem with the user
-before executing them, caching the user's decision.
+requires without involving the requesting Javascript. (For instance, access to an email REST service may
+require authentication, which the proxy & environment should handle.) If necessary, the environment can
+confirm requests to the filesystem with the user before executing them, caching the user's decision.
 
 **Multi-tasking.** A single tab represents a contained instance of the execution environment.
 This can provide multiple workspaces with separate sets of active scripts ("process-stacks").
@@ -132,8 +140,7 @@ to end and replace itself with the child script, or it may sleep and remain in t
 script can register callbacks, then return control to its parent.
 
 The user could then press the back button to move up the process stack; likewise, a finished script might trigger
-the back action to return to the parent. Whether the forward button should bring scripts back onto the stack
-would require some consideration.
+the back action to return to the parent.
 
 **Communication.** All processes communicate using the file-system and HTTP methods, whether interacting
 with a resource or with another process. Pattern-matching may be used to allow multiple request targets; for
@@ -145,6 +152,14 @@ This, of course, requires the browser env to populate the file-system with a num
 to the fs should be possible on a per-process basis, to limit scripts to the resources required for execution.
 Permissions are enforced by object capabilities, so, if a resource is visible in the namespace, it's authorized
 for use. (This is called "authorization by designation," as [discussed by Mark Miller in this talk on Secure
-Distributed Programming with OCaps](http://www.youtube.com/watch?v=w9hHHvhZ_HY&feature=related)). To grant access
-to a non-standard resource, an alias could be written to the script's private folder, with the option to make
-the alias remain for latter executions.
+Distributed Programming with OCaps](http://www.youtube.com/watch?v=w9hHHvhZ_HY&feature=related)).
+
+### Link Servers
+
+**Server Software.** The Link server should itself remain open and extensible, though this particular fork
+will focus on doing the least necessary. It should be simple for servers to enforce opinions, particularly
+regarding the initial environment, so the owners can dictate what their instances are used for.
+
+**User Management.** Link could implement a user registry, but it is far more interesting to let the
+users' filesystem definition live off-site. Users could then carry their own fs defs, host them on their own
+servers, or use a login service (which the Link instance-owners might provide).
