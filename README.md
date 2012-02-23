@@ -163,3 +163,11 @@ regarding the initial environment, so the owners can dictate what their instance
 **User Management.** Link could implement a user registry, but it is far more interesting to let the
 users' filesystem definition live off-site. Users could then carry their own fs defs, host them on their own
 servers, or use a login service (which the Link instance-owners might provide).
+
+## Contributing
+
+If you would like to get involved, contact Paul Frazee at pfrazee@gmail.com.
+
+## License
+
+The license has not yet been chosen, but it will be an open-source variant.
