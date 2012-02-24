@@ -170,4 +170,4 @@ If you would like to get involved, contact Paul Frazee at pfrazee@gmail.com.
 
 ## License
 
-The license has not yet been chosen, but it will be an open-source variant.
+Link is released under the MIT License (found in the LICENSE file).
