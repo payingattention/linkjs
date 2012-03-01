@@ -78,7 +78,9 @@ environment (a "web operating system") or a single application (using the env as
 **Core Responsibilities:**
 
  1. Transport data between services & scripts without exposing origin or destination.
- 2. Build a document-level JS environment which unifies resource-access with a convention-heavy API.
+ 2. Build a document-level JS environment which:
+    1. unifies resource-access with a convention-heavy API.
+    2. manages javascripts as processes which are executed on use and correctly released on exit.
 
 For developers, this should allow a cleaner separation of concerns, which, in turn, leads to better reuse. For
 instance, rather than build a traditional e-commerce site, a vendor could build a Link environment to use a
@@ -92,6 +94,12 @@ a middle-man on behalf of the user by asking where data should go, then conducti
 exposing the two ends to each other. This should, for instance, allow users to give an app their social graph
 without giving access to their wall. Web services will be able to inter-communicate without much
 server-side preparation, as the (perhaps user-built) glue code will live on the client-side.
+
+**It remains to be seen...**
+
+ - If javascript memory can be reliably recovered without reloading the document.
+ - If sandboxing the processes can happen without incurring too much of a performance or capabilities hit.
+ - If the system will be performant at all.
 
 ## Project Design
 
