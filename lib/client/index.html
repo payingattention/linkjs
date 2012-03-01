@@ -1,29 +1,23 @@
 <!html>
-<head>
-	<meta http-equiv="content-type" content="text/html; charset=iso-8859-1"/>
-	<title>HEAD / Namespace Browser</title>
+<html>
+    <head>
+        <meta http-equiv="content-type" content="text/html; charset=iso-8859-1"/>
+        <title>Link Env</title>
 
-	<link rel="stylesheet" href="/scripts/vendor/jquery.treeview/jquery.treeview.css" />
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7/jquery.js"></script>
+        <script type="text/javascript" src="/_scripts/jquery.requireScript.js"></script>
+        <script type="text/javascript" src="/_scripts/env.js"></script>
 
-	<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7/jquery.js"></script>
-	<script src="/scripts/vendor/jquery.treeview/jquery.treeview.js"></script>
-	<script src="/scripts/vendor/jquery.treeview/jquery.treeview.edit.js" type="text/javascript"></script>
-
-	<script type="text/javascript" src="/scripts/browser.js"></script>
-	
-	</head>
-	<body>
-
-	<div id="main">
-
-	<div id="treecontrol">
-		<a title="Collapse the entire tree below" href="#"><img src="/scripts/vendor/jquery.treeview/images/minus.gif" /> Collapse All</a>
-		<a title="Expand the entire tree below" href="#"><img src="/scripts/vendor/jquery.treeview/images/plus.gif" /> Expand All</a>
-		<a title="Toggle the tree below, opening closed branches, closing open branches" href="#">Toggle All</a>
-	</div>
-	<ul id="black" class="treeview-black">
-	</ul>
-	<div id="output"></div>
-</div>
-
-</body></html>
+        <script type="text/javascript">
+            $(function() {
+                // server-passed data
+                var request = {{request}};
+                if (!request.pathname || request.pathname == '/') { request.pathname = '/bin/explorer' }
+                env.exec(request.pathname, request)
+            })
+        </script>
+        
+    </head>
+    <body>
+    </body>
+</html>

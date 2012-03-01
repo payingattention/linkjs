@@ -124,6 +124,15 @@ exports["Names Manager"] = {
         test.done()
         //===
     }
+    , "#get doesn't try to calculate an undefined name from a parent if the parent is an empty binding": function(test) {
+        this.nm.set('/empty','')
+        this.nm.set('/notempty', 'val')
+        this.nm.set('/notempty/empty', '')
+        test.equal(this.nm.get('/empty/infer'), null)
+        test.equal(this.nm.get('/notempty/empty/infer'), 'val/empty/infer')
+        test.done()
+        //===
+    }
     , "#del removes a defined name and any child names, including cached names": function(test) {
         this.nm.set('/deleteme','val')
         this.nm.set('/deletemejustkidding','val')
