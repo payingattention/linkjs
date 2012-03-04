@@ -6,14 +6,17 @@
 
         <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7/jquery.js"></script>
         <script type="text/javascript" src="/_scripts/jquery.requireScript.js"></script>
+        <script type="text/javascript" src="/_scripts/env_processmanager.js"></script>
         <script type="text/javascript" src="/_scripts/env.js"></script>
 
         <script type="text/javascript">
             $(function() {
                 // server-passed data
                 var request = {{request}};
-                if (!request.pathname || request.pathname == '/') { request.pathname = '/bin/explorer' }
-                env.exec(request.pathname, request)
+                request.url = request.pathname
+                if (!request.url || request.url == '/') { request.url = '/bin/explorer' }
+                request.data.$container = $('body')
+                env.exec(request)
             })
         </script>
         
