@@ -9,18 +9,30 @@
         <script type="text/javascript" src="/_scripts/env_processmanager.js"></script>
         <script type="text/javascript" src="/_scripts/env.js"></script>
 
+        
+<link rel='stylesheet' href='/_scripts/vendor/jquery.treeview/jquery.treeview.css' type='text/css' media='screen' />
+<link rel='stylesheet' href='/_scripts/explorer.css' type='text/css' media='screen' />
+<script src='/_scripts/vendor/jquery.treeview/jquery.treeview.js' type='text/javascript'></script>
+<script src='/_scripts/vendor/jquery.treeview/jquery.treeview.edit.js' type='text/javascript'></script>
+
         <script type="text/javascript">
             $(function() {
                 // server-passed data
                 var request = {{request}};
                 request.url = request.pathname
-                if (!request.url || request.url == '/') { request.url = '/bin/explorer' }
-                request.data.$container = $('body')
-                env.exec(request)
+                if (!request.url || request.url == '/') {
+                    // default to the explorer
+                    request = { method: 'post', url: '/bin/explorer', data: { container_id: 'temp' } }
+                }
+                // call script
+                env.request(request)
             })
         </script>
         
     </head>
     <body>
+<div id="temp"></div>
+    <div id="temp2"></div>
+        
     </body>
 </html>
