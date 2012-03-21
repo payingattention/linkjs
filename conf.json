@@ -3,21 +3,6 @@
         "name": "Link"
         , "version": "0.0.0"
         , "port": 80
+        , "client_port": 8000
     }
-    , "nameserver": {
-        "name": "Link NameServer"
-        , "version": "0.0.0"
-        , "port": 8080
-        , "rooturl": "/ns"
-    }
-    , "clientserver": {
-        "name": "Link ClientServer"
-        , "version": "0.0.0"
-        , "port": 8081
-    }
-    , "proxyserver": {
-        "name": "Link ProxyServer"
-        , "version": "0.0.0"
-        , "rooturl": "/proxy"
-    } 
 }

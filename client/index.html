@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta author="pfraze">
+        <title>Link Browser App Environment</title>
+        <script src="/scripts/closure/goog/base.js"></script>
+        <script src="/scripts/link.js"></script>
+        <script src="/scripts/link/request.js"></script>
+        <script src="/scripts/link/resourceservice.js"></script>
+        <script src="/scripts/link/agent.js"></script>
+        <script>
+            function app_init() {
+                var rs = new link.ResourceService('/app.json'); // load our resource service definition (:TODO: callback?)
+                var agent = new link.Agent(rs); // create the agent
+                agent.attach_to_window(); // start listening to hash changes
+                agent.follow((new link.Request('/')).for_html()); // request our application init point
+                agent.render(document.body); // run the response handler
+            }
+        </script>
+    </head>
+    <body onload="app_init()">
+        hello world
+    </body>
+</html>
