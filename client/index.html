@@ -7,16 +7,21 @@
         <script src="/scripts/closure/goog/base.js"></script>
         <script src="/scripts/link.js"></script>
         <script src="/scripts/link/request.js"></script>
+        <script src="/scripts/link/response.js"></script>
         <script src="/scripts/link/resourceservice.js"></script>
+        <script src="/scripts/link/agentstate.js"></script>
         <script src="/scripts/link/agent.js"></script>
         <script>
-            function app_init() {
-                var rs = new link.ResourceService('/app.json'); // load our resource service definition (:TODO: callback?)
-                var agent = new link.Agent(rs); // create the agent
-                agent.attach_to_window(); // start listening to hash changes
-                agent.follow((new link.Request('/')).for_html()); // request our application init point
-                agent.render(document.body); // run the response handler
-            }
+
+function app_loaded(rs) {
+    var agent = new link.Agent(rs); // create the agent
+    agent.attach_to_window(); // start listening to browser events
+    agent.follow((new link.Request('/')).for_html()); // request our application init point
+}
+function app_init() {
+    var rs = new link.ResourceService('/app.json', app_loaded); // load our resource service definition
+}
+
         </script>
     </head>
     <body onload="app_init()">

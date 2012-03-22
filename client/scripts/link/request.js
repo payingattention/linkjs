@@ -1,40 +1,47 @@
 /*
 Request.js
 ==========
-An HTTP request to a specific ResourceService
+A ResourceService request builder
 
 Responsibilities:
  - Provides a simple interface to build/modify a request
  - Maintains headers and a body
- - References the target resource service
 */
 
 goog.provide('link.Request');
 
 goog.require('goog.structs.Map');
 
-link.Request = function(url) {
-    this.url = url;
-    this.body = null;
-    this.method = 'get';
-    this.headers = new goog.structs.Map();
+link.Request = function(uri) {
+    this.uri_ = uri;
+    this.method_ = 'get';
+    this.headers_ = new goog.structs.Map();
+    this.body_ = null;
 }
 
 //
-// Chainable interface
+// Getters
 //
-link.Request.prototype.url = function(url) {
-    this.url = url; return this;
+link.Request.prototype.get_uri = function() { return this.uri_; }
+link.Request.prototype.get_method = function() { return this.method_; }
+link.Request.prototype.get_headers = function() { return this.headers_; }
+link.Request.prototype.get_body = function() { return this.body_; }
+
+//
+// Builder interface
+//
+link.Request.prototype.uri = function(uri) {
+    this.uri_ = uri; return this;
 }
 link.Request.prototype.method = function(method) {
-    this.method = method; return this;
+    this.method_ = method; return this;
 }
 link.Request.prototype.headers = function(kvs) {
-    this.headers.addAll(kvs); return this;
+    this.headers_.addAll(kvs); return this;
 }
 link.Request.prototype.body = function(body, content_type) {
-    this.body = body;
-    this.headers.set('content-type', content_type);
+    this.body_ = body;
+    this.headers_.set('content-type', content_type);
     return this;
 }
 
