@@ -57,9 +57,10 @@ link.ResourceService.prototype.handle_request = function(request, callback) {
             return callback(new link.Response(404,"Not Found"));
         }
         var resource = this.resources_.get(request.get_uri());
+        var agent = new link.Agent(this);
         // If the resource has been loaded, evaluate to construct the response
         if (resource.__def) {
-            return resource.__def(request, callback);
+            return resource.__def(request, agent, callback);
         }
         // Load first, then construct
         if (!resource.src) {
@@ -70,16 +71,14 @@ link.ResourceService.prototype.handle_request = function(request, callback) {
             if (xhr.isSuccess()) {
                 // successful fetch...
                 try {
-                    // Evaluate function
-                    resource.__def = new Function('arg_request', 'arg_callback', xhr.getResponseText());
-                    // successful eval...
-                    console.log('Resource "' + request.get_uri() + '" definition retrieved and succesfully evaluated');
-                    // Run function
-                    resource.__def(request, callback);
+                    // Evaluate & run function
+                    resource.__def = new Function('arg_request', 'arg_agent', 'arg_callback', xhr.getResponseText());
+                    resource.__def(request, agent, callback);
                 } catch (except) {
                     // failed eval
-                    console.log('Failed to evaluate resource "' + request.get_uri() + '" definition', except);
+                    console.log('Failed to evaluate resource "' + request.get_uri() + '" definition');
                     callback(new link.Response(500,"Internal Server Error"));
+                    throw except;
                 }                
             } else {
                 // failed fetch
@@ -105,4 +104,18 @@ link.ResourceService.prototype.handle_configure_ = function(request, callback) {
         var key = keys[i];
         resource[key] = KVs.get(key);
     }
+}
+
+/**
+ * Provides the structure beneath the given URI
+ */
+link.ResourceService.prototype.get_child_uris = function(uri) {
+    var child_uris = [];
+    var all_uris = this.resources_.getKeys();
+    for (var i=0, ii=all_uris.length; i < ii; i++) {
+        if (all_uris[i].indexOf(uri) == 0) {
+            child_uris.push(all_uris[i]);
+        }
+    }
+    return child_uris;
 }
