@@ -11,9 +11,15 @@ Responsibilities:
 goog.provide('link.Request');
 
 goog.require('goog.structs.Map');
+goog.require('goog.Uri');
+goog.require('goog.Uri.QueryData');
 
 link.Request = function(uri) {
-    this.uri_ = uri;
+    // Parse URI
+    var parsed_uri = new goog.Uri(uri.slice(1));
+    this.uri_ = '#' + parsed_uri.getPath();
+    this.query_ = parsed_uri.getQueryData();
+    // Set up attribute defaults
     this.method_ = 'get';
     this.headers_ = new goog.structs.Map();
     this.body_ = null;
@@ -23,6 +29,7 @@ link.Request = function(uri) {
 // Getters
 //
 link.Request.prototype.get_uri = function() { return this.uri_; }
+link.Request.prototype.get_query = function() { return this.query_; }
 link.Request.prototype.get_method = function() { return this.method_; }
 link.Request.prototype.get_headers = function() { return this.headers_; }
 link.Request.prototype.get_header = function(key) { return this.headers_.get(key); }

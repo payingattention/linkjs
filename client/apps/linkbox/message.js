@@ -3,7 +3,7 @@ var self = this;
 arg_agent.require_script(['https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.js'], function() {
     if (arg_request.matches({'method':'get', 'accept':'text/html'})) {
         // Have _shell build its html if DNE
-        arg_agent.follow((new link.Request('/_iface/shell')).for_html(), function() {
+        arg_agent.get('#/_iface/shell', {'accept': 'text/html'}, function() { 
             arg_agent.render(document.body);
             // Fetch the message from our GET params
             // :TODO:
@@ -26,7 +26,7 @@ arg_agent.require_script(['https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jq
             html += '</div></div>';
             html += '<div class="page-header"><h3>' + message.timestamp + ' on ' + message.service + '</h3></div>';
             // Get the interface to the particular service
-            arg_agent.follow((new link.Request('/_iface/msg/' + message.service)).method('post').headers({'accept':'text/html'}).body(message,'application/json'), function(response) {
+            arg_agent.post('#/_iface/msg/' + message.service, message, 'application/json', {'accept':'text/html'}, function(response) {
                 html += response.get_body();
                 // Respond
                 arg_callback((new link.Response(200)).body(html,'text/html').render_to(document.getElementById('content')));

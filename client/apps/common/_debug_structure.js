@@ -10,10 +10,10 @@ if (!this.build_html) { // only define once
         if (!base_uri) { base_uri = ''; }
         var html = '<div class="container"><div class="row"><div class="span12"><ul>';
         for (var uri in level) {
-            var child_base_uri = '';
-            if (uri == '/') { child_base_uri = '/'; }
-            else { child_base_uri = base_uri + uri + '/'; }
-            html += '<li><a href="#' + base_uri + uri + '">' + uri + '</a>' + this.build_html(level[uri], child_base_uri) + '</li>';
+            var child_base_uri = base_uri + uri + '/';
+            //if (uri == '/') { child_base_uri = '/'; }
+            //else { child_base_uri = base_uri + uri + '/'; }
+            html += '<li><a href="' + base_uri + uri + '">' + uri + '</a>' + this.build_html(level[uri], child_base_uri) + '</li>';
         }
         html += '</ul></div></div></div>';
         return html;

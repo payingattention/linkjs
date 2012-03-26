@@ -50,16 +50,16 @@ link.Agent.prototype.attach_to_window = function () {
     // Attach to URL fragment changes (links, manually-entered)
     window.onhashchange = function() {
         // Build the request from the hash
-        var uri = window.location.hash.substring(1);
-        if (uri == null || uri == '') { uri = '/'; }
+        var uri = window.location.hash;
+        if (uri == null || uri == '') { uri = '#'; }
         var request = new link.Request(uri);
         request.for_html(); // assume GET for text/html
         // Follow the request
         self.follow(request);
     }
     // Now follow the current uri
-    var uri = window.location.hash.substring(1);
-    if (uri == null || uri == '') { uri = '/'; }
+    var uri = window.location.hash;
+    if (uri == null || uri == '') { uri = '#'; }
     this.follow((new link.Request(uri)).for_html()); // request the current page
 }
 
@@ -240,7 +240,7 @@ link.Agent.prototype.post = function(uri, body, body_contenttype, headers, callb
  * Provides the structure beneath the given URI
  */
 link.Agent.prototype.get_child_uris = function(uri) {
-    if (!uri) { uri = '/'; }
+    if (!uri) { uri = '#'; }
     return this.res_service_.get_child_uris(uri);
 }
 
@@ -248,13 +248,12 @@ link.Agent.prototype.get_child_uris = function(uri) {
  * Provides the structure beneath the given URI as an object
  */
 link.Agent.prototype.get_uri_structure = function(uri) {
-    if (!uri) { uri = '/'; }
+    if (!uri) { uri = '#'; }
     var uris = this.res_service_.get_child_uris(uri);
     var structure = {};
     // add the uris
     for (var i=0, ii=uris.length; i < ii; i++) {
         var uri_parts = uris[i].split('/');
-        if (uri_parts[0] == '') { uri_parts[0] = '/'; } // before first slash is root, let's just call it '/'
         if (uri_parts[uri_parts.length-1] == '') { uri_parts.pop(); } // if uri ended with a slash, ignore the extra
         var cur_node = structure;
         while (uri_parts.length) {
