@@ -74,7 +74,7 @@ link.Request.prototype.matches = function(props) {
         var prop = props[key];
         if (key == 'uri' && prop != this.uri_) { return false; }
         if (key == 'method' && prop != this.method_) { return false; }
-        if (key == 'accept' && this.headers_.get('accept').indexOf(prop) == -1) { return false; }
+        if (key == 'accept' && this.headers_.containsKey('accept') && this.headers_.get('accept').indexOf(prop) == -1) { return false; }
         if (this.headers_.containsKey(key) && prop != this.headers_.get(key)) { return false; }
     }
     return true;

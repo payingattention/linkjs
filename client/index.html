@@ -8,17 +8,18 @@
         <script src="/scripts/link.js"></script>
         <script src="/scripts/link/request.js"></script>
         <script src="/scripts/link/response.js"></script>
-        <script src="/scripts/link/resourceservice.js"></script>
+        <script src="/scripts/link/app.js"></script>
         <script src="/scripts/link/agentstate.js"></script>
         <script src="/scripts/link/agent.js"></script>
         <script>
 
-function app_loaded(rs) {
-    var agent = new link.Agent(rs); // create the agent
+function app_loaded() {
+    var agent = new link.Agent(); // create the agent
     agent.attach_to_window(); // start listening to browser events
 }
 function app_init() {
-    var rs = new link.ResourceService('/apps/linkbox/app.json', app_loaded); // load our resource service definition
+    link.App.configure({'#': '#/winbox'}); // make winbox the default app
+    link.App.load_config('/apps/winbox/config.js', app_loaded); // load winbox
 }
 
         </script>
