@@ -1,0 +1,30 @@
+body {
+    margin: 0;
+    padding: 0;
+}
+
+#shell-debug-bar {
+    position: absolute;
+    bottom: 0;
+    height: 26px;
+    width: 100%;
+    padding-top: 4px;
+    border-top: 1px solid #e0e0e0;
+    filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#fafafa', endColorstr='#f0f0f0');
+    background: -webkit-gradient(linear, left top, left bottom, from(#FAFAFA), to(#F0F0F0));
+    background: -moz-linear-gradient(top,  #fafafa,  #f0f0f0);
+}
+#shell-debug-bar a {
+    margin-left: 10px;
+    text-decoration: none;
+    font-family: verdana;
+    font-size: 11px;
+    color: #555;
+    padding-top: 7px;
+}
+#shell-debug-bar a:hover {
+    border-top: 2px solid #AD6;
+}
+#shell-debug-bar a.selected {
+    border-top: 2px solid #39F;
+}
