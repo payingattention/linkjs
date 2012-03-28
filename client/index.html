@@ -18,8 +18,8 @@ function app_loaded() {
     agent.attach_to_window(); // start listening to browser events
 }
 function app_init() {
-    link.App.configure({'#': '#/winbox'}); // make winbox the default app
-    link.App.load_config('/apps/winbox/config.js', app_loaded); // load winbox
+    //link.App.configure({'#': '#/winbox'}); // make winbox the default app
+    link.App.load_config('/apps/shell/config.js', app_loaded); // load shell
 }
 
         </script>

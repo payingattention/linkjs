@@ -21,7 +21,6 @@ goog.require('goog.dom');
 
 link.Agent = function() {
     this.state_ = null;
-    this.element_ = null;
 }
 
 //
@@ -34,8 +33,6 @@ link.Agent.prototype.get_current_state = function() { return this.state_; }
  */
 link.Agent.prototype.attach_to_window = function () {
     var self = this;
-    // Render to the whole document
-    self.element_ = document.body;
     // Attach to URL fragment changes (links, manually-entered)
     window.onhashchange = function() {
         // Build the request from the hash
@@ -61,8 +58,12 @@ link.Agent.prototype.follow = function(request, callback) {
     link.App.handle_request(request, function(response) {
         // Construct the new state
         self.state_ = new link.AgentState(request,response);
+        // Find out what element to operate on
+        var element = null; /*link.App.get_uri_config(request.get_uri(),'->agent_element',true);
+        if (element) { element = document.getElementById(element); }*/
+        if (!element) { element = document.body; }
         // Run the response handler
-        self.render(self.element_);
+        self.render(element);
         // Run the callback, if given
         if (callback) {
             callback.call(self, response);

@@ -1,6 +1,0 @@
-{
-    "#": { "src": "/apps/helloworld/init.js" },
-    "#/test": { "src": "/apps/helloworld/test.js" },
-    "#/test2": { "src": "/apps/helloworld/test2.js" }
-}
-        

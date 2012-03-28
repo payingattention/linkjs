@@ -33,6 +33,7 @@ link.App.load_config = function(url, callback) {
  */
 link.App.configure = function(name, def) {
     if (!this.resources_) { this.resources_ = new goog.structs.Map(); }
+    // :TODO: some kind of precedence so user settings win?
     if (!def && typeof(name) == 'object') {
         this.resources_.addAll(name); // :TODO: set one at a time, to do extending
     } else {
@@ -42,7 +43,44 @@ link.App.configure = function(name, def) {
         goog.object.extend(old_def, def);
         this.resources_.set(name, old_def);
     }
-    // :TODO: some kind of precedence so user settings win?
+}
+
+/**
+ * Get a resource config value
+ * - 'search_up' = true to check parents until the value is found
+ */
+link.App.get_uri_config = function(uri, name, search_up) {
+    var uris = [uri];
+    if (search_up) { uris = uris.concat(this.get_parent_uris(uri)); }
+    for (var i=0, ii=uris.length; i < ii; i++) {
+        var resource = this.resources_.get(uris[i]);
+        if (!resource) { continue; }
+        if (resource[name]) { return resource[name]; }
+    }
+    return undefined;
+}
+
+
+/**
+ * Loads the given resources
+ *  - 'uri' may be an array or string
+ */
+link.App.load = function(uri, callback) {
+    if (typeof(uri) == 'string') { uri = [uri]; }
+    // Collected needed scripts
+    var needed_scripts = [];
+    for (var i=0, ii=uri.length; i < ii; i++) {
+        var resource = this.resources_.get(uri[i]);
+        if (!resource) { continue; }
+        if (resource['->requires']) { // add the requires
+            if (typeof(resource['->requires']) == 'object') { needed_scripts = needed_scripts.concat(resource['->requires']); }
+            else { needed_scripts.push(resource['->requires']); }
+        }
+        var handler = resource['->'];
+        if (handler && typeof(handler) != 'function') { needed_scripts.push(handler); } // add the handler if its not yet been loaded
+    }
+    // Load
+    link.App.require_script(needed_scripts, callback);
 }
 
 /**
@@ -56,6 +94,11 @@ link.App.handle_request = function(request, callback) {
         return callback(new link.Response(404,"Not Found"));
     }
     var resource = this.resources_.get(request.get_uri());
+    // If the handler has been set by a previous call to this function, just run it
+    // (this occurs during pipes)
+    if (request.handler_) {
+        return request.handler_.call(resource, request, new link.Agent(), callback);
+    }
     // Just a string? Redirect/alias
     if (typeof(resource) == 'string') {
         return this.handle_request(request.uri(resource), callback);
@@ -65,22 +108,23 @@ link.App.handle_request = function(request, callback) {
     if (!handler) {
         return callback(new link.Response(501,"Not Implemented"));
     }
-    var agent = new link.Agent();
-    // If the resource has been loaded, evaluate to construct the response
-    if (typeof(handler) == 'function') {
-        return handler.call(resource, request, agent, callback);
-    }
     // Load first, then run
     var self = this
-    link.App.require_script(handler, function() {
+    link.App.load(request.get_uri(), function() {
         var resource = self.resources_.get(request.get_uri());
         var handler = resource['->'];
-        if (!handler || typeof(handler) != 'function') {
-            resource['->'] = null; // bad definition, take it out of the gene pool
+        if (!handler || typeof(handler) != 'function') { // must not have loaded
             return callback(new link.Response(500,"Internal Error"));
         }
-        // Good to go, give it a run
-        handler.call(resource, request, agent, callback);
+        // Run through the pipe, if it exists for this or a parent resource
+        var pipe = self.get_uri_config(request.get_uri(), '->pipe', true);
+        if (pipe && typeof(pipe) == 'function') {
+            request.handler_ = handler; // save the handler to avoid setting it up again
+            pipe.call(resource, request, new link.Agent(), callback);
+        } else {
+            // Run direct
+            handler.call(resource, request, new link.Agent(), callback);
+        }
     });
 }
 
@@ -99,6 +143,18 @@ link.App.get_child_uris = function(uri) {
 }
 
 /**
+ * Provides the structure above the given URI
+ */
+link.App.get_parent_uris = function(uri) {
+    var parent_uris = [];
+    var uri_parts = uri.split('/');
+    for (var i=uri_parts.length-1; i > 0; i--) {
+        parent_uris.push(uri_parts.slice(0,i).join('/'));
+    }
+    return parent_uris;
+}
+
+/**
  * Loads scripts into the document, if not already loaded
  *  - 'script_srcs' may be a single string (url) or an array of strings
  *  - 'callback' is evaluated when all scripts have loaded
@@ -108,10 +164,10 @@ link.App.require_script = function(script_srcs, callback) {
     if (typeof(script_srcs) == 'string') { script_srcs = [script_srcs]; }
     // Collect scripts that have been loaded
     if (!link.App.require_script._loaded_scripts) {
-        link.App.require_script._loaded_scripts = []; // assume more wont be added by other means and cache the result
+        link.App.require_script._loaded_scripts = {}; // assume more wont be added by other means and cache the result
         var script_elems = goog.dom.getElementsByTagNameAndClass('script', null, document.head);
         for (var i=0; i < script_elems.length; i++) {
-            link.App.require_script._loaded_scripts.push(script_elems[i].src);
+            link.App.require_script._loaded_scripts[script_elems[i].src] = script_elems[i];
         }
     }
     // Add script elems, as needed
@@ -120,27 +176,33 @@ link.App.require_script = function(script_srcs, callback) {
     for (var i=0; i < script_srcs.length; i++) {
         var script_src = script_srcs[i];
         // Skip if present
-        if (link.App.require_script._loaded_scripts.indexOf(script_src) != -1) {
+        var existing_script = link.App.require_script._loaded_scripts[script_src];
+        if (existing_script) {
+            if (!existing_script.loaded) { script_elems.push(existing_script); } // Watch the callback if its still loading
             continue;
         }
-        link.App.require_script._loaded_scripts.push(script_src);
         // Attach element to head
         var script_elem = document.createElement('script');
         script_elem.src = script_src;
         script_elem.type = "application/javascript";
         head.appendChild(script_elem);
-        script_elems.push(script_elem);
+        // Track
+        script_elem.loaded = false; // track the loaded state, in case this gets called again before its done
+        script_elems.push(script_elem); // add to the script elems that we're tracking in this call
+        link.App.require_script._loaded_scripts[script_src] = script_elem; // add to the script elems that we're tracking in this document
     }
     // Helper for adding the callbacks
     function add_callback(elem, fn) {
         elem.onreadystatechange = function() { // ie...
             if (elem.readyState == 'loaded' || elem.readyState == 'complete') {
                 console.log(elem.src);
+                elem.loaded = true;
                 fn && fn(); fn = false;
             }
         };
         elem.onload = function() { // most everybody...
-                console.log(elem.src);
+            console.log(elem.src);
+            elem.loaded = true;
             fn && fn(); fn = false;
         };
         // :TODO: safari -- http://ajaxian.com/archives/a-technique-for-lazy-script-loading
