@@ -7,8 +7,17 @@ link.App.configure({
         "->requires": [
             '/apps/shell/vendor/handlebars.runtime.js',
             '/apps/shell/templates/templates.js'
-        ],
-        "->pipe": function(request, agent, callback) {
+        ]
+    },
+    "#/shell/updatenav": {
+        "->": "/apps/shell/updatenav.js"
+    },
+    "#/shell/structure": {
+        "->": "/apps/shell/structure.js"
+    },
+
+    "/shell/pipe": { // :TODO: move this where it belongs
+        "->": function(request, agent, callback) {
             // Follow the original request
             agent.follow(request, function(response) {
                 // Wrap the render function
@@ -27,9 +36,21 @@ link.App.configure({
                 callback(response);
             });
         }
-    },
-    "#/shell/structure": {
-        "->": "/apps/shell/structure.js"
     }
 });
-link.App.load(['#']); // preload
+link.App.load(['#', '#/shell/structure']); // preload, for the hell of it
+link.App.set_frame_controller('body', function(agent, request) {
+    // Create the frame agents, if they don't exist
+    if (!agent.has_frame_agents(['shell-app', 'shell-ui'])) {
+        // Create the frame elements
+        agent.get_frame_element().innerHTML = '<div id="shell-app"></div><div id="shell-ui"></div>';
+        // Add the agents
+        agent.add_frame_agents(['shell-app', 'shell-ui']);
+    }
+    // Send the request as-is to the shell-app frame
+    agent.get_frame_agent('shell-app').follow(request);
+    // Notify the shell bar
+    agent.get_frame_agent('shell-ui').post('#/shell/updatenav', request.get_uri(), 'text/plain');
+    // Don't let top-level handle this; it would destroy our shell markup
+    return false;
+});
