@@ -7,9 +7,6 @@ Responsibilities:
  - Manages a namespace which maps to layered resource definitions
  - Handles CONFIGURE requests, which update the namespace at runtime
  - Loads and evaluates resource definitions from remote sources
-
-Todo:
- - Change the winbox resources to use the configure call
 */
 
 goog.provide('link.App');
@@ -19,6 +16,12 @@ goog.require('goog.structs.Map');
 goog.require('goog.object');
 goog.require('goog.Uri.QueryData');
 goog.require('goog.net.XhrIo');
+
+//
+// Initialize some app properties
+//
+link.App.resources_ = new goog.structs.Map();
+link.App.document_body_agent_ = null;
 
 /**
  * Loads app configuration from a remote url
@@ -32,7 +35,6 @@ link.App.load_config = function(url, callback) {
  * Configure the application namespace
  */
 link.App.configure = function(name, def) {
-    if (!this.resources_) { this.resources_ = new goog.structs.Map(); }
     // :TODO: some kind of precedence so user settings win?
     if (!def && typeof(name) == 'object') {
         this.resources_.addAll(name); // :TODO: set one at a time, to do extending
@@ -60,7 +62,6 @@ link.App.get_uri_config = function(uri, name, search_up) {
     return undefined;
 }
 
-
 /**
  * Loads the given resources
  *  - 'uri' may be an array or string
@@ -83,10 +84,33 @@ link.App.load = function(uri, callback) {
     link.App.require_script(needed_scripts, callback);
 }
 
+//
+// Frame agent methods
+//
+link.App.set_body_agent = function(agent) {
+    if (this.document_body_agent_) {} // :TODO: destroy code?
+    this.document_body_agent_ = agent;
+}
+link.App.get_frame_agent = function(frame_element_id, parent_agent) {
+    if (frame_element_id == 'document.body') { return this.document_body_agent_; }
+    if (!parent_agent) { parent_agent = this.document_body_agent_; }
+    // See if this parent has it
+    var frame_agent = parent_agent.get_frame_agent(frame_element_id);
+    if (frame_agent) { return frame_agent; }
+    // If not, iterate its children
+    var frame_agents = parent_agent.get_frame_agents().getValues();
+    for (var i=0, ii=frame_agents.length; i < ii; i++) {
+        frame_agent = this.get_frame_agent(frame_element_id, frame_agents[i]);
+        if (frame_agent) { return frame_agent; }
+    }
+    // Not found
+    return null;
+}
+
 /**
  * Generates a response by evaluating the target resource
  */
-link.App.handle_request = function(request, callback) {
+link.App.handle_request = function(request, agent, callback) {
     // Make sure the request isn't malformed
     // :TODO:
     // Find the target resource
@@ -94,37 +118,30 @@ link.App.handle_request = function(request, callback) {
         return callback(new link.Response(404,"Not Found"));
     }
     var resource = this.resources_.get(request.get_uri());
-    // If the handler has been set by a previous call to this function, just run it
-    // (this occurs during pipes)
-    if (request.handler_) {
-        return request.handler_.call(resource, request, new link.Agent(), callback);
-    }
     // Just a string? Redirect/alias
     if (typeof(resource) == 'string') {
         return this.handle_request(request.uri(resource), callback);
     }
     var handler = resource['->'];
-    // Has a handler?
     if (!handler) {
         return callback(new link.Response(501,"Not Implemented"));
-    }
+    }        
     // Load first, then run
     var self = this
     link.App.load(request.get_uri(), function() {
         var resource = self.resources_.get(request.get_uri());
+        // Run request processor :TODO: processorS-- build an array out of the URI stack (#, #/a, #/a/b...)
+        var request_processor = self.get_uri_config(request.get_uri(), '->request_processor', true);
+        if (request_processor) {
+            var should_handle = request_processor.call(resource, request);
+            if (!should_handle) { return; }// callback(new link.Response(204,"No Content")); }
+        }
+        // Run handler
         var handler = resource['->'];
         if (!handler || typeof(handler) != 'function') { // must not have loaded
             return callback(new link.Response(500,"Internal Error"));
         }
-        // Run through the pipe, if it exists for this or a parent resource
-        var pipe = self.get_uri_config(request.get_uri(), '->pipe', true);
-        if (pipe && typeof(pipe) == 'function') {
-            request.handler_ = handler; // save the handler to avoid setting it up again
-            pipe.call(resource, request, new link.Agent(), callback);
-        } else {
-            // Run direct
-            handler.call(resource, request, new link.Agent(), callback);
-        }
+        handler.call(resource, request, new link.Agent(), callback);
     });
 }
 
@@ -193,38 +210,37 @@ link.App.require_script = function(script_srcs, callback) {
     }
     // Helper for adding the callbacks
     function add_callback(elem, fn) {
-        elem.onreadystatechange = function() { // ie...
+        goog.events.listen(elem, goog.events.EventType.READYSTATECHANGE, function() { // ie...
             if (elem.readyState == 'loaded' || elem.readyState == 'complete') {
                 console.log(elem.src);
                 elem.loaded = true;
                 fn && fn(); fn = false;
             }
-        };
-        elem.onload = function() { // most everybody...
+        });
+        goog.events.listen(elem, goog.events.EventType.LOAD, function() { // most everybody...
             console.log(elem.src);
             elem.loaded = true;
             fn && fn(); fn = false;
-        };
+        });
         // :TODO: safari -- http://ajaxian.com/archives/a-technique-for-lazy-script-loading
     }
     // Setup callbacks
-    if (callback) {
-        var secount = script_elems.length;
-        if (secount == 0) {
-            // All scripts were already loaded, just hit the callback now
-            callback();
-        } else if (secount == 1) {
-            // Only one script to load, hit the callback when its done
-            add_callback(script_elems[0], callback);
-        } else {
-            // Multiple scripts; track the number that have loaded and call the given callback when all have finished
-            var num_loaded = 0;
-            for (var i=0; i < secount; i++) {
-                add_callback(script_elems[i], function() {
-                    if (num_loaded < (secount-1)) { num_loaded++; }
-                    else { callback(); }
-                });
-            }
+    if (!callback) { callback = function() { }; }
+    var secount = script_elems.length;
+    if (secount == 0) {
+        // All scripts were already loaded, just hit the callback now
+        callback();
+    } else if (secount == 1) {
+        // Only one script to load, hit the callback when its done
+        add_callback(script_elems[0], callback);
+    } else {
+        // Multiple scripts; track the number that have loaded and call the given callback when all have finished
+        var num_loaded = 0;
+        for (var i=0; i < secount; i++) {
+            add_callback(script_elems[i], function() {
+                if (num_loaded < (secount-1)) { num_loaded++; }
+                else { callback(); }
+            });
         }
     }
 }

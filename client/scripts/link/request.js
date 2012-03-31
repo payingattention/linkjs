@@ -15,8 +15,13 @@ goog.require('goog.Uri');
 goog.require('goog.Uri.QueryData');
 
 link.Request = function(uri) {
+    // Create our in-app URI if it's a hash
+    // :TODO: this needs to be smarter, might need to have a better onclick hander
+    if (uri.indexOf('#') != -1) {
+        uri = uri.substr(uri.indexOf('#') + 1);
+    }
     // Parse URI
-    var parsed_uri = new goog.Uri(uri.slice(1));
+    var parsed_uri = new goog.Uri(uri);
     this.uri_ = '#' + parsed_uri.getPath();
     this.query_ = parsed_uri.getQueryData();
     // Set up attribute defaults

@@ -7,49 +7,11 @@ Responsibilities:
  - Provides HTTP requests through the link application
  - Maintains state
  - Maintains frame agents
- - Maintains request modifiers (cookies++) :TODO:
-
-Frame Agents:
- - Sub-agents attached to elements in the DOM to track independent states and handle requests originating from their DOM trees
- - Frame Controllers handle routing, creation, and deletion of frames
 
 Todo:
- - Add frame agents to link.Agent
-   - Add .frame_agents, .frame_element, and .parent_agent properties
-   - frame_agents = map, key=frame_element_id, value=agent
-   - Add functions to create/destroy frame agents
-     - Requires frame element to exist when called
-
- - Update link.Agent.follow()
-   - Add optional frame element id (default=body) which specifies which frame the request originated from
-   - If the frame elem is not attached to the agent or any subs...
-     - If parent_agent exists, its .follow will be called
-     - If it doesn't, the request wont be handled (error condition, probably non existent element)
-   - If the frame elem is attached to the current or a sub at any depth, follow() will run its controller code
-     - Default controller only calls the attached sub (one level down, not the exact one)
-   - If the controller returns true or DNE, follow() handles the request itself
-   - Note, possible decisions are: create new frame, delete existing frame, modify request, route request to a frame agent, and create new request to a frame agent.
-
- - Add frame controllers to link.App
-   - Add .frame_controllers (map, key=frame_element_id, value=callback)
-   - Add function to set controllers
-     - Doesn't require frame elements to exist when called
-     - Meant to be called during configuration/init
-   - Controllers are given the agent and the request
-     - If the given agent will handle, returns true
-     - Doesn't use a callback because it's not supposed to make async choices on the given request
-
- - Update link.Agent.attach_to_window()
-   - Remove onhashchange, replace with a document.body listener
-   - Handle on the bubble stage, so that components can easily override this behavior with their own
-
-
-Request Persistence
- - A tool for resources to provide persistent request behavior (headers, redirects, etc)
- - Approaches
-   - Callbacks which are run on requests, giving them the opportunity to add/modify headers & body
- - Proposed behaviors/capabilities
- - Questions
+ - Add frame agent deletion tools
+   - Need to listen to deletion of their elements
+   - Need a remove_agent()
 */
 
 goog.provide('link.Agent');
@@ -60,36 +22,112 @@ goog.require('link.Request');
 goog.require('link.Response');
 
 goog.require('goog.Uri');
+goog.require('goog.structs.Map');
 goog.require('goog.dom');
 
 link.Agent = function() {
     this.state_ = null;
+    this.frame_element_ = null;
+    this.frame_controller_ = null;
+    this.frame_agents_ = new goog.structs.Map();
+    this.parent_agent_ = null;
+    this.click_handler_ = null;
 }
 
 //
-// Getters
+// Accessors
 //
 link.Agent.prototype.get_current_state = function() { return this.state_; }
+link.Agent.prototype.get_frame_element = function() { return this.frame_element_; }
+link.Agent.prototype.get_frame_element_id = function() {
+    if (!this.frame_element_) { return null; }
+    if (this.frame_element_ == document.body) { return 'document.body'; }
+    return this.frame_element_.id;
+}
+link.Agent.prototype.get_frame_controller = function() { return this.frame_controller_; }
+link.Agent.prototype.set_frame_controller = function(fn) { this.frame_controller_ = fn; }
+link.Agent.prototype.get_frame_agents = function() { return this.frame_agents_; }
+link.Agent.prototype.get_frame_agent = function(frame_element_id) { return this.frame_agents_.get(frame_element_id); }
+link.Agent.prototype.get_parent_agent = function() { return this.parent_agent_; }
 
 /**
- * Couples the agent to the window so that it extends the browser
+ * Couples the agent to the given element, to use as its "frame"
+ */
+link.Agent.prototype.attach_to_element = function(element) {
+    if (this.frame_element_) {
+        goog.events.unlisten(source, goog.events.EventType.CLICK, this.click_handler_);
+    }
+    this.frame_element_ = element;
+    // Define the click handler in this closure, to have access to 'self'
+    // (I could use goog.bind, but go away you bother me)
+    var self = this;
+    this.click_handler_ = function(e) {
+        // :TODO: forms
+        // Try to collect the target URI
+        var target_uri = e.target.href;
+        if (!target_uri) { return; }
+        e.stopPropagation();
+        // Build request
+        var request = new link.Request(target_uri);
+        request.for_html(); // <a> = GET text/html
+        // Run our parent frame controller
+        if (self.get_parent_agent() && self.get_parent_agent().get_frame_controller()) {
+            var should_handle = self.get_parent_agent().get_frame_controller()(request);
+            if (!should_handle) { return; }
+        }
+        // Handle it ourselves
+        self.follow(request);
+    };
+    goog.events.listen(this.frame_element_, goog.events.EventType.CLICK, this.click_handler_);
+    // :TODO: do we want to check goog.events.hasListener before we do this, so we can avoid 2 agents attaching to a frame? Even if it's not another agent listening, we might need to consider the seat taken
+}
+
+/**
+ * Couples the agent to the window - root agent
  */
 link.Agent.prototype.attach_to_window = function () {
-    var self = this;
-    // Attach to URL fragment changes (links, manually-entered)
-    window.onhashchange = function() {
-        // Build the request from the hash
-        var uri = window.location.hash;
-        if (uri == null || uri == '') { uri = '#'; }
-        var request = new link.Request(uri);
-        request.for_html(); // assume GET for text/html
-        // Follow the request
-        self.follow(request);
-    }
-    // Now follow the current uri
+    this.attach_to_element(document.body);
+    link.App.set_body_agent(this);
+    // Now follow the current hash's uri
     var uri = window.location.hash;
     if (uri == null || uri == '') { uri = '#'; }
-    this.follow((new link.Request(uri)).for_html()); // request the current page
+    this.follow((new link.Request(uri)).for_html());
+}
+
+/**
+ * Checks for frame agents within this immediate frame, returns true if ALL are found
+ * - 'frame_element_ids' may be a string or an array of strings
+ */
+link.Agent.prototype.has_frame_agents = function(frame_element_ids) {
+    if (typeof(frame_element_ids) == 'string') { frame_element_ids = [frame_element_ids]; }
+    for (var i=0; i < frame_element_ids.length; i++) {
+        if (!this.frame_agents_.containsKey(frame_element_ids[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/**
+ * Adds frames and creates their agents if they don't already exist
+ * - 'frame_element_ids' may be a string or an array of strings
+ * - Given frame elements must exist at time of call
+ */
+link.Agent.prototype.add_frame_agents = function(frame_element_ids) {
+    if (typeof(frame_element_ids) == 'string') { frame_element_ids = [frame_element_ids]; }
+    // Iterate given ids
+    for (var i=0; i < frame_element_ids.length; i++) {
+        if (!this.frame_agents_.containsKey(frame_element_ids[i])) {
+            var elem = document.getElementById(frame_element_ids[i]);
+            if (elem) {
+                // Element exists, create the agent
+                var frame_agent = new link.Agent();
+                frame_agent.parent_agent_ = this;
+                frame_agent.attach_to_element(elem);
+                this.frame_agents_.set(elem.id, frame_agent);
+            }
+        }
+    }
 }
 
 /**
@@ -97,13 +135,12 @@ link.Agent.prototype.attach_to_window = function () {
  **/
 link.Agent.prototype.follow = function(request, callback) {
     var self = this;
-    // Instruct the request's resource service to build the response
-    link.App.handle_request(request, function(response) {
+    link.App.handle_request(request, this, function(response) {
         // Construct the new state
         self.state_ = new link.AgentState(request,response);
         // Run the response handler
         if (response.render) {
-            response.render(this);
+            response.render(self);
         }
         // Run the callback, if given
         if (callback) {

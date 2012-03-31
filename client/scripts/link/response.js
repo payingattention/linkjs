@@ -50,11 +50,12 @@ link.Response.prototype.render_to = function(elem) {
 // Handling behavior
 //
 link.Response.prototype.render = function(agent) {
-    var target_elem = this.render_target_elem_ || document.body;
+    var target_elem = agent.get_frame_element();
+    if (!target_elem) { return; }
     // Default behavior
     if (this.status_code_ != 200) {
         target_elem.innerHTML = '' + this.status_code_ + ' ' + this.reason_phrase_;
-    } else if (this.body_) {
+    } else if (this.body_ !== null) {
         target_elem.innerHTML = this.body_;
     }
 }
