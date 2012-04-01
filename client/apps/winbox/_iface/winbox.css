@@ -1,0 +1,11 @@
+#winbox-container {
+    margin: 5px 8px;
+}
+#winbox-container .well {
+    padding: 8px 0;
+    width: 150px;
+    float: left;
+}
+#winbox-content {
+    margin-left: 170px;
+}

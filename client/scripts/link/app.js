@@ -118,14 +118,10 @@ link.App.handle_request = function(request, agent, callback) {
         return callback(new link.Response(404,"Not Found"));
     }
     var resource = this.resources_.get(request.get_uri());
-    // Just a string? Redirect/alias
-    if (typeof(resource) == 'string') {
-        return this.handle_request(request.uri(resource), callback);
-    }
     var handler = resource['->'];
     if (!handler) {
         return callback(new link.Response(501,"Not Implemented"));
-    }        
+    }
     // Load first, then run
     var self = this
     link.App.load(request.get_uri(), function() {
@@ -139,6 +135,7 @@ link.App.handle_request = function(request, agent, callback) {
         // Run handler
         var handler = resource['->'];
         if (!handler || typeof(handler) != 'function') { // must not have loaded
+            console.log('Error: Handler for ' + request.get_uri() + ' didn\'t load.');
             return callback(new link.Response(500,"Internal Error"));
         }
         handler.call(resource, request, new link.Agent(), callback);
