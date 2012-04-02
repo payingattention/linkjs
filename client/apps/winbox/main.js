@@ -5,11 +5,27 @@ link.App.configure('#/winbox', {
     "->": function(request, agent, callback) {
         var self = this;
         if (request.matches({'method':'get', 'accept':'text/html'})) {
-            var html = 'debug';
+
+            // Fetch messages from all configured services
+            if (!self._messages) {
+                // Fetch the unread messages
+                self._messages = [];
+                var services = agent.get_child_uris('#/winbox/_services');
+                for (var i=0, ii=services.length; i < ii; i++) {
+                    agent.get(services[i] + '?req=messages&filter=unread', {'accept':'application/json'}, function(res) { self._handle_messages(res); });
+                }
+            }
+            
+            // Render the messages
+            var messages_html = self._render_messages();
+
+            // Render the inbox
+            var html = Handlebars.templates['box.html']({messages:messages_html});
+            
             // Put into the layout
-            agent.post('#/winbox/_iface/layout', html, 'text/html', {'accept': 'text/html'}, function(response) {
+            agent.post('#/winbox/_iface/layout', html, 'text/html', {'accept': 'text/html'}, callback);/*function(response) {
                 callback(response); // stop there for now
-                /*// Highlight the inbox
+                // Highlight the inbox
                 agent.post('#/winbox/_iface/shell', {label: 'Messages'}, 'application/json');
                 // Add the messages list interface
                 var html = Handlebars.templates['box.html']();
@@ -28,8 +44,8 @@ link.App.configure('#/winbox', {
                         // Just render messages
                         self._render_messages(self._messages);
                     }
-                }));*/
-            });
+                }));
+            });*/
         }
     },
     _render_messages: function(messages) {
@@ -39,7 +55,7 @@ link.App.configure('#/winbox', {
             var msgmoment = moment(message.date);
             html += '<tr onclick="window.location.hash=\'#/winbox/message\'; return false;"><td><input type="checkbox" /></td><td><span class="label">' + message.service + '</span></td><td>' + message.summary + '</td><td title="' + msgmoment.calendar() + '">' + msgmoment.fromNow() + '</td></tr>';
         }
-        document.getElementById('winbox-messages').innerHTML = html;
+        return html;
     },
     _handle_messages: function(response) {
         var new_messages = response.get_body();
