@@ -32,23 +32,23 @@ link.Agent = function() {
     this.frame_agents_ = new goog.structs.Map();
     this.parent_agent_ = null;
     this.click_handler_ = null;
-}
+};
 
 //
 // Accessors
 //
-link.Agent.prototype.get_current_state = function() { return this.state_; }
-link.Agent.prototype.get_frame_element = function() { return this.frame_element_; }
+link.Agent.prototype.get_current_state = function() { return this.state_; };
+link.Agent.prototype.get_frame_element = function() { return this.frame_element_; };
 link.Agent.prototype.get_frame_element_id = function() {
     if (!this.frame_element_) { return null; }
     if (this.frame_element_ == document.body) { return 'document.body'; }
     return this.frame_element_.id;
-}
-link.Agent.prototype.get_frame_controller = function() { return this.frame_controller_; }
-link.Agent.prototype.set_frame_controller = function(fn) { this.frame_controller_ = fn; }
-link.Agent.prototype.get_frame_agents = function() { return this.frame_agents_; }
-link.Agent.prototype.get_frame_agent = function(frame_element_id) { return this.frame_agents_.get(frame_element_id); }
-link.Agent.prototype.get_parent_agent = function() { return this.parent_agent_; }
+};
+link.Agent.prototype.get_frame_controller = function() { return this.frame_controller_; };
+link.Agent.prototype.set_frame_controller = function(fn) { this.frame_controller_ = fn; };
+link.Agent.prototype.get_frame_agents = function() { return this.frame_agents_; };
+link.Agent.prototype.get_frame_agent = function(frame_element_id) { return this.frame_agents_.get(frame_element_id); };
+link.Agent.prototype.get_parent_agent = function() { return this.parent_agent_; };
 
 /**
  * Couples the agent to the given element, to use as its "frame"
@@ -66,7 +66,8 @@ link.Agent.prototype.attach_to_element = function(element) {
         // Try to collect the target URI
         var target_uri = e.target.href;
         if (!target_uri) { return; }
-        e.stopPropagation();
+        e.preventDefault();
+        if (e.stopPropagation) { e.stopPropagation(); }
         // Build request
         var request = new link.Request(target_uri);
         request.for_html(); // <a> = GET text/html
@@ -77,22 +78,50 @@ link.Agent.prototype.attach_to_element = function(element) {
         }
         // Handle it ourselves
         self.follow(request);
+        // Have the body agent do whatever it needs
+        link.App.get_body_agent().update_window(request);
     };
-    goog.events.listen(this.frame_element_, goog.events.EventType.CLICK, this.click_handler_);
+    goog.events.listen(this.frame_element_, goog.events.EventType.CLICK, this.click_handler_, false);
     // :TODO: do we want to check goog.events.hasListener before we do this, so we can avoid 2 agents attaching to a frame? Even if it's not another agent listening, we might need to consider the seat taken
-}
+};
 
 /**
  * Couples the agent to the window - root agent
  */
 link.Agent.prototype.attach_to_window = function () {
+    var self = this;
+    // Set up the standard listeners
     this.attach_to_element(document.body);
     link.App.set_body_agent(this);
+    // Set up a hash listener as well
+    window.onhashchange = function() {
+        // Build the request from the hash
+        var uri = window.location.hash;
+        if (self.expected_hashchange_ == uri) {
+            self.expected_hashchange_ = null; // do nothing if this has been handled elsewhere
+            return;
+        }
+        self.expected_hashchange_ = null;
+        if (uri == null || uri == '') { uri = '#'; }
+        var request = new link.Request(uri);
+        request.for_html(); // assume GET for text/html
+        // Follow the request
+        self.follow(request);
+        
+    };
     // Now follow the current hash's uri
     var uri = window.location.hash;
     if (uri == null || uri == '') { uri = '#'; }
     this.follow((new link.Request(uri)).for_html());
-}
+};
+
+/**
+ * Updates the browser to reflect state
+ */
+link.Agent.prototype.update_window = function(request) {
+    this.expected_hashchange_ = request.get_uri();
+    window.location.hash = request.get_uri();
+};
 
 /**
  * Checks for frame agents within this immediate frame, returns true if ALL are found
@@ -106,7 +135,7 @@ link.Agent.prototype.has_frame_agents = function(frame_element_ids) {
         }
     }
     return true;
-}
+};
 
 /**
  * Adds frames and creates their agents if they don't already exist
@@ -128,7 +157,7 @@ link.Agent.prototype.add_frame_agents = function(frame_element_ids) {
             }
         }
     }
-}
+};
 
 /**
  * Follows a request, building state around the response
@@ -147,7 +176,7 @@ link.Agent.prototype.follow = function(request, callback) {
             callback.call(self, response);
         }
     });
-}
+};
 
 //
 // Request create & follow helpers
@@ -157,14 +186,14 @@ link.Agent.prototype.get = function(uri, headers, callback) {
     request.method('get');
     if (headers) { request.headers(headers); }
     this.follow(request, callback);
-}
+};
 link.Agent.prototype.post = function(uri, body, body_contenttype, headers, callback) {
     var request = new link.Request(uri);
     request.method('post');
     if (headers) { request.headers(headers); }
     if (body) { request.body(body, body_contenttype); }
     this.follow(request, callback);
-}
+};
 
 /**
  * Provides the structure beneath the given URI
@@ -172,7 +201,7 @@ link.Agent.prototype.post = function(uri, body, body_contenttype, headers, callb
 link.Agent.prototype.get_child_uris = function(uri) {
     if (!uri) { uri = '#'; }
     return link.App.get_child_uris(uri);
-}
+};
 
 /**
  * Provides the structure beneath the given URI as an object
@@ -193,4 +222,4 @@ link.Agent.prototype.get_uri_structure = function(uri) {
         }
     }
     return structure;
-}
+};

@@ -91,6 +91,9 @@ link.App.set_body_agent = function(agent) {
     if (this.document_body_agent_) {} // :TODO: destroy code?
     this.document_body_agent_ = agent;
 }
+link.App.get_body_agent = function(agent) {
+    return this.document_body_agent_;
+}
 link.App.get_frame_agent = function(frame_element_id, parent_agent) {
     if (frame_element_id == 'document.body') { return this.document_body_agent_; }
     if (!parent_agent) { parent_agent = this.document_body_agent_; }

@@ -26,6 +26,8 @@ link.App.configure('#', {
                 link.App.get_frame_agent('shell-app').follow(request);
                 // Notify the shell bar
                 link.App.get_frame_agent('shell-ui').get('/shell/ui?activenav=' + request.get_uri().substr(1));
+                // Update the browser
+                link.App.get_body_agent().update_window(request);
                 // Don't let the body frame agent handle this; it would destroy our shell markup
                 return false;
             };

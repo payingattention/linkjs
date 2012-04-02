@@ -19,9 +19,7 @@ function app_loaded() {
 }
 function app_init() {
     //link.App.configure({'#': '#/winbox'}); // make winbox the default app
-    link.App.load_config('/apps/shell/config.js'); // load shell
-    link.App.load_config('/apps/winbox/config.js', app_loaded); // load winbox
-    // :NOTE: probably need to combine the above into one call-- no guarantee that winbox would finish after shell
+    link.App.load_config(['/apps/shell/config.js','/apps/winbox/config.js'], app_loaded); // load shell & winbox
 }
 
         </script>
