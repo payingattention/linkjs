@@ -11,7 +11,8 @@ link.App.require_script([
 });
 link.App.configure({
     "#/winbox": {
-        "->": "/apps/winbox/main.js"
+        "->": "/apps/winbox/main.js",
+        "->requires": ['/apps/winbox/templates/templates.js']
     },
     "#/winbox/message": {
         "->": "/apps/winbox/message.js"

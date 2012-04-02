@@ -6,7 +6,8 @@ link.App.configure('#/winbox', {
         var self = this;
         if (request.matches({'method':'get', 'accept':'text/html'})) {
 
-            // Fetch messages from all configured services
+            // Trigger requests to our services
+            var messages_html = '<tr><td colspan="3">Loading...</td></tr>';
             if (!self._messages) {
                 // Fetch the unread messages
                 self._messages = [];
@@ -14,44 +15,22 @@ link.App.configure('#/winbox', {
                 for (var i=0, ii=services.length; i < ii; i++) {
                     agent.get(services[i] + '?req=messages&filter=unread', {'accept':'application/json'}, function(res) { self._handle_messages(res); });
                 }
+            } else {
+                // Just re-render
+                messages_html = self._render_messages();
             }
             
-            // Render the messages
-            var messages_html = self._render_messages();
-
             // Render the inbox
-            var html = Handlebars.templates['box.html']({messages:messages_html});
+            var html = Handlebars.templates['box.html']({messages: messages_html});
             
             // Put into the layout
-            agent.post('#/winbox/_iface/layout', html, 'text/html', {'accept': 'text/html'}, callback);/*function(response) {
-                callback(response); // stop there for now
-                // Highlight the inbox
-                agent.post('#/winbox/_iface/shell', {label: 'Messages'}, 'application/json');
-                // Add the messages list interface
-                var html = Handlebars.templates['box.html']();
-                // Respond
-                callback((new link.Response(200)).body(html,'text/html').renderer(function(element) {
-                    // Render interface to winbox-content
-                    document.getElementById('winbox-content').innerHTML = this.get_body();
-                    if (!self._messages) {
-                        // Fetch the unread messages
-                        self._messages = [];
-                        var services = agent.get_child_uris('#/winbox/_services');
-                        for (var i=0, ii=services.length; i < ii; i++) {
-                            agent.get(services[i] + '?req=messages&filter=unread', {'accept':'application/json'}, function(res) { self._handle_messages(res); });
-                        }
-                    } else {
-                        // Just render messages
-                        self._render_messages(self._messages);
-                    }
-                }));
-            });*/
+            agent.post('#/winbox/_iface/layout', html, 'text/html', {'accept': 'text/html'}, callback);
         }
     },
-    _render_messages: function(messages) {
+    _render_messages: function() {
         var html = '';
-        for (var i=0, ii=messages.length; i < ii; i++) {
-            var message = messages[i];
+        for (var i=0, ii=this._messages.length; i < ii; i++) {
+            var message = this._messages[i];
             var msgmoment = moment(message.date);
             html += '<tr onclick="window.location.hash=\'#/winbox/message\'; return false;"><td><input type="checkbox" /></td><td><span class="label">' + message.service + '</span></td><td>' + message.summary + '</td><td title="' + msgmoment.calendar() + '">' + msgmoment.fromNow() + '</td></tr>';
         }
@@ -73,6 +52,7 @@ link.App.configure('#/winbox', {
             if (!added) { this._messages.push(new_messages[i]); }
         }
         // Redraw all messages
-        this._render_messages(this._messages);
+        var messages_table = document.getElementById('winbox-messages');
+        messages_table.innerHTML = this._render_messages();
     }
 });
