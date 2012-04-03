@@ -33,5 +33,15 @@ link.App.configure({
         "->": "/apps/winbox/_service/restemail.js",
         "service": "GMail",
         "host": "http://estate45.com:8001/"
+    },
+    "#/winbox/_services/restwitter": {
+        "->": "/apps/winbox/_service/restwitter.js",
+        "service": "Twitter",
+        "host": "http://estate45.com:8002/"
+    },
+    "#/winbox/_services/restfacebook": {
+        "->": "/apps/winbox/_service/restfacebook.js",
+        "service": "Facebook",
+        "host": "http://estate45.com:8003/"
     }
 });
