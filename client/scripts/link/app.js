@@ -132,7 +132,7 @@ link.App.handle_request = function(request, agent, callback) {
         // Run request processor :TODO: processorS-- build an array out of the URI stack (#, #/a, #/a/b...)
         var request_processor = self.get_uri_config(request.get_uri(), '->request_processor', true);
         if (request_processor) {
-            var should_handle = request_processor.call(resource, request);
+            var should_handle = request_processor.call(resource, request, agent);
             if (!should_handle) { return; }// callback(new link.Response(204,"No Content")); }
         }
         // Run handler
