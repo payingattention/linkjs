@@ -7,7 +7,7 @@
 //     - '?req=message' for a single message body
 //       - '&id=:id' to specify the id
 //       - returns structure of {body:}
-link.App.configure('#/winbox/_services/restemail', {
+link.App.configure('#/winbox/services/restemail', {
     "->": function(request, agent, callback) {
         var self = this;
         if (request.matches({'method':'get', 'accept': 'application/json'})) {

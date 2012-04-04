@@ -28,7 +28,7 @@ link.App.configure('#/winbox', {
         self._messages = [];
         this._service_descripts = [];
         // Fetch all services configured into the pindex
-        agent.get('#/pindex?q="winbox_service"', {'accept':'application/javascript'}, function(services_res) {
+        agent.get('#/pindex?q=["winbox","service"]', {'accept':'application/javascript'}, function(services_res) {
             self._services = services_res.get_body();
             for (var i=0, ii=self._services.length; i < ii; i++) {
                 // Fetch description

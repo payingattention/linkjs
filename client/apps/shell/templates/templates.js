@@ -34,7 +34,7 @@ function program2(depth0,data) {
   
   return "class=\"selected\"";}
 
-  buffer += "<div id=\"shell-root\">\n</div>\n<div id=\"shell-debug-bar\">\n    ";
+  buffer += "<div id=\"shell-app\">\n</div>\n<div id=\"shell-ui\">\n    ";
   foundHelper = helpers.nav;
   stack1 = foundHelper || depth0.nav;
   stack2 = helpers.each;

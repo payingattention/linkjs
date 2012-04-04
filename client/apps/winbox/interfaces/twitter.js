@@ -1,4 +1,4 @@
-link.App.configure('#/winbox/_iface/msg/twitter', {
+link.App.configure('#/winbox/interfaces/twitter', {
     "->": function(request, agent, callback) {
         if (request.matches({'method':'post', 'accept':'text/html'})) {
             var body = request.get_body();

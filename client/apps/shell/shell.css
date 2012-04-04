@@ -3,7 +3,7 @@ body {
     padding: 0;
 }
 
-#shell-debug-bar {
+#shell-ui {
     position: absolute;
     bottom: 0;
     height: 26px;
@@ -14,7 +14,7 @@ body {
     background: -webkit-gradient(linear, left top, left bottom, from(#FAFAFA), to(#F0F0F0));
     background: -moz-linear-gradient(top,  #fafafa,  #f0f0f0);
 }
-#shell-debug-bar a {
+#shell-ui a {
     margin-left: 10px;
     text-decoration: none;
     font-family: verdana;
@@ -22,9 +22,9 @@ body {
     color: #555;
     padding-top: 5px;
 }
-#shell-debug-bar a:hover {
+#shell-ui a:hover {
     border-top: 2px solid #AD6;
 }
-#shell-debug-bar a.selected {
+#shell-ui a.selected {
     border-top: 2px solid #39F;
 }

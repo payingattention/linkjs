@@ -36,7 +36,17 @@ link.App.configure('#/pindex', {
                 this.indexed_values[k] = values[k];
             }
             callback(new link.Response(200));
-        } else {
+        }
+        // List the index
+        else if (request.matches({'method':'get', 'content-type':'text/html'})) {
+            var html = '<ul>';
+            for (var k in this.indexed_values) {
+                html += '<li><strong>' + k + '</strong>: ' + this.indexed_values[k].join(', ') + '</li>';
+            }
+            html += '</ul>';
+            callback((new link.Response(200)).body(html,'text/html'));
+        }
+        else {
             callback(new link.Response(501,"Not Implemented"));
         }
     },

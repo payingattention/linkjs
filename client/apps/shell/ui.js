@@ -8,7 +8,8 @@ link.App.configure('#/shell/ui', {
             // Generate the HTML
             var html = Handlebars.templates['shell.html']({ 'nav': [
                 {'uri': '#', 'label': '&lfloor;&rceil;', 'selected': (selection == '')},
-                {'uri': '#/shell/structure', 'label': 'structure', 'selected': (selection == '/shell/structure')}
+                {'uri': '#/shell/structure', 'label': 'structure', 'selected': (selection == '/shell/structure')},
+                {'uri': '#/pindex', 'label': 'pindex', 'selected': (selection == '/pindex')}
             ]});
             // Respond :TODO:
             callback((new link.Response(200)).body(html,'text/html'));

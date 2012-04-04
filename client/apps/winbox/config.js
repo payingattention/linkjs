@@ -1,6 +1,6 @@
 // Winbox Configuration
 // ====================
-link.App.require_style(['/apps/bootstrap/css/bootstrap.css', '/apps/winbox/_iface/winbox.css']);
+link.App.require_style(['/apps/bootstrap/css/bootstrap.css', '/apps/winbox/interfaces/winbox.css']);
 link.App.require_script([
     'https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.js',
     '/apps/winbox/vendor/handlebars.runtime.js',
@@ -20,27 +20,21 @@ link.App.configure({
     "#/winbox/settings": {
         "->": "/apps/winbox/settings.js"
     },
-    "#/winbox/service": {
-        "->": "/apps/winbox/service.js"
+    "#/winbox/interfaces/twitter": {
+        "->": "/apps/winbox/interfaces/twitter.js"
     },
-    "#/winbox/_iface/layout": {
-        "->": "/apps/winbox/_iface/layout.js"
-    },
-    "#/winbox/_iface/msg/twitter": {
-        "->": "/apps/winbox/_iface/msg/twitter.js"
-    },
-    "#/winbox/_services/restemail": {
-        "->": "/apps/winbox/_service/restemail.js",
+    "#/winbox/services/restemail": {
+        "->": "/apps/winbox/services/restemail.js",
         "service": "GMail",
         "host": "http://estate45.com:8001/"
     },
-    "#/winbox/_services/restwitter": {
-        "->": "/apps/winbox/_service/restwitter.js",
+    "#/winbox/services/restwitter": {
+        "->": "/apps/winbox/services/restwitter.js",
         "service": "Twitter",
         "host": "http://estate45.com:8002/"
     },
-    "#/winbox/_services/restfacebook": {
-        "->": "/apps/winbox/_service/restfacebook.js",
+    "#/winbox/services/restfacebook": {
+        "->": "/apps/winbox/services/restfacebook.js",
         "service": "Facebook",
         "host": "http://estate45.com:8003/"
     }
