@@ -9,8 +9,12 @@ link.App.configure('#/winbox/_iface/layout', {
         if (request.matches({'accept':'text/html'})) {
             var content = '';
             if (request.matches({'method': 'post'})) { content = request.get_body(); }
-            var html = Handlebars.templates['winbox-layout.html']({content: content});
-            callback((new link.Response(200)).body(html,'text/html'));
+            // Fetch the services in use
+            agent.get('#/pindex?q="winbox_service"', {'accept':'application/javascript'}, function(services_res) {
+                var services = services_res.get_body();
+                var html = Handlebars.templates['winbox-layout.html']({content: content, services: services});
+                callback((new link.Response(200)).body(html,'text/html'));
+            });
         }
         // Interaction request
         /*else if (request.matches({'method':'post', 'accept': 'application/json'})) {

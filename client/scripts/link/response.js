@@ -55,6 +55,7 @@ link.Response.prototype.render = function(agent) {
     // Default behavior
     if (this.status_code_ != 200) {
         target_elem.innerHTML = '' + this.status_code_ + ' ' + this.reason_phrase_;
+        if (this.body_) { target_elem.innerHTML += "<br />\n" + this.body_; }
     } else if (this.body_ !== null) {
         target_elem.innerHTML = this.body_;
     }

@@ -14,12 +14,20 @@
         <script>
 
 function app_loaded() {
-    var agent = new link.Agent(); // create the agent
-    agent.attach_to_window(); // start listening to browser events
+    // :DEBUG: configure pindex
+    (new link.Agent).post('#/pindex', {
+        '#/winbox/_services/restemail': ['winbox_service'],
+        '#/winbox/_services/restwitter': ['winbox_service']
+    }, 'application/javascript');
+    (new link.Agent()).attach_to_window(); // start listening to browser events
 }
 function app_init() {
-    //link.App.configure({'#': '#/winbox'}); // make winbox the default app
-    link.App.load_config(['/apps/shell/config.js','/apps/winbox/config.js'], app_loaded); // load shell & winbox
+    // Load apps
+    link.App.load_config([
+        '/apps/pindex/config.js',
+        '/apps/shell/config.js',
+        '/apps/winbox/config.js'
+    ], app_loaded);
 }
 
         </script>

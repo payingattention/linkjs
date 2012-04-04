@@ -39,6 +39,10 @@ link.App.configure('#/winbox/_services/restwitter', {
                     }
                 }, 'GET', null, { 'x-link-host': self.host });
             }
+            // Service description
+            else if (query.get('req') == 'descript') {
+                callback((new link.Response(200)).body({name: this.service}, 'application/json'));
+            }
         }
     }
 });
