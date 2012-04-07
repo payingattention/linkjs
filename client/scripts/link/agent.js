@@ -202,24 +202,3 @@ link.Agent.prototype.get_child_uris = function(uri) {
     if (!uri) { uri = '#'; }
     return link.App.get_child_uris(uri);
 };
-
-/**
- * Provides the structure beneath the given URI as an object
- */
-link.Agent.prototype.get_uri_structure = function(uri) {
-    if (!uri) { uri = '#'; }
-    var uris = link.App.get_child_uris(uri);
-    var structure = {};
-    // add the uris
-    for (var i=0, ii=uris.length; i < ii; i++) {
-        var uri_parts = uris[i].split('/');
-        if (uri_parts[uri_parts.length-1] == '') { uri_parts.pop(); } // if uri ended with a slash, ignore the extra
-        var cur_node = structure;
-        while (uri_parts.length) {
-            var part = uri_parts.shift();
-            if (!cur_node[part]) { cur_node[part] = {}; }
-            cur_node = cur_node[part];
-        }
-    }
-    return structure;
-};

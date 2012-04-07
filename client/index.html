@@ -15,12 +15,12 @@
 
 function app_loaded() {
     // :DEBUG: configure pindex
-    (new link.Agent).post('#/pindex', {
+    /*(new link.Agent).post('#/pindex', {
         '#/winbox/services/restemail': ['winbox', 'service', 'email'],
         '#/winbox/services/restwitter': ['winbox', 'service', 'twitter'],
         '#/winbox/interfaces/email': ['winbox', 'interface', 'email'],
         '#/winbox/interfaces/twitter': ['winbox', 'interface', 'twitter']
-    }, 'application/javascript');
+    }, 'application/javascript');*/
     (new link.Agent()).attach_to_window(); // start listening to browser events
 }
 function app_init() {

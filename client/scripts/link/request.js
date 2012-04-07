@@ -28,7 +28,6 @@ link.Request = function(uri) {
     this.method_ = 'get';
     this.headers_ = new goog.structs.Map();
     this.body_ = null;
-    this.piped_ = false;
 }
 
 //

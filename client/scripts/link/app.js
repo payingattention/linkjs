@@ -29,7 +29,7 @@ link.App.document_body_agent_ = null;
 link.App.load_config = function(url, callback) {
     // Just load the script - it should run link.App.config(...)
     link.App.require_script(url, callback);
-}
+};
 
 /**
  * Configure the application namespace
@@ -45,7 +45,7 @@ link.App.configure = function(name, def) {
         goog.object.extend(old_def, def);
         this.resources_.set(name, old_def);
     }
-}
+};
 
 /**
  * Get a resource config value
@@ -60,7 +60,7 @@ link.App.get_uri_config = function(uri, name, search_up) {
         if (resource[name]) { return resource[name]; }
     }
     return undefined;
-}
+};
 
 /**
  * Loads the given resources
@@ -77,12 +77,10 @@ link.App.load = function(uri, callback) {
             if (typeof(resource['->requires']) == 'object') { needed_scripts = needed_scripts.concat(resource['->requires']); }
             else { needed_scripts.push(resource['->requires']); }
         }
-        var handler = resource['->'];
-        if (handler && typeof(handler) != 'function') { needed_scripts.push(handler); } // add the handler if its not yet been loaded
     }
     // Load
-    link.App.require_script(needed_scripts, callback);
-}
+    link.App.require_script(needed_scripts, function() { callback && callback(resource); });
+};
 
 //
 // Frame agent methods
@@ -90,10 +88,10 @@ link.App.load = function(uri, callback) {
 link.App.set_body_agent = function(agent) {
     if (this.document_body_agent_) {} // :TODO: destroy code?
     this.document_body_agent_ = agent;
-}
+};
 link.App.get_body_agent = function(agent) {
     return this.document_body_agent_;
-}
+};
 link.App.get_frame_agent = function(frame_element_id, parent_agent) {
     if (frame_element_id == 'document.body') { return this.document_body_agent_; }
     if (!parent_agent) { parent_agent = this.document_body_agent_; }
@@ -108,7 +106,7 @@ link.App.get_frame_agent = function(frame_element_id, parent_agent) {
     }
     // Not found
     return null;
-}
+};
 
 /**
  * Generates a response by evaluating the target resource
@@ -116,39 +114,88 @@ link.App.get_frame_agent = function(frame_element_id, parent_agent) {
 link.App.handle_request = function(request, agent, callback) {
     // Make sure the request isn't malformed
     // :TODO:
-    // Find the target resource
-    if (!this.resources_.containsKey(request.get_uri())) {
-        return callback(new link.Response(404,"Not Found"));
+
+    // Resolve the target resource
+    var resolved_baseuri = null, resolved_suburi = '';
+    if (this.resources_.containsKey(request.get_uri())) {
+        // complete match
+        resolved_baseuri = request.get_uri();
+    } else {
+        // no complete match, march up parents
+        var parent_uris = this.get_parent_uris(request.get_uri());
+        for (var i=0; i < parent_uris.length; i++) {
+            var base_uri = parent_uris[i];
+            // resource exists at given uri?
+            if (this.resources_.containsKey(base_uri)) {
+                // for simplicity, go ahead and take this resource
+                // (if we wanted to make sure a sub-uri handler matches, we'd have to load the resource before ascertaining a match)
+                resolved_suburi = request.get_uri().slice(base_uri.length);
+                resolved_baseuri = base_uri;
+                break;
+            }
+        }
+        if (resolved_baseuri === null) {
+            return callback(new link.Response(404,"Not Found"));
+        }
     }
-    var resource = this.resources_.get(request.get_uri());
-    var handler = resource['->'];
-    if (!handler) {
-        return callback(new link.Response(501,"Not Implemented"));
-    }
-    // Load first, then run
-    var self = this
-    link.App.load(request.get_uri(), function() {
-        var resource = self.resources_.get(request.get_uri());
+
+    // Load any scripts we'll require
+    var self = this;
+    link.App.load(resolved_baseuri, function(resource) {
         // Run request processor :TODO: processorS-- build an array out of the URI stack (#, #/a, #/a/b...)
         var request_processor = self.get_uri_config(request.get_uri(), '->request_processor', true);
         if (request_processor) {
             var should_handle = request_processor.call(resource, request, agent);
-            if (!should_handle) { return; }// callback(new link.Response(204,"No Content")); }
+            if (!should_handle) { return; }
         }
-        // Run handler
+        
+        // Verify load
         var handler = resource['->'];
-        if (!handler || typeof(handler) != 'function') { // must not have loaded
-            console.log('Error: Handler for ' + request.get_uri() + ' didn\'t load.');
+        if (!handler) {
+            console.log('Error: Handler for "' + resolved_baseuri + '" didn\'t load.');
             return callback(new link.Response(500,"Internal Error"));
         }
-        handler.call(resource, request, new link.Agent(), callback);
+        
+        // Sub-URI handler
+        var uri_params;
+        if (!(handler instanceof Function) && typeof(handler) == 'object') {
+            // sub-URI handlers, choose the first which matches the suburi
+            var found=false;
+            for (var pattern in handler) {
+                var re = new RegExp(pattern, 'i');
+                uri_params = re.exec(resolved_suburi);
+                if (uri_params) {
+                    handler = handler[pattern];
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                console.log('Error: Handler for "' + resolved_baseuri + '" didn\'t have a match for suburi "' + resolved_suburi + '".');
+                return callback(new link.Response(404,"Not Found"));
+            }
+        } else {
+            // no sub-URI handlers, just call given function with the sub-URI as its uri_param
+            uri_params = [resolved_suburi];
+        }
+        
+        // Run handler
+        handler.call(resource, request, uri_params, function(code, body, content_type, headers) {
+            if (code && code instanceof link.Response) {
+                callback(code); // valid link.Response was provided
+            } else {
+                // build the response
+                callback((new link.Response(code)).body(body,content_type).headers(headers));
+            }
+        });
     });
-}
+};
 
 /**
  * Provides the structure beneath the given URI
  */
 link.App.get_child_uris = function(uri) {
+    if (!uri) { uri = '#'; }
     var child_uris = [];
     var all_uris = this.resources_.getKeys();
     for (var i=0, ii=all_uris.length; i < ii; i++) {
@@ -157,10 +204,32 @@ link.App.get_child_uris = function(uri) {
         }
     }
     return child_uris;
-}
+};
+
+/**
+ * Provides the structure beneath the given URI as an object
+ */
+link.App.get_uri_structure = function(uri) {
+    if (!uri) { uri = '#'; }
+    var uris = link.App.get_child_uris(uri);
+    var structure = {};
+    // add the uris
+    for (var i=0, ii=uris.length; i < ii; i++) {
+        var uri_parts = uris[i].split('/');
+        if (uri_parts[uri_parts.length-1] == '') { uri_parts.pop(); } // if uri ended with a slash, ignore the extra
+        var cur_node = structure;
+        while (uri_parts.length) {
+            var part = uri_parts.shift();
+            if (!cur_node[part]) { cur_node[part] = {}; }
+            cur_node = cur_node[part];
+        }
+    }
+    return structure;
+};
 
 /**
  * Provides the structure above the given URI
+ * e.g., '#/a/b/c' -> [ '#/a/b', '#/a', '#' ]
  */
 link.App.get_parent_uris = function(uri) {
     var parent_uris = [];
@@ -169,7 +238,7 @@ link.App.get_parent_uris = function(uri) {
         parent_uris.push(uri_parts.slice(0,i).join('/'));
     }
     return parent_uris;
-}
+};
 
 /**
  * Loads scripts into the document, if not already loaded
@@ -243,7 +312,7 @@ link.App.require_script = function(script_srcs, callback) {
             });
         }
     }
-}
+};
 
 /**
  * Loads styles into the document, if not already loaded
@@ -281,4 +350,4 @@ link.App.require_style = function(style_hrefs) {
             head.appendChild(link_elem);
         }
     }
-}
+};

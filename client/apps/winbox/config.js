@@ -11,16 +11,26 @@ link.App.require_script([
 });
 link.App.configure({
     "#/winbox": {
-        "->": "/apps/winbox/main.js",
-        "->requires": ['/apps/winbox/templates/templates.js']
+        "->requires": ['/apps/winbox/templates/templates.js', '/apps/winbox/main.js']
     },
     "#/winbox/message": {
-        "->": "/apps/winbox/message.js"
+        "->requires": "/apps/winbox/message.js"
     },
     "#/winbox/settings": {
-        "->": "/apps/winbox/settings.js"
+        "->requires": "/apps/winbox/settings.js"
     },
-    "#/winbox/interfaces/twitter": {
+    "#/winbox/services/fixture": {
+        "->requires": "/apps/winbox/services/fixture.js",
+        "interfaces": {
+            "message": "#/winbox/interfaces/scaff/fixture"
+        }
+    },
+    "#/winbox/interfaces/fixture/message": {
+        "->requires": "/apps/winbox/interfaces/fixture/message.js"
+    },
+
+    // TODO...
+    /*"#/winbox/interfaces/twitter": {
         "->": "/apps/winbox/interfaces/twitter.js"
     },
     "#/winbox/services/restemail": {
@@ -37,5 +47,5 @@ link.App.configure({
         "->": "/apps/winbox/services/restfacebook.js",
         "service": "Facebook",
         "host": "http://estate45.com:8003/"
-    }
+    }*/
 });
