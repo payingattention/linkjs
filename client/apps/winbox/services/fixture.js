@@ -50,7 +50,7 @@ link.App.configure('#/winbox/services/fixture', {
 
     // Handlers
     "->": {
-        '': function(request, uri_params, respond) {
+        '^$': function(request, uri_params, respond) {
             var self = this;
             // Message(s) request
             if (request.matches({'method':'get', 'accept': 'application/json'})) {
@@ -93,7 +93,7 @@ link.App.configure('#/winbox/services/fixture', {
             // Message send
             // :TODO:
         },
-        '/[0-9]+$': function(request, uri_params, respond) {
+        '^/[0-9]+$': function(request, uri_params, respond) {
             // Message update
             if (request.matches({'method':'get', 'accept': 'application/json'})) {
                 // Find our message
@@ -113,9 +113,11 @@ link.App.configure('#/winbox/services/fixture', {
                 respond(200);
             }
         },
-        '/config': function(request, respond) {
+        '^/config$': function(request, uri_params, respond) {
             // Config fetch
-            // :TODO:
+            if (request.matches({'method':'get', 'accept': 'application/json'})) {
+                return respond(200, { name: this.service }, 'application/json');
+            }
             // Config interface fetch
             // :TODO:
             // Config update

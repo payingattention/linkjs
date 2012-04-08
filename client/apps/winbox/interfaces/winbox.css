@@ -9,3 +9,6 @@
 #winbox-content {
     margin-left: 170px;
 }
+#winbox-messages tr td a {
+    color: #555;
+}

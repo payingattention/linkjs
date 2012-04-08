@@ -13,12 +13,6 @@ link.App.configure({
     "#/winbox": {
         "->requires": ['/apps/winbox/templates/templates.js', '/apps/winbox/main.js']
     },
-    "#/winbox/message": {
-        "->requires": "/apps/winbox/message.js"
-    },
-    "#/winbox/settings": {
-        "->requires": "/apps/winbox/settings.js"
-    },
     "#/winbox/services/fixture": {
         "->requires": "/apps/winbox/services/fixture.js",
         "interfaces": {
