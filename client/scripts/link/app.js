@@ -16,6 +16,8 @@ goog.require('goog.structs.Map');
 goog.require('goog.object');
 goog.require('goog.Uri.QueryData');
 goog.require('goog.net.XhrIo');
+goog.require('goog.async.Deferred');
+goog.require('goog.async.DeferredList');
 
 //
 // Initialize some app properties
@@ -111,7 +113,7 @@ link.App.get_frame_agent = function(frame_element_id, parent_agent) {
 /**
  * Generates a response by evaluating the target resource
  */
-link.App.handle_request = function(request, agent, callback) {
+link.App.handle_request = function(request, agent, deferred) {
     // Make sure the request isn't malformed
     // :TODO:
 
@@ -135,7 +137,7 @@ link.App.handle_request = function(request, agent, callback) {
             }
         }
         if (resolved_baseuri === null) {
-            return callback(new link.Response(404,"Not Found"));
+            return deferred.callback(new link.Response(404,"Not Found"));
         }
     }
 
@@ -153,7 +155,7 @@ link.App.handle_request = function(request, agent, callback) {
         var handler = resource['->'];
         if (!handler) {
             console.log('Error: Handler for "' + resolved_baseuri + '" didn\'t load.');
-            return callback(new link.Response(500,"Internal Error"));
+            return deferred.callback(new link.Response(500,"Internal Error"));
         }
         
         // Sub-URI handler
@@ -172,7 +174,7 @@ link.App.handle_request = function(request, agent, callback) {
             }
             if (!found) {
                 console.log('Error: Handler for "' + resolved_baseuri + '" didn\'t have a match for suburi "' + resolved_suburi + '".');
-                return callback(new link.Response(404,"Not Found"));
+                return deferred.callback(new link.Response(404,"Not Found"));
             }
         } else {
             // no sub-URI handlers, just call given function with the sub-URI as its uri_param
@@ -182,10 +184,10 @@ link.App.handle_request = function(request, agent, callback) {
         // Run handler
         handler.call(resource, request, uri_params, function(code, body, content_type, headers) {
             if (code && code instanceof link.Response) {
-                callback(code); // valid link.Response was provided
+                deferred.callback(code); // valid link.Response was provided
             } else {
                 // build the response
-                callback((new link.Response(code)).body(body,content_type).headers(headers));
+                deferred.callback((new link.Response(code)).body(body,content_type).headers(headers));
             }
         });
     });

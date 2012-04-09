@@ -41,7 +41,6 @@
 
 link.App.configure('#/winbox/services/fixture', {
     // Data
-    "service": "Scaffold",
     "messages": {
         '1': { date:new Date(), author:'bsmith', recp:{ 'bsmith':'Bob Smith' }, subject:'Hey, Buddy!', body:'How are you doing?', re:null, read:false },
         '2': { date:new Date(), author:'bsmith', recp:{ 'bsmith':'Bob Smith', 'asmitherson':'Alice Smitherson' }, subject:'About the meeting', body:'Important business conversation. Things people talk about and stuff', re:null, read:true },
@@ -116,7 +115,7 @@ link.App.configure('#/winbox/services/fixture', {
         '^/config$': function(request, uri_params, respond) {
             // Config fetch
             if (request.matches({'method':'get', 'accept': 'application/json'})) {
-                return respond(200, { name: this.service }, 'application/json');
+                return respond(200, { name: 'Fixture' }, 'application/json');
             }
             // Config interface fetch
             // :TODO:
@@ -133,7 +132,7 @@ link.App.configure('#/winbox/services/fixture', {
         // Assemble the return object from the fields requested
         for (var i=0,ii=fields.length; i < ii; i++) {
             if (fields[i] == 'service') {
-                message['service'] = this.service;
+                message['service'] = 'Fixture';
             } else if (fields[i] == 'summary') {
                 message['summary'] = '<strong>' + org.author + '</strong> ' + org.subject;
             } else {

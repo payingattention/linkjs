@@ -24,6 +24,7 @@ goog.require('link.Response');
 goog.require('goog.Uri');
 goog.require('goog.structs.Map');
 goog.require('goog.dom');
+goog.require('goog.async.Deferred');
 
 link.Agent = function() {
     this.state_ = null;
@@ -163,19 +164,20 @@ link.Agent.prototype.add_frame_agents = function(frame_element_ids) {
  * Follows a request, building state around the response
  **/
 link.Agent.prototype.follow = function(request, callback) {
-    var self = this;
-    link.App.handle_request(request, this, function(response) {
+    var def = new goog.async.Deferred();
+    def.addCallback(function(response) {
         // Construct the new state
-        self.state_ = new link.AgentState(request,response);
+        this.state_ = new link.AgentState(request,response);
         // Run the response handler
         if (response.render) {
-            response.render(self);
+            response.render(this);
         }
-        // Run the callback, if given
-        if (callback) {
-            callback.call(self, response);
-        }
-    });
+    }, this);
+    if (callback) {
+        def.addCallback(callback, this);
+    }
+    link.App.handle_request(request, this, def);
+    return def;
 };
 
 //
@@ -185,14 +187,14 @@ link.Agent.prototype.get = function(uri, headers, callback) {
     var request = new link.Request(uri);
     request.method('get');
     if (headers) { request.headers(headers); }
-    this.follow(request, callback);
+    return this.follow(request, callback);
 };
 link.Agent.prototype.post = function(uri, body, body_contenttype, headers, callback) {
     var request = new link.Request(uri);
     request.method('post');
     if (headers) { request.headers(headers); }
     if (body) { request.body(body, body_contenttype); }
-    this.follow(request, callback);
+    return this.follow(request, callback);
 };
 
 /**

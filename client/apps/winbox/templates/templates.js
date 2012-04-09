@@ -18,7 +18,13 @@ templates['winbox-layout.html'] = template(function (Handlebars,depth0,helpers,p
   var buffer = "", stack1, foundHelper, self=this, functionType="function", helperMissing=helpers.helperMissing, undef=void 0;
 
 
-  buffer += "<div id=\"winbox-container\">\n    <div class=\"well\">\n        <ul id=\"winbox-nav\" class=\"nav nav-list\">\n            <li class=\"nav-header\" style=\"color: #666\">winbox</li>\n            <li class=\"active\"><a href=\"#/winbox\"><i class=\"icon-white icon-inbox\"></i> Messages</a></li>\n            <li><a href=\"#/winbox/settings\"><i class=\"icon-cog\"></i> Settings</a></li>\n            <li class=\"nav-header\">Services</li>\n            <span id=\"winbox-services-list\"></span><!-- :DEBUG: temporary -->\n        </ul>\n    </div>\n    <div id=\"winbox-content\">";
+  buffer += "<div id=\"winbox-container\">\n    <div class=\"well\">\n        <ul id=\"winbox-nav\" class=\"nav nav-list\">\n            ";
+  foundHelper = helpers.nav;
+  stack1 = foundHelper || depth0.nav;
+  if(typeof stack1 === functionType) { stack1 = stack1.call(depth0, { hash: {} }); }
+  else if(stack1=== undef) { stack1 = helperMissing.call(depth0, "nav", { hash: {} }); }
+  if(stack1 || stack1 === 0) { buffer += stack1; }
+  buffer += "\n        </ul>\n    </div>\n    <div id=\"winbox-content\">";
   foundHelper = helpers.content;
   stack1 = foundHelper || depth0.content;
   if(typeof stack1 === functionType) { stack1 = stack1.call(depth0, { hash: {} }); }
