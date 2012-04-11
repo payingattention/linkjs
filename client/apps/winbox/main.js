@@ -3,10 +3,16 @@
 // A messaging inbox. \o/
 link.App.configure('#/winbox', {
     'services': null,
-    'serv_name_map': null,
+
+    // Cached requests
+    // (all of the external interactions this resource makes)
+    'req': {
+        'get_config': new link.Request('{{service_uri}}/config').for_json(),
+        'get_inbox': new link.Request('{{service_uri}}?q=all&v=["service","date","summary"]').for_json()
+    },
     
     // Handlers
-    "->": {
+    '->': {
         // Views
         '^/?$': function(request, uri_params, respond) {
             var self = this;
@@ -96,7 +102,6 @@ link.App.configure('#/winbox', {
         var self = this;
         var agent = new link.Agent();
         this.services = {};
-        this.serv_name_map = {};
         // Fetch all services under #/winbox/services
         var service_uris = link.App.get_child_uris('#/winbox/services');
         var deferreds = [];
@@ -104,12 +109,10 @@ link.App.configure('#/winbox', {
             var uri = service_uris[i]
             self.services[uri] = {};
             // Fetch config
-            var deferred = agent.get(uri + '/config', {'accept':'application/json'}, function(res) {
+            var deferred = agent.follow(this.req.get_config.uri_param('service_uri', uri), function(res) {
                 if (res.get_status_code() != 200) { console.log('Failbox: failed to get config from '+uri); }
                 // Store in the service
                 self.services[uri].config = res.get_body();
-                // Save the name->uri map
-                self.serv_name_map[self.services[uri].config.name] = uri;
             });
             deferreds.push(deferred);
         }
@@ -120,7 +123,7 @@ link.App.configure('#/winbox', {
     sync_service_inbox: function(service_uri, callback) {
         var self = this;
         // Fetch messages
-        (new link.Agent()).get(service_uri + '?q=all&v=["service","date","summary"]', {'accept':'application/json'}, function(res) {
+        (new link.Agent()).follow(this.req.get_inbox.uri_param('service_uri', service_uri), function(res) {
             var messages = res.get_body();
             // Given as a map of id:msg, just save as an array
             var new_messages = [];
@@ -170,6 +173,7 @@ link.App.configure('#/winbox', {
         html += '<li class="nav-header">Services</li>';
         for (var uri in this.services) {
             var service = this.services[uri];
+            if (!service || !service.config) { continue; }
             var li_active = (this.active_service == uri ? ' class="active" ' : '');
             var i_active = (this.active_service == uri ? ' icon-white ' : '');
             html += '<li' + li_active + '><a href="#/winbox/service/' + service.config.name + '"><i class="icon-folder-open' + i_active + '"></i> ' + service.config.name + '</a></li>';

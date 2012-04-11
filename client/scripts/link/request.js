@@ -15,25 +15,27 @@ goog.require('goog.Uri');
 goog.require('goog.Uri.QueryData');
 
 link.Request = function(uri) {
-    // Create our in-app URI if it's a hash
-    // :TODO: this needs to be smarter, might need to have a better onclick hander
-    if (uri.indexOf('#') != -1) {
-        uri = uri.substr(uri.indexOf('#') + 1);
-    }
-    // Parse URI
-    var parsed_uri = new goog.Uri(uri);
-    this.uri_ = '#' + parsed_uri.getPath();
-    this.query_ = parsed_uri.getQueryData();
+    this.uri(uri);
     // Set up attribute defaults
     this.method_ = 'get';
     this.headers_ = new goog.structs.Map();
+    this.uri_params_ = new goog.structs.Map();
     this.body_ = null;
 }
 
 //
 // Getters
 //
-link.Request.prototype.get_uri = function() { return this.uri_; }
+link.Request.prototype.get_uri = function() {
+    var uri = this.uri_;
+    if (!this.uri_params_.isEmpty()) {
+        var keys = this.uri_params_.getKeys();
+        for (var i=0; i < keys.length; i++) {
+            uri = uri.replace('{{'+keys[i]+'}}', this.uri_params_.get(keys[i]));
+        }
+    }
+    return uri;
+}
 link.Request.prototype.get_query = function() { return this.query_; }
 link.Request.prototype.get_method = function() { return this.method_; }
 link.Request.prototype.get_headers = function() { return this.headers_; }
@@ -44,13 +46,32 @@ link.Request.prototype.get_body = function() { return this.body_; }
 // Builder interface
 //
 link.Request.prototype.uri = function(uri) {
-    this.uri_ = uri; return this;
+    // Create our in-app URI if it's a hash
+    var had_hash = false;
+    if (uri.indexOf('#') != -1) {
+        uri = uri.substr(uri.indexOf('#') + 1);
+        had_hash = true;
+    }
+    // Parse URI
+    var parsed_uri = new goog.Uri(uri);
+    this.uri_ = (had_hash ? '#' : '') + parsed_uri.getPath();
+    this.query_ = parsed_uri.getQueryData();
+    return this;
 }
 link.Request.prototype.method = function(method) {
     this.method_ = method; return this;
 }
+link.Request.prototype.header = function(k, v) {
+    this.headers_.set(k, v); return this;
+}
 link.Request.prototype.headers = function(kvs) {
     this.headers_.addAll(kvs); return this;
+}
+link.Request.prototype.uri_param = function(k, v) {
+    this.uri_params_.set(k, v); return this;
+}
+link.Request.prototype.uri_params = function(kvs) {
+    this.uri_params_.addAll(kvs); return this;
 }
 link.Request.prototype.body = function(body, content_type) {
     this.body_ = body;
