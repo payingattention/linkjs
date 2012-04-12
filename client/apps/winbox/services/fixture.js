@@ -39,7 +39,7 @@
 // PUT '/config' application/x-www-form-urlencoded: service config update
 // =================
 
-link.App.configure('#/winbox/services/fixture', {
+link.App.add_resource_type('Winbox.Service.Fixture', {
     // Data
     "messages": {
         '1': { date:new Date(), author:'bsmith', recp:{ 'bsmith':'Bob Smith' }, subject:'Hey, Buddy!', body:'How are you doing?', re:null, read:false },

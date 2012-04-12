@@ -23,30 +23,47 @@ goog.require('goog.async.DeferredList');
 // Initialize some app properties
 //
 link.App.resources_ = new goog.structs.Map();
+link.App.resource_types_ = new goog.structs.Map();
 link.App.document_body_agent_ = null;
 
 /**
- * Loads app configuration from a remote url
+ * Defines a new resource type
  */
-link.App.load_config = function(url, callback) {
-    // Just load the script - it should run link.App.config(...)
-    link.App.require_script(url, callback);
+link.App.add_resource_type = function(name, def) {
+    var existing = link.App.resource_types_.get(name);
+    // Save new definition
+    link.App.resource_types_.set(name, def);
+    // If a deferred was registered, notify it of the sweet satisfaction
+    if (existing && existing instanceof goog.async.Deferred) {
+        existing.callback(def);
+    }
 };
 
 /**
  * Configure the application namespace
  */
-link.App.configure = function(name, def) {
-    // :TODO: some kind of precedence so user settings win?
-    if (!def && typeof(name) == 'object') {
-        this.resources_.addAll(name); // :TODO: set one at a time, to do extending
-    } else {
+link.App.configure_uris = function(kvs) {
+    for (var k in kvs) {
+        var v = kvs[k];
+        var new_res_type = v['->isa'];
+        
         // Extend the old definition, if it exists
-        var old_def = {};
-        if (this.resources_.containsKey(name)) { old_def = this.resources_.get(name); }
-        goog.object.extend(old_def, def);
-        this.resources_.set(name, old_def);
-    }
+        var oldv = {};
+        if (this.resources_.containsKey(k)) { oldv = this.resources_.get(k); }
+        var old_res_type = oldv['->isa'];
+        goog.object.extend(oldv, v);
+        v = oldv;
+
+        // Set into URI structure
+        v['uri'] = k;
+        this.resources_.set(k, v);
+
+        // If the resource type has changed, instantiate the new type into this URI
+        if (new_res_type != old_res_type) {
+            v['__loading'] = true;
+            this.instantiate_resource_into_uri(new_res_type, k);
+        }
+    }        
 };
 
 /**
@@ -65,23 +82,42 @@ link.App.get_uri_config = function(uri, name, search_up) {
 };
 
 /**
- * Loads the given resources
- *  - 'uri' may be an array or string
+ * Instantiate a resource type and add it to the URI
+ * - If the resource type does not exist (yet) will register a callback to update the URI when the type does become available
+ * - Returns a deferred
+ *   - Will fire when the resource type is available
+ *   - Will be fired if the resource type is already available
  */
-link.App.load = function(uri, callback) {
-    if (typeof(uri) == 'string') { uri = [uri]; }
-    // Collected needed scripts
-    var needed_scripts = [];
-    for (var i=0, ii=uri.length; i < ii; i++) {
-        var resource = this.resources_.get(uri[i]);
-        if (!resource) { continue; }
-        if (resource['->requires']) { // add the requires
-            if (typeof(resource['->requires']) == 'object') { needed_scripts = needed_scripts.concat(resource['->requires']); }
-            else { needed_scripts.push(resource['->requires']); }
+link.App.instantiate_resource_into_uri = function(type, uri) {
+    var res_type = link.App.resource_types_.get(type);
+    var res_is_deferred = (res_type instanceof goog.async.Deferred)
+    if (res_type && !res_is_deferred) {
+        // Use a prototype chain to duplicate the definition
+        var ctor = function() {};
+        ctor.prototype = res_type;
+        var inst = new ctor();
+        
+        // Extend the existing URI definition with the instance
+        // (giving the existing object priority, so config remains king)
+        var uri_def = {};
+        if (this.resources_.containsKey(uri)) {
+            uri_def = this.resources_.get(uri);
         }
+        goog.object.extend(inst, uri_def);
+
+        // And set
+        inst['__loading'] = false;
+        this.resources_.set(uri, inst);
+        return goog.async.Deferred.succeed(inst);
+    } else {
+        // Not ready yet-- register a deferred for when it is
+        if (!res_is_deferred) {
+            res_type = new goog.async.Deferred();
+        }
+        res_type.addCallback(function() { link.App.instantiate_resource_into_uri(type, uri); }); // On succeed, just run this func again
+        this.resource_types_.set(type, res_type);
+        return res_type;
     }
-    // Load
-    link.App.require_script(needed_scripts, function() { callback && callback(resource); });
 };
 
 //
@@ -116,22 +152,23 @@ link.App.get_frame_agent = function(frame_element_id, parent_agent) {
 link.App.handle_request = function(request, agent, deferred) {
     // Make sure the request isn't malformed
     // :TODO:
+    var request_uri = request.get_uri();
 
     // Resolve the target resource
     var resolved_baseuri = null, resolved_suburi = '';
-    if (this.resources_.containsKey(request.get_uri())) {
+    if (this.resources_.containsKey(request_uri)) {
         // complete match
-        resolved_baseuri = request.get_uri();
+        resolved_baseuri = request_uri;
     } else {
         // no complete match, march up parents
-        var parent_uris = this.get_parent_uris(request.get_uri());
+        var parent_uris = this.get_parent_uris(request_uri);
         for (var i=0; i < parent_uris.length; i++) {
             var base_uri = parent_uris[i];
             // resource exists at given uri?
             if (this.resources_.containsKey(base_uri)) {
                 // for simplicity, go ahead and take this resource
                 // (if we wanted to make sure a sub-uri handler matches, we'd have to load the resource before ascertaining a match)
-                resolved_suburi = request.get_uri().slice(base_uri.length);
+                resolved_suburi = request_uri.slice(base_uri.length);
                 resolved_baseuri = base_uri;
                 break;
             }
@@ -141,11 +178,14 @@ link.App.handle_request = function(request, agent, deferred) {
         }
     }
 
-    // Load any scripts we'll require
+    // Define the function to finish handling this function
+    // (we do this in case the resource isn't loaded yet)
     var self = this;
-    link.App.load(resolved_baseuri, function(resource) {
+    var finish_handling = function() {
+        var resource = self.resources_.get(resolved_baseuri);
+        
         // Run request processor :TODO: processorS-- build an array out of the URI stack (#, #/a, #/a/b...)
-        var request_processor = self.get_uri_config(request.get_uri(), '->request_processor', true);
+        var request_processor = self.get_uri_config(resolved_baseuri, '->request_processor', true);
         if (request_processor) {
             var should_handle = request_processor.call(resource, request, agent);
             if (!should_handle) { return; }
@@ -190,7 +230,17 @@ link.App.handle_request = function(request, agent, deferred) {
                 deferred.callback((new link.Response(code)).body(body,content_type).headers(headers));
             }
         });
-    });
+    };
+    
+    // If the resource type isn't loaded yet, finish handling this request when it does
+    var resource = this.resources_.get(resolved_baseuri);
+    if (resource['__loading'] && resource['->isa']) {
+        this.resource_types_.get(resource['->isa']).addCallback(finish_handling);
+        // :TODO: possibly register a timeout that notifies the user something went weird
+    } else {
+        // Resource ready, finish now
+        finish_handling();
+    }
 };
 
 /**

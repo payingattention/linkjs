@@ -25,9 +25,9 @@ function app_loaded() {
 }
 function app_init() {
     // Load apps
-    link.App.load_config([
-        '/apps/pindex/config.js',
-        '/apps/shell/config.js',
+    link.App.require_script([
+//        '/apps/pindex/config.js',
+//        '/apps/shell/config.js',
         '/apps/winbox/config.js'
     ], app_loaded);
 }

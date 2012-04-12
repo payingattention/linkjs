@@ -7,24 +7,31 @@ link.App.require_script([
     '/apps/winbox/vendor/moment.min.js'
 ], function() {
     // depends on handlebars.runtime.js
-    link.App.require_script('/apps/winbox/templates/templates.js');
+    link.App.require_script('/apps/winbox/templates/templates.js', function() {
+        // depends on templates.js
+        link.App.require_script([
+            '/apps/winbox/main.js',
+            '/apps/winbox/services/fixture.js'
+        ]);
+    });
 });
-link.App.configure({
+link.App.configure_uris({
     "#/winbox": {
-        "->requires": ['/apps/winbox/templates/templates.js', '/apps/winbox/main.js']
+        "->isa": "Winbox"
+    },
+    "#/winbox2": {
+        "->isa": "Winbox",
+        "title": "Winbox2"
     },
     "#/winbox/services/fixture": {
-        "->requires": "/apps/winbox/services/fixture.js",
-        "interfaces": {
-            "message": "#/winbox/interfaces/scaff/fixture"
-        }
-    },
-    "#/winbox/interfaces/fixture/message": {
-        "->requires": "/apps/winbox/interfaces/fixture/message.js"
+        "->isa": "Winbox.Service.Fixture"
     },
 
     // TODO...
-    /*"#/winbox/interfaces/twitter": {
+    /*"#/winbox/interfaces/fixture/message": {
+        "->requires": "/apps/winbox/interfaces/fixture/message.js"
+    },
+    "#/winbox/interfaces/twitter": {
         "->": "/apps/winbox/interfaces/twitter.js"
     },
     "#/winbox/services/restemail": {

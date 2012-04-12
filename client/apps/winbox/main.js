@@ -1,8 +1,9 @@
-// WinBox
+// Winbox
 // ======
 // A messaging inbox. \o/
-link.App.configure('#/winbox', {
+link.App.add_resource_type('Winbox', {
     'services': null,
+    'title': 'Winbox',
 
     // Cached requests
     // (all of the external interactions this resource makes)
@@ -43,7 +44,7 @@ link.App.configure('#/winbox', {
                 if (request.matches({'method':'get', 'accept':'text/html'})) {
                     // Find the service by name
                     var param_servicename = uri_params[1];
-                    var service_uri = '#/winbox/services/' + param_servicename.toLowerCase();
+                    var service_uri = this.uri + '/services/' + param_servicename.toLowerCase();
                     var service = self.services[service_uri];
                     if (!service) { console.log('Failbox: service ' + param_servicename + ' not found.'); return respond(404); }
                     this.active_service = service_uri;
@@ -102,8 +103,8 @@ link.App.configure('#/winbox', {
         var self = this;
         var agent = new link.Agent();
         this.services = {};
-        // Fetch all services under #/winbox/services
-        var service_uris = link.App.get_child_uris('#/winbox/services');
+        // Fetch all services under ./services
+        var service_uris = link.App.get_child_uris(this.uri + '/services');
         var deferreds = [];
         for (var i=0, ii=service_uris.length; i < ii; i++) {
             var uri = service_uris[i]
@@ -167,7 +168,7 @@ link.App.configure('#/winbox', {
     },
     html_nav: function() {
         var html = '';
-        html += '<li class="nav-header" style="color: #666">winbox</li>';
+        html += '<li class="nav-header" style="color: #666">'+this.title+'</li>';
         html += '<li ' + (!this.active_service ? 'class="active"' : '') + '><a href="#/winbox"><i class="' + (!this.active_service ? 'icon-white ' : '') + 'icon-inbox"></i> Messages</a></li>';
         html += '<li><a href="#/winbox/settings"><i class="icon-cog"></i> Settings</a></li>';
         html += '<li class="nav-header">Services</li>';
