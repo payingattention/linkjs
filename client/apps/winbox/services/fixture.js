@@ -6,10 +6,11 @@
 //   - '?v=[<field1>,<field2>,...<fieldN>]' specify values to fetch
 //     - 'service' name of the origin service {service:<String>}
 //     - 'date' date the message was received {date:<Date>}
-//     - 'author' user who sent the message {author:<id string>}
+//     - 'author' user who sent the message {author:<id String>}
 //     - 'recp' users involved in the message {recp:{<id String>:<name String>...}}
 //     - 'summary' a summary line of the message {summary:<any value>}
 //     - 'body' the body of the message {body:<any value>}
+//     - 'view_link' the uri of the message view renderer {view_link:<uri String>}
 //   - '?q=<query>' specify which messages to fetch
 //     - 'unread' a list of unread messages
 //     - 'byid' a list of messages by id (requires '&q_id')
@@ -23,6 +24,9 @@
 //   - '{ re: <message_id> }' message this new message replies to
 //   - '{ recp: [<user_id1>,<user_id2>,...<user_idN>] }' users this message should go to
 //   - '{ body: <any value> }' the contents of the message
+// =================
+// GET '/:id' text/html: message view
+// - provides an interface for viewing the message
 // =================
 // PUT '/:id' application/json: message update
 // - :id must map to an existing message
@@ -39,7 +43,7 @@
 // PUT '/config' application/x-www-form-urlencoded: service config update
 // =================
 
-link.App.add_resource_type('Winbox.Service.Fixture', {
+link.App.add_resource_type('Winbox.Fixture.Service', {
     // Data
     "messages": {
         '1': { date:new Date(), author:'bsmith', recp:{ 'bsmith':'Bob Smith' }, subject:'Hey, Buddy!', body:'How are you doing?', re:null, read:false },
@@ -92,25 +96,47 @@ link.App.add_resource_type('Winbox.Service.Fixture', {
             // Message send
             // :TODO:
         },
-        '^/[0-9]+$': function(request, uri_params, respond) {
-            // Message update
-            if (request.matches({'method':'get', 'accept': 'application/json'})) {
+        '^/([0-9]+)$': function(request, uri_params, respond) {
+            // Message view
+            if (request.matches({'method':'get', 'accept': 'text/html'})) {
                 // Find our message
-                var param_id = uri_params[0];
+                var param_id = uri_params[1];
                 var message = null;
                 if (param_id && param_id in this.messages) {
                     message = this.messages[param_id];
                 }
                 if (!message) {
-                    respond(404, 'Message not found');
+                    return respond(404, 'Message ' + param_id + ' not found');
                 }
-                // Update
+                // Build response
+                var html = '<h3>' + message.subject + '</h3>' + '<p><small>Sent on <span class="label" style="background:#444">' + message.date.toLocaleDateString() + ' @' + message.date.toLocaleTimeString()  + '</span> by <span class="label label-success">' + message.author + '</span> to ';
+                var recps = [];
+                for (var user in message.recp) {
+                    recps.push('<span class="label label-info">' + user + ' (' + message.recp[user] + ')</span>');
+                }
+                html += recps.join(', ') + '</small></p>';
+                html += '<hr /><p>' + message.body + '</p>';
+                //'3': { date:new Date(), author:'asmitherson', recp:{ 'bsmith':'Bob Smith', 'asmitherson':'Alice Smitherson' }, subject:'About the meeting', body:'Important business conversation. Things people talk about and stuff', re:2, read:false }
+                respond(200, html, 'text/html');
+            }
+            // Message update
+            else if (request.matches({'method':'put', 'accept': 'application/json'})) {
+                // Find our message
+                var param_id = uri_params[1];
+                var message = null;
+                if (param_id && param_id in this.messages) {
+                    message = this.messages[param_id];
+                }
+                if (!message) {
+                    return respond(404, 'Message ' + param_id + ' not found');
+                }
+                // Update...
                 var updates = request.get_body();
-                if (read in updates) {
+                if (read in updates) { // "read" state
                     message.read = updates.read;
                 }
                 respond(200);
-            }
+            } else { respond(400); }
         },
         '^/config$': function(request, uri_params, respond) {
             // Config fetch
@@ -135,6 +161,8 @@ link.App.add_resource_type('Winbox.Service.Fixture', {
                 message['service'] = 'Fixture';
             } else if (fields[i] == 'summary') {
                 message['summary'] = '<strong>' + org.author + '</strong> ' + org.subject;
+            } else if (fields[i] == 'view_link') {
+                message['view_link'] = '#/winbox/services/fixture/' + id;
             } else {
                 message[fields[i]] = org[fields[i]];
             }

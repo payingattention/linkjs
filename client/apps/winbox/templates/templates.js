@@ -5,7 +5,13 @@ templates['box.html'] = template(function (Handlebars,depth0,helpers,partials,da
   var buffer = "", stack1, foundHelper, self=this, functionType="function", helperMissing=helpers.helperMissing, undef=void 0;
 
 
-  buffer += "<div class=\"btn-toolbar\"><div class=\"btn-group\">\n        <a class=\"btn\" href=\"#\" title=\"Check for new messages\"><i class=\"icon-refresh\"></i></a>\n        <a class=\"btn\" href=\"#\" title=\"Compose a message\"><i class=\"icon-pencil\"></i></a>\n    </div>\n    <div class=\"btn-group\">\n        <a class=\"btn\" href=\"#\" title=\"Mark selected messages as read\"><i class=\"icon-check\"></i></a>\n</div></div>\n<table class=\"table table-condensed\">\n    <tbody id=\"winbox-messages\">\n        ";
+  buffer += "<div class=\"btn-toolbar\">\n    <div class=\"btn-group\">\n        <a class=\"btn\" href=\"#\" title=\"Check for new messages\"><i class=\"icon-refresh\"></i></a>\n        <a class=\"btn\" href=\"#\" title=\"Compose a message\"><i class=\"icon-pencil\"></i></a>\n        <ul id=\"compose-dropdown\" class=\"dropdown-menu\">\n            ";
+  foundHelper = helpers.compose_dropdown;
+  stack1 = foundHelper || depth0.compose_dropdown;
+  if(typeof stack1 === functionType) { stack1 = stack1.call(depth0, { hash: {} }); }
+  else if(stack1=== undef) { stack1 = helperMissing.call(depth0, "compose_dropdown", { hash: {} }); }
+  if(stack1 || stack1 === 0) { buffer += stack1; }
+  buffer += "\n        </ul>\n    </div>\n    <div class=\"btn-group\">\n        <a class=\"btn\" href=\"#\" title=\"Mark selected messages as read\"><i class=\"icon-check\"></i></a>\n    </div>\n</div>\n<table class=\"table table-condensed\">\n    <tbody id=\"winbox-messages\">\n        ";
   foundHelper = helpers.messages;
   stack1 = foundHelper || depth0.messages;
   if(typeof stack1 === functionType) { stack1 = stack1.call(depth0, { hash: {} }); }

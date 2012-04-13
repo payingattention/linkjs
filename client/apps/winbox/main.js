@@ -3,22 +3,23 @@
 // A messaging inbox. \o/
 link.App.add_resource_type('Winbox', {
     'services': null,
-    'title': 'Winbox',
 
     // Cached requests
+    // ===============
     // (all of the external interactions this resource makes)
     'req': {
         'get_config': new link.Request('{{service_uri}}/config').for_json(),
-        'get_inbox': new link.Request('{{service_uri}}?q=all&v=["service","date","summary"]').for_json()
+        'get_inbox': new link.Request('{{service_uri}}?q=all&v=["service","date","summary","view_link"]').for_json(),
+        'get_message_view': new link.Request('{{view_uri}}').for_html()
     },
     
     // Handlers
+    // ========
     '->': {
-        // Views
+        // Main inbox
         '^/?$': function(request, uri_params, respond) {
             var self = this;
-            self.ensure_ready(function() {
-                // Main inbox
+            self.when_ready(function() {
                 if (request.matches({'method':'get', 'accept':'text/html'})) {
                     this.active_service = null;
                     // Sync service messages if needed
@@ -37,60 +38,56 @@ link.App.add_resource_type('Winbox', {
                 } else { respond(400); }
             });
         },
-        '^/service/(.+)/?$': function(request, uri_params, respond) {
+        // Service inbox
+        '^/([^/]+)/?$': function(request, uri_params, respond) {
             var self = this;
-            this.ensure_ready(function() {
-                // Service inbox
+            this.when_ready(function() {
                 if (request.matches({'method':'get', 'accept':'text/html'})) {
                     // Find the service by name
                     var param_servicename = uri_params[1];
-                    var service_uri = this.uri + '/services/' + param_servicename.toLowerCase();
-                    var service = self.services[service_uri];
+                    var service = self.services[param_servicename];
                     if (!service) { console.log('Failbox: service ' + param_servicename + ' not found.'); return respond(404); }
-                    this.active_service = service_uri;
-                    // Sync if needed
-                    var messages_html = '<tr><td colspan="3">Loading...</td></tr>';
-                    if (!service.messages) { // sync on first load
-                        self.sync_service_inbox(service_uri, function() {
-                            var messages_table = document.getElementById('winbox-messages');
-                            if (messages_table) { messages_table.innerHTML = self.html_messages(service.messages); }
-                        });
-                    }
-                    if (service.messages) { // check again, in case the above wasnt async (really need to make that consistent!)
-                        messages_html = self.html_messages(service.messages);
-                    }
-                    respond(200, self.html_layout(self.html_box(messages_html)), 'text/html');
+                    this.active_service = param_servicename;
+                    // Sync
+                    self.sync_service_inbox(param_servicename, function() {
+                        var messages_html = self.html_messages(service.messages);
+                        respond(200, self.html_layout(self.html_box(messages_html)), 'text/html');
+                    });
                 } else { respond(400); }
             });
         },
-        '^/service/(.+)/view/(.+)/?$': function(request, uri_params, respond) {
-            // Message view
-            if (request.matches({'method':'get', 'accept':'text/html'})) {
-                respond(501); // :TODO:
-            } else { respond(400); }
+        // Message view
+        '^/([^/]+)/([^/]*)/?$': function(request, uri_params, respond) {
+            var self = this;
+            this.when_ready(function() {
+                if (request.matches({'method':'get', 'accept':'text/html'})) {
+                    // Find the service
+                    var param_servicename = uri_params[1];
+                    var param_messageid = uri_params[2];
+                    var service = self.services[param_servicename];
+                    if (!service) { console.log('Failbox: service ' + param_servicename + ' not found.'); return respond(404); }
+                    // Sync
+                    self.sync_service_inbox(param_servicename, function() {
+                        // Find the message
+                        var message = service.messages[param_messageid];
+                        if (!message) { console.log('Failbox: message not found.'); return respond(404); }
+                        // Get the message view
+                        (new link.Agent).follow(self.req.get_message_view.uri_param('view_uri', message.view_link), function(res) {
+                            respond(200, self.html_layout(self.html_box(res.get_body())), 'text/html');
+                        });
+                    });
+                } else { respond(400); }
+            });
         },
-        '^/service/(.+)/compose/?$': function(request, uri_params, respond) {
-            // Message compose
-            if (request.matches({'method':'get', 'accept':'text/html'})) {
-                respond(501); // :TODO:
-            } else { respond(400); }
-        },
+        // Winbox settings
         '^/settings/?$': function(request, uri_params, respond) {
-            // Winbox settings
             if (request.matches({'method':'get', 'accept':'text/html'})) {
                 respond(501); // :TODO:
             } else { respond(400); }
         },
-
-        // Actions
-        '^/sync/?$': function(request, uri_params, respond) {
-            // Sync all services
-            if (request.matches({'method':'post'})) {
-                respond(501); // :TODO:
-            } else { respond(400); }
-        },
-        '^/service/(.+)/sync/?$': function(request, uri_params, respond) {
-            // Sync a specific service
+        // Sync an inbox (or all inboxes)
+        '^/sync[/(.*)]?/?$': function(request, uri_params, respond) {
+            
             if (request.matches({'method':'post'})) {
                 respond(501); // :TODO:
             } else { respond(400); }
@@ -98,7 +95,7 @@ link.App.add_resource_type('Winbox', {
     },
 
     // Common tasks
-    ensure_ready: function(callback) {
+    when_ready: function(callback) {
         if (this.services) { return callback.call(this); }
         var self = this;
         var agent = new link.Agent();
@@ -107,35 +104,37 @@ link.App.add_resource_type('Winbox', {
         var service_uris = link.App.get_child_uris(this.uri + '/services');
         var deferreds = [];
         for (var i=0, ii=service_uris.length; i < ii; i++) {
-            var uri = service_uris[i]
-            self.services[uri] = {};
-            // Fetch config
-            var deferred = agent.follow(this.req.get_config.uri_param('service_uri', uri), function(res) {
-                if (res.get_status_code() != 200) { console.log('Failbox: failed to get config from '+uri); }
-                // Store in the service
-                self.services[uri].config = res.get_body();
-            });
-            deferreds.push(deferred);
+            (function() { // capture new scope
+                var uri = service_uris[i];
+                var name = uri.replace(self.uri + '/services/', '');
+                self.services[name] = {};
+                // Fetch config
+                var deferred = agent.follow(self.req.get_config.uri_param('service_uri', uri), function(res) {
+                    if (res.get_status_code() != 200) { console.log('Failbox: failed to get config from '+uri); }
+                    // Store in the service
+                    self.services[name].config = res.get_body();
+                });
+                deferreds.push(deferred);
+            })();
         }
         // Set up the callback to run after all fetches complete
         this.init_deferred_list_ = new goog.async.DeferredList(deferreds);
         this.init_deferred_list_.addCallback(callback, this);
     },
-    sync_service_inbox: function(service_uri, callback) {
+    sync_service_inbox: function(service_name, callback) {
         var self = this;
         // Fetch messages
-        (new link.Agent()).follow(this.req.get_inbox.uri_param('service_uri', service_uri), function(res) {
+        (new link.Agent()).follow(this.req.get_inbox.uri_param('service_uri', this.uri + '/services/' + service_name), function(res) {
             var messages = res.get_body();
-            // Given as a map of id:msg, just save as an array
-            var new_messages = [];
-            for (var mid in messages) {
+            // Given as a map of id:msg
+            for (var mid in messages) { // some prep
                 var msg = messages[mid];
                 msg.id = mid;
-                new_messages.push(msg);
+                msg.service_uri = service_name;
             }
             // Store in the service
-            self.services[service_uri].messages = new_messages;
-            callback(service_uri);
+            self.services[service_name].messages = messages;
+            callback(service_name);
         });
     },
     get_all_service_messages: function() {
@@ -143,7 +142,9 @@ link.App.add_resource_type('Winbox', {
         // Add all messages into one large array
         for (var uri in this.services) {
             if (!this.services[uri].messages) { continue; }
-            messages = messages.concat(this.services[uri].messages);
+            for (var k in this.services[uri].messages) {
+                messages.push(this.services[uri].messages[k]);
+            }
         }
         // Sort by date
         messages.sort(function(a,b) { a.date > b.date });
@@ -155,29 +156,36 @@ link.App.add_resource_type('Winbox', {
         return Handlebars.templates['winbox-layout.html']({ content:content, nav:this.html_nav() });
     },
     html_box: function(messages) {
-        return Handlebars.templates['box.html']({ messages:messages })
+        var compose_dropdown = '';
+        for (var name in this.services) {
+            var service = this.services[name];
+            if (!service || !service.config) { continue; }
+            compose_dropdown += '<li><a href="#todo/' + name + '">' + service.config.name + '</a></li>';
+        }
+        return Handlebars.templates['box.html']({ messages:messages, compose_dropdown:compose_dropdown })
     },
     html_messages: function(messages) {
         var html = '';
-        for (var i=0, ii=messages.length; i < ii; i++) {
-            var message = messages[i];
+        for (var k in messages) {
+            var message = messages[k];
             var msgmoment = moment(message.date);
-            html += '<tr><td><input type="checkbox" /></td><td><span class="label">' + message.service + '</span></td><td><a href="#/winbox/service/' + message.service + '/view/' + message.id + '">' + message.summary + '</a></td><td title="' + msgmoment.calendar() + '">' + msgmoment.fromNow() + '</td></tr>';
+            // :TODO: view link
+            html += '<tr><td><input type="checkbox" /></td><td><span class="label">' + message.service + '</span></td><td><a href="#/winbox/' + message.service_uri + '/' + message.id + '">' + message.summary + '</a></td><td title="' + msgmoment.calendar() + '">' + msgmoment.fromNow() + '</td></tr>';
         }
         return html;
     },
     html_nav: function() {
         var html = '';
-        html += '<li class="nav-header" style="color: #666">'+this.title+'</li>';
+        html += '<li class="nav-header" style="color: #666">Winbox</li>';
         html += '<li ' + (!this.active_service ? 'class="active"' : '') + '><a href="#/winbox"><i class="' + (!this.active_service ? 'icon-white ' : '') + 'icon-inbox"></i> Messages</a></li>';
         html += '<li><a href="#/winbox/settings"><i class="icon-cog"></i> Settings</a></li>';
         html += '<li class="nav-header">Services</li>';
-        for (var uri in this.services) {
-            var service = this.services[uri];
+        for (var name in this.services) {
+            var service = this.services[name];
             if (!service || !service.config) { continue; }
-            var li_active = (this.active_service == uri ? ' class="active" ' : '');
-            var i_active = (this.active_service == uri ? ' icon-white ' : '');
-            html += '<li' + li_active + '><a href="#/winbox/service/' + service.config.name + '"><i class="icon-folder-open' + i_active + '"></i> ' + service.config.name + '</a></li>';
+            var li_active = (this.active_service == name ? ' class="active" ' : '');
+            var i_active = (this.active_service == name ? ' icon-white ' : '');
+            html += '<li' + li_active + '><a href="#/winbox/' + name + '"><i class="icon-folder-open' + i_active + '"></i> ' + service.config.name + '</a></li>';
         }
         return html;
     }

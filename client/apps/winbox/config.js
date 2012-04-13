@@ -19,12 +19,8 @@ link.App.configure_uris({
     "#/winbox": {
         "->isa": "Winbox"
     },
-    "#/winbox2": {
-        "->isa": "Winbox",
-        "title": "Winbox2"
-    },
     "#/winbox/services/fixture": {
-        "->isa": "Winbox.Service.Fixture"
+        "->isa": "Winbox.Fixture.Service"
     },
 
     // TODO...
