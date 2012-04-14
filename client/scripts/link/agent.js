@@ -62,9 +62,9 @@ link.Agent = function() {
             var elem = form[i];
             // If was recently clicked, pull its request attributes-- it's our submitter
             if (elem.getAttribute('clicked') == '1') {
-                target_uri = elem.formAction;
-                enctype = elem.formEnctype;
-                method = elem.formMethod;
+                target_uri = elem.getAttribute('formaction');
+                enctype = elem.getAttribute('formenctype');
+                method = elem.getAttribute('formmethod');
                 elem.setAttribute('clicked', '0');
             }
             if (elem.value) {
@@ -76,10 +76,13 @@ link.Agent = function() {
         if (!target_uri) { target_uri = form.action; }
         if (!enctype) { enctype = form.enctype; }
         if (!method) { method = form.method; }
+
+        // No target uri means use the current URI
+        target_uri = target_uri.replace(form.baseURI, '');
+        if (!target_uri) { target_uri = window.location.hash; }
         
         // Submit to Link resource?
-        target_uri = target_uri.replace(form.baseURI, '');
-        if (!target_uri || target_uri.charAt(0) != '#') { return; }
+        if (target_uri.charAt(0) != '#') { return; }
         e.preventDefault();
         if (e.stopPropagation) { e.stopPropagation(); }
 
@@ -142,8 +145,12 @@ link.Agent.prototype.follow = function(request) {
     return link.App.handle_request(request, function(response) {
         // Render to window
         if (response.render) { response.render(); }
+        // If a redirect, do that now
+        if (response.get_status_code() >= 300 && response.get_status_code() < 400) {
+            window.location.hash = response.get_headers().get('location');
+        }
         // If not a 205 Reset Content, then change our hash
-        if (response.get_status_code() != 205) {
+        else if (response.get_status_code() != 205) {
             self.expected_hashchange_ = request.get_uri();
             window.location.hash = request.get_uri();
         }

@@ -1,12 +1,7 @@
 /*
 App.js
-==================
-"Hosts" client resources
-
-Responsibilities:
- - Manages a namespace which maps to layered resource definitions
- - Handles CONFIGURE requests, which update the namespace at runtime
- - Loads and evaluates resource definitions from remote sources
+======
+:TODO: Documentation
 */
 
 goog.provide('link.App');
@@ -151,6 +146,7 @@ link.App.handle_request = function(request, callback) {
     // Get all applicable resources (eg for #/a/b/c, gather #, #/a, #/a/b, and #/a/b/c)
     // and build a DeferredList to run the request handling after they've all loaded
     var resource_uris = this.get_parent_uris(request_uri);
+    resource_uris.reverse();
     resource_uris.push(request_uri);
     var resources = [];
     var rtype_defs = [];
@@ -167,8 +163,12 @@ link.App.handle_request = function(request, callback) {
         }
     }
 
-    // When ready, run the rest of this
-    // (if all are ready, `rtype_defs` will be empty, and DeferredList will run the callback immediately)
+    // Add a next-tick callback to make sure the handling function is always async
+    var delay_def = new goog.async.Deferred();
+    rtype_defs.push(delay_def);
+    setTimeout(function() { delay_def.callback(); }, 0);
+
+    // Register the handler after all deferreds are run
     (new goog.async.DeferredList(rtype_defs)).addCallback(function() {
         // Pull params out of our context
         var resource_uris = this.resource_uris;

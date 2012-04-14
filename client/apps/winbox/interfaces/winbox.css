@@ -1,3 +1,6 @@
+body {
+    margin-top: 10px;
+}
 #winbox-container {
     margin: 5px 8px;
 }
@@ -12,3 +15,4 @@
 #winbox-messages tr td a {
     color: #555;
 }
+#winbox-content .form-horizontal .control-group::after { clear: none; }

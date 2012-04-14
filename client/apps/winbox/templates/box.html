@@ -2,11 +2,11 @@
     <form>
         <div class="btn-group">
             <button class="btn" formaction="#/winbox/sync{{{cur_sync}}}" formmethod="post" title="Check for new messages"><i class="icon-refresh"></i></button>
-            <button class="btn" formaction="#/winbox/compose-dropdown" formmethod="post" title="Compose a message"><i class="icon-pencil"></i></button>        
+            <button class="btn dropdown-toggle" data-toggle="dropdown" title="Compose a message"><i class="icon-pencil"></i></button>        
+            <ul class="dropdown-menu">
+                {{{compose_dropdown}}}
+            </ul>
         </div>
-        <ul id="compose-dropdown" class="dropdown-menu">
-            {{{compose_dropdown}}}
-        </ul>
         <div class="btn-group">
             <button class="btn" title="Mark selected messages as read"><i class="icon-check"></i></button>
         </div>

@@ -2,11 +2,15 @@
 // ====================
 link.App.require_style(['/apps/bootstrap/css/bootstrap.css', '/apps/winbox/interfaces/winbox.css']);
 link.App.require_script([
+    'https://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js',
     '/apps/winbox/vendor/handlebars.runtime.js',
     '/apps/winbox/vendor/moment.min.js'
 ], function() {
-    // depends on handlebars.runtime.js
-    link.App.require_script('/apps/winbox/templates/templates.js', function() {
+    // depends on handlebars.runtime.js or jquery
+    link.App.require_script([
+        '/apps/winbox/templates/templates.js',
+        'http://twitter.github.com/bootstrap/assets/js/bootstrap-dropdown.js'
+    ], function() {
         // depends on templates.js
         link.App.require_script([
             '/apps/winbox/main.js',
