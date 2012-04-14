@@ -46,9 +46,9 @@
 link.App.add_resource_type('Winbox.Fixture.Service', {
     // Data
     "messages": {
-        '1': { date:new Date(), author:'bsmith', recp:{ 'bsmith':'Bob Smith' }, subject:'Hey, Buddy!', body:'How are you doing?', re:null, read:false },
-        '2': { date:new Date(), author:'bsmith', recp:{ 'bsmith':'Bob Smith', 'asmitherson':'Alice Smitherson' }, subject:'About the meeting', body:'Important business conversation. Things people talk about and stuff', re:null, read:true },
-        '3': { date:new Date(), author:'asmitherson', recp:{ 'bsmith':'Bob Smith', 'asmitherson':'Alice Smitherson' }, subject:'About the meeting', body:'Important business conversation. Things people talk about and stuff', re:2, read:false }
+        '1': { date:new Date() - Math.random() * 300000, author:'bsmith', recp:{ 'bsmith':'Bob Smith' }, subject:'Hey, Buddy!', body:'How are you doing?', re:null, read:false },
+        '2': { date:new Date() - Math.random() * 300000, author:'bsmith', recp:{ 'bsmith':'Bob Smith', 'asmitherson':'Alice Smitherson' }, subject:'About the meeting', body:'Important business conversation. Things people talk about and stuff', re:null, read:true },
+        '3': { date:new Date() - Math.random() * 300000, author:'asmitherson', recp:{ 'bsmith':'Bob Smith', 'asmitherson':'Alice Smitherson' }, subject:'About the meeting', body:'Important business conversation. Things people talk about and stuff', re:2, read:false }
     },
 
     // Handlers
@@ -163,6 +163,8 @@ link.App.add_resource_type('Winbox.Fixture.Service', {
                 message['summary'] = '<strong>' + org.author + '</strong> ' + org.subject;
             } else if (fields[i] == 'view_link') {
                 message['view_link'] = '#/winbox/services/fixture/' + id;
+            } else if (fields[i] == 'date') {
+                message['date'] = new Date() - Math.random() * 300000; // Just so we know when a sync happens
             } else {
                 message[fields[i]] = org[fields[i]];
             }

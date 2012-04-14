@@ -53,10 +53,12 @@ link.Response.prototype.render = function() {
     var target_elem = this.render_target_eleme_;
     if (!target_elem) { target_elem = document.body; }
     // Default behavior
-    if (this.status_code_ != 200) {
+    if (this.status_code_ < 200 || this.status_code_ >= 300) {
         target_elem.innerHTML = '' + this.status_code_ + ' ' + this.reason_phrase_;
         if (this.body_) { target_elem.innerHTML += "<br />\n" + this.body_; }
     } else if (this.body_ !== null) {
-        target_elem.innerHTML = this.body_;
+        if (this.status_code_ != 204 && this.status_code_ != 205) {
+            target_elem.innerHTML = this.body_;
+        }
     }
 }

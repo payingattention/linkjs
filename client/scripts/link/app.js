@@ -12,6 +12,7 @@ Responsibilities:
 goog.provide('link.App');
 
 goog.require('link.Response');
+goog.require('goog.dom');
 goog.require('goog.structs.Map');
 goog.require('goog.object');
 goog.require('goog.Uri.QueryData');

@@ -61,6 +61,41 @@ link.App.add_resource_type('Winbox', {
                 respond(200, self.html_box(messages_html), 'text/html');
             } else { respond(400); }
         },
+        // Sync an inbox (or all inboxes)
+        '^/sync/?([^/]*)?/?$': function(request, uri_params, respond) {
+            var self = this;
+            if (request.matches({'method':'post'})) {
+                var param_servicename = uri_params[1];
+                var services = [];
+                if (param_servicename) { // a specific service
+                    services = [self.services[param_servicename]];
+                } else { // all services
+                    services = self.services;
+                }
+                for (var uri in self.services) {
+                    self.sync_service_inbox(uri, function() {
+                        // Redraw all messages
+                        var messages_table = document.getElementById('winbox-messages');
+                        if (messages_table) { messages_table.innerHTML = self.html_messages(self.get_all_service_messages()); }
+                    });
+                }
+                respond(205); // No content-- don't try to render anything, and don't change the URI
+            } else { respond(400); }
+        },
+        // Open the compose dropdown
+        '^/compose-dropdown/?$': function(request, uri_params, respond) {
+            var self = this;
+            if (request.matches({'method':'post'})) {
+                console.log('compose!');
+                respond(205); // No content-- don't try to render anything, and don't change the URI
+            } else { respond(400); }
+        },
+        // Winbox settings
+        '^/settings/?$': function(request, uri_params, respond) {
+            if (request.matches({'method':'get', 'accept':'text/html'})) {
+                respond(501); // :TODO:
+            } else { respond(400); }
+        },
         // Service inbox
         '^/([^/]+)/?$': function(request, uri_params, respond) {
             var self = this;
@@ -97,20 +132,7 @@ link.App.add_resource_type('Winbox', {
                     });
                 });
             } else { respond(400); }
-        },
-        // Winbox settings
-        '^/settings/?$': function(request, uri_params, respond) {
-            if (request.matches({'method':'get', 'accept':'text/html'})) {
-                respond(501); // :TODO:
-            } else { respond(400); }
-        },
-        // Sync an inbox (or all inboxes)
-        '^/sync[/(.*)]?/?$': function(request, uri_params, respond) {
-            
-            if (request.matches({'method':'post'})) {
-                respond(501); // :TODO:
-            } else { respond(400); }
-        },
+        }
     },
 
     // Common tasks
@@ -179,7 +201,8 @@ link.App.add_resource_type('Winbox', {
             if (!service || !service.config) { continue; }
             compose_dropdown += '<li><a href="#todo/' + name + '">' + service.config.name + '</a></li>';
         }
-        return Handlebars.templates['box.html']({ messages:messages, compose_dropdown:compose_dropdown })
+        var cur_sync = this.active_service ? ('/' + this.active_service) : '';
+        return Handlebars.templates['box.html']({ messages:messages, compose_dropdown:compose_dropdown, cur_sync:cur_sync })
     },
     html_messages: function(messages) {
         var html = '';

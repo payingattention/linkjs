@@ -19,15 +19,26 @@ goog.require('goog.dom');
 goog.require('goog.async.Deferred');
 
 link.Agent = function() {
-    // Define the click handler in this closure, to have access to 'self'
-    // (I could use goog.bind, but go away you bother me)
     var self = this;
-    var click_handler_ = function(e) {
-        // :TODO: forms
-
+    
+    // Click handler
+    var click_handler = function(e) {
+        // Mark as recently clicked, if this (or a parent) is part of a form
+        var node = e.target;
+        while (node) {
+            if (node.form) {
+                for (var i=0; i < node.form.length; i++) {
+                    node.form[i].setAttribute('clicked', null); // clear the others out, to be safe
+                }
+                node.setAttribute('clicked', '1');
+                break;
+            }
+            node = node.parentNode;
+        }
+        
         // Try to collect the target URI
         var target_uri = e.target.href;
-        if (!target_uri) { return; }
+        if (!target_uri || target_uri.charAt(0) != '#') { return; }
         e.preventDefault();
         if (e.stopPropagation) { e.stopPropagation(); }
 
@@ -37,11 +48,62 @@ link.Agent = function() {
         
         // Handle
         self.follow(request);
-        
-        // Deal with the window
-        self.update_window(request);
     };
-    goog.events.listen(document, goog.events.EventType.CLICK, click_handler_, false);
+    goog.events.listen(document, goog.events.EventType.CLICK, click_handler, false);
+
+    // Form handler
+    var submit_handler = function(e) {
+        var form = e.target;
+        var target_uri, enctype, method;
+
+        // Serialize the data
+        var data = {};
+        for (var i=0; i < form.length; i++) {
+            var elem = form[i];
+            // If was recently clicked, pull its request attributes-- it's our submitter
+            if (elem.getAttribute('clicked') == '1') {
+                target_uri = elem.formAction;
+                enctype = elem.formEnctype;
+                method = elem.formMethod;
+                elem.setAttribute('clicked', '0');
+            }
+            if (elem.value) {
+                data[elem.name] = elem.value;
+            }
+        }
+
+        // If no element gave request attributes, pull them from the form
+        if (!target_uri) { target_uri = form.action; }
+        if (!enctype) { enctype = form.enctype; }
+        if (!method) { method = form.method; }
+        
+        // Submit to Link resource?
+        target_uri = target_uri.replace(form.baseURI, '');
+        if (!target_uri || target_uri.charAt(0) != '#') { return; }
+        e.preventDefault();
+        if (e.stopPropagation) { e.stopPropagation(); }
+
+        // Build the request
+        var request = new link.Request(target_uri);
+        request.method(method);
+        if (form.acceptCharset) { request.headers({ 'accept': form.acceptCharset }); }
+
+        // Build request body
+        if (form.method == 'get') {
+            var qparams = [];
+            for (var k in data) {
+                qparams.push(k + '=' + data[k]);
+            }
+            target_uri += '?' + qparams.join('&');
+            request.uri(target_uri);
+        } else {
+            request.body(data, enctype);
+        }
+        
+        // Handle
+        self.follow(request);
+    };
+    goog.events.listen(document, goog.events.EventType.SUBMIT, submit_handler, false);
     
     // Set up a hash listener as well
     window.onhashchange = function() {
@@ -58,7 +120,6 @@ link.Agent = function() {
         
         // Follow the request
         self.follow(request);
-        
     };
     
     // Now follow the current hash's uri
@@ -71,8 +132,6 @@ link.Agent = function() {
  * Updates the browser to reflect state
  */
 link.Agent.prototype.update_window = function(request) {
-    this.expected_hashchange_ = request.get_uri();
-    window.location.hash = request.get_uri();
 };
 
 /**
@@ -81,6 +140,12 @@ link.Agent.prototype.update_window = function(request) {
 link.Agent.prototype.follow = function(request) {
     var self = this;
     return link.App.handle_request(request, function(response) {
+        // Render to window
         if (response.render) { response.render(); }
+        // If not a 205 Reset Content, then change our hash
+        if (response.get_status_code() != 205) {
+            self.expected_hashchange_ = request.get_uri();
+            window.location.hash = request.get_uri();
+        }
     });
 };
