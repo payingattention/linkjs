@@ -2,7 +2,6 @@
 // ====================
 link.App.require_style(['/apps/bootstrap/css/bootstrap.css', '/apps/winbox/interfaces/winbox.css']);
 link.App.require_script([
-    'https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.js',
     '/apps/winbox/vendor/handlebars.runtime.js',
     '/apps/winbox/vendor/moment.min.js'
 ], function() {
@@ -24,9 +23,7 @@ link.App.configure_uris({
     },
 
     // TODO...
-    /*"#/winbox/interfaces/fixture/message": {
-        "->requires": "/apps/winbox/interfaces/fixture/message.js"
-    },
+    /*
     "#/winbox/interfaces/twitter": {
         "->": "/apps/winbox/interfaces/twitter.js"
     },

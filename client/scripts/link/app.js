@@ -20,11 +20,18 @@ goog.require('goog.async.Deferred');
 goog.require('goog.async.DeferredList');
 
 //
-// Initialize some app properties
+// Init some resources
 //
+
 link.App.resources_ = new goog.structs.Map();
 link.App.resource_types_ = new goog.structs.Map();
-link.App.document_body_agent_ = null;
+
+/**
+ * Init
+ */
+link.App.initialize = function() {
+    this.agent_ = new link.Agent();
+}
 
 /**
  * Defines a new resource type
@@ -54,8 +61,13 @@ link.App.configure_uris = function(kvs) {
         goog.object.extend(oldv, v);
         v = oldv;
 
+        // Add the .config structure
+        if (!v.config) { v.config = {}; }
+        v.config.uri = k;
+        v.config.uri_parts = k.split('/');
+        v.config.slug = v.config.uri_parts[v.config.uri_parts.length - 1];
+
         // Set into URI structure
-        v['uri'] = k;
         this.resources_.set(k, v);
 
         // If the resource type has changed, instantiate the new type into this URI
@@ -120,127 +132,125 @@ link.App.instantiate_resource_into_uri = function(type, uri) {
     }
 };
 
-//
-// Frame agent methods
-//
-link.App.set_body_agent = function(agent) {
-    if (this.document_body_agent_) {} // :TODO: destroy code?
-    this.document_body_agent_ = agent;
-};
-link.App.get_body_agent = function(agent) {
-    return this.document_body_agent_;
-};
-link.App.get_frame_agent = function(frame_element_id, parent_agent) {
-    if (frame_element_id == 'document.body') { return this.document_body_agent_; }
-    if (!parent_agent) { parent_agent = this.document_body_agent_; }
-    // See if this parent has it
-    var frame_agent = parent_agent.get_frame_agent(frame_element_id);
-    if (frame_agent) { return frame_agent; }
-    // If not, iterate its children
-    var frame_agents = parent_agent.get_frame_agents().getValues();
-    for (var i=0, ii=frame_agents.length; i < ii; i++) {
-        frame_agent = this.get_frame_agent(frame_element_id, frame_agents[i]);
-        if (frame_agent) { return frame_agent; }
-    }
-    // Not found
-    return null;
-};
-
 /**
  * Generates a response by evaluating the target resource
  */
-link.App.handle_request = function(request, agent, deferred) {
+link.App.handle_request = function(request, callback) {
     // Make sure the request isn't malformed
     // :TODO:
     var request_uri = request.get_uri();
-
-    // Resolve the target resource
-    var resolved_baseuri = null, resolved_suburi = '';
-    if (this.resources_.containsKey(request_uri)) {
-        // complete match
-        resolved_baseuri = request_uri;
+    var final_def;
+    if (callback instanceof goog.async.Deferred) {
+        final_def = callback;
     } else {
-        // no complete match, march up parents
-        var parent_uris = this.get_parent_uris(request_uri);
-        for (var i=0; i < parent_uris.length; i++) {
-            var base_uri = parent_uris[i];
-            // resource exists at given uri?
-            if (this.resources_.containsKey(base_uri)) {
-                // for simplicity, go ahead and take this resource
-                // (if we wanted to make sure a sub-uri handler matches, we'd have to load the resource before ascertaining a match)
-                resolved_suburi = request_uri.slice(base_uri.length);
-                resolved_baseuri = base_uri;
-                break;
+        final_def = new goog.async.Deferred();
+        final_def.addCallback(callback);
+    }
+
+    // Get all applicable resources (eg for #/a/b/c, gather #, #/a, #/a/b, and #/a/b/c)
+    // and build a DeferredList to run the request handling after they've all loaded
+    var resource_uris = this.get_parent_uris(request_uri);
+    resource_uris.push(request_uri);
+    var resources = [];
+    var rtype_defs = [];
+    for (var i=0, ii=resource_uris.length; i < ii; i++) {
+        var uri = resource_uris[i];
+        if (this.resources_.containsKey(uri)) {
+            // resource exists
+            var resource = this.resources_.get(uri);
+            resources.push(resource);
+            // loading? add to deflist
+            if (resource['__loading'] && resource['->isa']) {
+                rtype_defs.push(this.resource_types_.get(resource['->isa']));
             }
-        }
-        if (resolved_baseuri === null) {
-            return deferred.callback(new link.Response(404,"Not Found"));
         }
     }
 
-    // Define the function to finish handling this function
-    // (we do this in case the resource isn't loaded yet)
-    var self = this;
-    var finish_handling = function() {
-        var resource = self.resources_.get(resolved_baseuri);
+    // When ready, run the rest of this
+    // (if all are ready, `rtype_defs` will be empty, and DeferredList will run the callback immediately)
+    (new goog.async.DeferredList(rtype_defs)).addCallback(function() {
+        // Pull params out of our context
+        var resource_uris = this.resource_uris;
+        var request = this.request;
+        var callback = this.callback;
         
-        // Run request processor :TODO: processorS-- build an array out of the URI stack (#, #/a, #/a/b...)
-        var request_processor = self.get_uri_config(resolved_baseuri, '->request_processor', true);
-        if (request_processor) {
-            var should_handle = request_processor.call(resource, request, agent);
-            if (!should_handle) { return; }
+        // Grab the resources again-- if loaded, the object was changed
+        var resources = [];
+        for (var i=0, ii=resource_uris.length; i < ii; i++) {
+            var uri = resource_uris[i];
+            if (link.App.resources_.containsKey(uri)) {
+                resources.push(link.App.resources_.get(uri));
+            }
         }
-        
-        // Verify load
-        var handler = resource['->'];
-        if (!handler) {
-            console.log('Error: Handler for "' + resolved_baseuri + '" didn\'t load.');
-            return deferred.callback(new link.Response(500,"Internal Error"));
-        }
-        
-        // Sub-URI handler
+
+        // Decide which resource should be the handler
+        var handler_index = resources.length - 1;
+        var handler_function = null;
         var uri_params;
-        if (!(handler instanceof Function) && typeof(handler) == 'object') {
-            // sub-URI handlers, choose the first which matches the suburi
-            var found=false;
-            for (var pattern in handler) {
-                var re = new RegExp(pattern, 'i');
-                uri_params = re.exec(resolved_suburi);
-                if (uri_params) {
-                    handler = handler[pattern];
+        for (handler_index; handler_index >= 0; handler_index--) {
+            var resource = resources[handler_index];
+            var handler = resource['->'];
+            if (handler instanceof Function) {
+                // one handler, allow if a perfect match
+                if (resource.config.uri == request_uri) {
+                    handler_function = handler;
                     found = true;
                     break;
                 }
+            } else if (typeof(handler) == 'object') {
+                // sub-URI handlers, choose the first which matches the suburi
+                var suburi = request_uri.replace(resource.config.uri, '');
+                var found=false;
+                for (var pattern in handler) {
+                    var re = new RegExp(pattern, 'i');
+                    uri_params = re.exec(suburi);
+                    if (uri_params) {
+                        handler_function = handler[pattern];
+                        found = true;
+                        break;
+                    }
+                }
             }
-            if (!found) {
-                console.log('Error: Handler for "' + resolved_baseuri + '" didn\'t have a match for suburi "' + resolved_suburi + '".');
-                return deferred.callback(new link.Response(404,"Not Found"));
-            }
-        } else {
-            // no sub-URI handlers, just call given function with the sub-URI as its uri_param
-            uri_params = [resolved_suburi];
+            if (found) { break; }
         }
-        
-        // Run handler
-        handler.call(resource, request, uri_params, function(code, body, content_type, headers) {
+        if (!handler_function) {
+            console.log('Error: Handler for "' + request_uri + '" could not be found.');
+            return final_def.callback(new link.Response(404,"Not Found"));
+        }
+
+        // Run the preprocessors for each resource leading up to the handler
+        for (var i=0; i <= handler_index; i++) {
+            if (resources[i].pre) {
+                var request = resources[i].pre(request, final_def);
+                if (!request) {
+                    return; // Stop here, as instructed
+                }
+            }
+        }
+
+        // Run the handler
+        handler_function.call(resources[handler_index], request, uri_params, function(code, body, content_type, headers) {
+            var response;
             if (code && code instanceof link.Response) {
-                deferred.callback(code); // valid link.Response was provided
+                // full response provided
+                response = code;
             } else {
                 // build the response
-                deferred.callback((new link.Response(code)).body(body,content_type).headers(headers));
+                response = (new link.Response(code)).body(body,content_type).headers(headers);
             }
+            
+            // Run the postprocessors for each resource leading down from the handler
+            for (var i=handler_index; i >= 0; i--) {
+                if (resources[i].post) {
+                    response = resources[i].post(request, response);
+                }
+            }
+            
+            // Send on back to our caller
+            final_def.callback(response);
         });
-    };
-    
-    // If the resource type isn't loaded yet, finish handling this request when it does
-    var resource = this.resources_.get(resolved_baseuri);
-    if (resource['__loading'] && resource['->isa']) {
-        this.resource_types_.get(resource['->isa']).addCallback(finish_handling);
-        // :TODO: possibly register a timeout that notifies the user something went weird
-    } else {
-        // Resource ready, finish now
-        finish_handling();
-    }
+    }, { request:request, callback:callback, resource_uris:resource_uris });
+    return final_def;
 };
 
 /**

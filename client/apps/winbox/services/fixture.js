@@ -109,7 +109,7 @@ link.App.add_resource_type('Winbox.Fixture.Service', {
                     return respond(404, 'Message ' + param_id + ' not found');
                 }
                 // Build response
-                var html = '<h3>' + message.subject + '</h3>' + '<p><small>Sent on <span class="label" style="background:#444">' + message.date.toLocaleDateString() + ' @' + message.date.toLocaleTimeString()  + '</span> by <span class="label label-success">' + message.author + '</span> to ';
+                var html = '<h2 style="margin-bottom:5px">' + message.subject + '</h2><p><small>Sent on <span class="label" style="background:#444">' + message.date.toLocaleDateString() + ' @' + message.date.toLocaleTimeString()  + '</span> by <span class="label label-success">' + message.author + '</span> to ';
                 var recps = [];
                 for (var user in message.recp) {
                     recps.push('<span class="label label-info">' + user + ' (' + message.recp[user] + ')</span>');
