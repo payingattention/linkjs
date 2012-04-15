@@ -9,8 +9,9 @@ link.App.add_resource_type('Winbox', {
     // (all of the external interactions this resource makes)
     'req': {
         'get_config': new link.Request('{{service_uri}}/config').for_json(),
-        'get_inbox': new link.Request('{{service_uri}}?v=["service","date","summary","view_link"]').for_json(),
-        'get_message_view': new link.Request('{{view_uri}}').for_html()
+        'get_inbox': new link.Request('{{service_uri}}?v=["service","date","summary","read","view_link"]').for_json(),
+        'get_message_view': new link.Request('{{view_uri}}').for_html(),
+        'mark_read': new link.Request('{{update_uri}}').method('put').body({read: true}, 'application/json')
     },
 
     // Pre processor
@@ -61,27 +62,6 @@ link.App.add_resource_type('Winbox', {
                 respond(200, self.html_box(messages_html), 'text/html');
             } else { respond(400); }
         },
-        // Sync an inbox (or all inboxes)
-        '^/sync/?([^/]*)?/?$': function(request, uri_params, respond) {
-            var self = this;
-            if (request.matches({'method':'post'})) {
-                var param_servicename = uri_params[1];
-                var services = [];
-                if (param_servicename) { // a specific service
-                    services = [self.services[param_servicename]];
-                } else { // all services
-                    services = self.services;
-                }
-                for (var uri in self.services) {
-                    self.sync_service_inbox(uri, function() {
-                        // Redraw all messages
-                        var messages_table = document.getElementById('winbox-messages');
-                        if (messages_table) { messages_table.innerHTML = self.html_messages(self.get_all_service_messages()); }
-                    });
-                }
-                respond(205); // No content-- don't try to render anything, and don't change the URI
-            } else { respond(400); }
-        },
         // Service inbox
         '^/messages/([^/]+)/?$': function(request, uri_params, respond) {
             var self = this;
@@ -117,6 +97,48 @@ link.App.add_resource_type('Winbox', {
                 // Render layout
                 respond(200, html, 'text/html');
             } else { respond(400); }
+        },
+        // Sync an inbox (or all inboxes)
+        '^/sync/?([^/]*)?/?$': function(request, uri_params, respond) {
+            var self = this;
+            if (request.matches({'method':'post'})) {
+                var param_servicename = uri_params[1];
+                var services = [];
+                if (param_servicename) { // a specific service
+                    services = [self.services[param_servicename]];
+                } else { // all services
+                    services = self.services;
+                }
+                for (var uri in self.services) {
+                    self.sync_service_inbox(uri, function() {
+                        // Redraw all messages
+                        var messages_table = document.getElementById('winbox-messages');
+                        if (messages_table) { messages_table.innerHTML = self.html_messages(self.get_all_service_messages()); }
+                    });
+                }
+                respond(205); // No content-- don't try to render anything, and don't change the URI
+            } else { respond(400); }
+        },
+        // Mark read
+        '^/markread/?$': function(request, uri_params, respond) {
+            if (request.matches({'method':'post'})) {
+                // Gather all the checked items and mark them read
+                var deferreds = [];
+                var messages_table = document.getElementById('winbox-messages');
+                var rows = messages_table.getElementsByTagName('tr');
+                for (var i=0, ii=rows.length; i < ii; i++) {
+                    var checkbox = rows[i].getElementsByTagName('input');
+                    checkbox = checkbox[0];
+                    if (checkbox.checked) {
+                        deferreds.push(link.App.handle_request(this.req.mark_read.uri_param('update_uri', checkbox.value)));
+                        checkbox.checked = false;
+                    }
+                }
+                // After all finish, refresh
+                (new goog.async.DeferredList(deferreds)).addCallback(function() {
+                    respond(303, null, null, {'location':this.config.uri});
+                }, this);
+            }
         }
     },
 
@@ -199,11 +221,11 @@ link.App.add_resource_type('Winbox', {
         }
         // Sort by date        
         messages.sort(function(a,b) { return a.date < b.date });
-        
+        // Generate html
         for (var k in messages) {
             var message = messages[k];
             var msgmoment = moment(message.date);
-            html += '<tr><td><input type="checkbox" /></td><td><span class="label">' + message.service + '</span></td><td><a href="' + message.view_link + '">' + message.summary + '</a></td><td title="' + msgmoment.calendar() + '">' + msgmoment.fromNow() + '</td></tr>';
+            html += '<tr><td><input type="checkbox" value="' + message.view_link + '" /></td><td>' + (message.read ? '' : '<i class="icon-flag" title="unread"></i>') + '</td><td><span class="label">' + message.service + '</span></td><td><a href="' + message.view_link + '">' + message.summary + '</a></td><td title="' + msgmoment.calendar() + '">' + msgmoment.fromNow() + '</td></tr>';
         }
         return html;
     },

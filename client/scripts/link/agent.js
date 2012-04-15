@@ -78,7 +78,10 @@ link.Agent = function() {
         if (!method) { method = form.method; }
 
         // No target uri means use the current URI
-        target_uri = target_uri.replace(form.baseURI, '');
+        var base_uri = form.baseURI;
+        var hash_pos = form.baseURI.indexOf('#');
+        if (hash_pos != -1) { base_uri = base_uri.substring(0,hash_pos); }
+        target_uri = target_uri.replace(base_uri, '');
         if (!target_uri) { target_uri = window.location.hash; }
         
         // Submit to Link resource?
@@ -143,14 +146,15 @@ link.Agent.prototype.update_window = function(request) {
 link.Agent.prototype.follow = function(request) {
     var self = this;
     return link.App.handle_request(request, function(response) {
-        // Render to window
-        if (response.render) { response.render(); }
         // If a redirect, do that now
         if (response.get_status_code() >= 300 && response.get_status_code() < 400) {
-            window.location.hash = response.get_headers().get('location');
+            self.follow((new link.Request(response.get_headers().get('location'))).for_html());
+            return;
         }
+        // Render to window
+        if (response.render) { response.render(); }
         // If not a 205 Reset Content, then change our hash
-        else if (response.get_status_code() != 205) {
+        if (response.get_status_code() != 205) {
             self.expected_hashchange_ = request.get_uri();
             window.location.hash = request.get_uri();
         }

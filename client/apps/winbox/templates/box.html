@@ -1,14 +1,14 @@
 <div class="btn-toolbar">
-    <form>
+    <form method="post">
         <div class="btn-group">
-            <button class="btn" formaction="#/winbox/sync{{{cur_sync}}}" formmethod="post" title="Check for new messages"><i class="icon-refresh"></i></button>
+            <button class="btn" formaction="#/winbox/sync{{{cur_sync}}}" title="Check for new messages"><i class="icon-refresh"></i></button>
             <button class="btn dropdown-toggle" data-toggle="dropdown" title="Compose a message"><i class="icon-pencil"></i></button>        
             <ul class="dropdown-menu">
                 {{{compose_dropdown}}}
             </ul>
         </div>
         <div class="btn-group">
-            <button class="btn" title="Mark selected messages as read"><i class="icon-check"></i></button>
+            <button class="btn" formaction="#/winbox/markread" title="Mark selected messages as read"><i class="icon-check"></i></button>
         </div>
     </form>
 </div>

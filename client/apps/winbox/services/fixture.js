@@ -10,6 +10,7 @@
 //     - 'recp' users involved in the message [<id String>...]
 //     - 'summary' a summary line of the message {summary:<any value>}
 //     - 'body' the body of the message {body:<any value>}
+//     - 'read' has the message been read yet? {read:<bool>}
 //     - 'view_link' the uri of the message view renderer {view_link:<uri String>}
 //   - '?offset=<:decimal>' specify a start offset, when retrieving a list
 //   - '?limit=<:decimal>' specify a maximum number to fetch, when retrieving a list
@@ -58,6 +59,7 @@ link.App.add_resource_type('Winbox.Fixture.Service', {
         '2': { date:new Date() - Math.random() * 300000, author:'bsmith', recp:['bsmith', 'asmitherson'], subject:'About the meeting', body:'Important business conversation. Things people talk about and stuff', re:null, read:true },
         '3': { date:new Date() - Math.random() * 300000, author:'asmitherson', recp:['bsmith', 'asmitherson'], subject:'RE: About the meeting', body:'Other stuff about business or whatever.', re:2, read:false }
     },
+    "username": "fixtureuser",
 
     // Handlers
     "->": {
@@ -85,6 +87,8 @@ link.App.add_resource_type('Winbox.Fixture.Service', {
                 // Get message
                 var message = this.get_message(uri_params[1]);
                 if (!message) { return respond(404, 'Message ' + uri_params[1] + ' not found'); }
+                // Has been read
+                message.read = true;
                 // Respond
                 var html = [
                     this.html_message(message),
@@ -99,7 +103,7 @@ link.App.add_resource_type('Winbox.Fixture.Service', {
                 if (!message) { return respond(404, 'Message ' + uri_params[1] + ' not found'); }
                 // Update...
                 var updates = request.get_body();
-                if (read in updates) { // "read" state
+                if ('read' in updates) { // "read" state
                     message.read = updates.read;
                 }
                 respond(200);
@@ -138,7 +142,7 @@ link.App.add_resource_type('Winbox.Fixture.Service', {
                 // Build new message
                 inputs.recp = inputs.recp.split(',');
                 inputs.date = new Date();
-                inputs.author = 'winboxuser';
+                inputs.author = this.username;
                 inputs.re = uri_params[1];
                 inputs.read = true;
                 var new_id = this.get_new_msg_id();
@@ -167,7 +171,7 @@ link.App.add_resource_type('Winbox.Fixture.Service', {
                 // Build new message
                 inputs.recp = inputs.recp.split(',');
                 inputs.date = new Date();
-                inputs.author = 'winboxuser';
+                inputs.author = this.username;
                 inputs.re = null;
                 inputs.read = true;
                 var new_id = this.get_new_msg_id();
@@ -186,10 +190,28 @@ link.App.add_resource_type('Winbox.Fixture.Service', {
             }
             // Config interface fetch
             else if (request.matches({'method':'get', 'accept': 'text/html'})) {
-                return respond(200, 'todo', 'text/html', { 'pragma':'no-alter' });
+                var html = [
+                    '<h4 id="fixture-cfg-title">Fixture</h4>',
+                    '<form class="form-horizontal" method="post" action="', this.config.uri, '/config">',
+                    '<div class="control-group">',
+                    '<label class="control-label" for="fixture-username">Username:</label>',
+                    '<div class="controls">',
+                    '<input type="text" class="input-xlarge span3" id="fixture-username" name="username" value="', this.username, '" />',
+                    '</div></div>',
+                    '<div class="control-group"><div class="controls">',
+                    '<button class="btn">Save</button>',
+                    '</div></div>',
+                    '</form>'
+                ].join('');
+                return respond(200, html, 'text/html', { 'pragma':'no-alter' });
             }
             // Config update
-            // :TODO:
+            else if (request.matches({'method':'post'})) {
+                var inputs = request.get_body();
+                if (inputs.username) { this.username = inputs.username; }
+                document.getElementById('fixture-cfg-title').innerHTML = 'Fixture <span class="label">updated</span>';
+                return respond(205);
+            } else { respond(400); }
         }
     },
 
