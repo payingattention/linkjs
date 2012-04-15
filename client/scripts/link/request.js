@@ -15,8 +15,8 @@ goog.require('goog.Uri');
 goog.require('goog.Uri.QueryData');
 
 link.Request = function(uri) {
-    this.uri(uri);
     // Set up attribute defaults
+    this.uri_ = uri;
     this.method_ = 'get';
     this.headers_ = new goog.structs.Map();
     this.uri_params_ = new goog.structs.Map();
@@ -28,15 +28,25 @@ link.Request = function(uri) {
 //
 link.Request.prototype.get_uri = function() {
     var uri = this.uri_;
+    // Do any param replacements
     if (!this.uri_params_.isEmpty()) {
         var keys = this.uri_params_.getKeys();
         for (var i=0; i < keys.length; i++) {
             uri = uri.replace('{{'+keys[i]+'}}', this.uri_params_.get(keys[i]));
         }
     }
+    // Try to remove everything before the hash
+    var cur_uri = new String(window.location); cur_uri = cur_uri.substr(0, cur_uri.indexOf('#'));
+    uri = uri.replace(cur_uri, '');
+    // If it is a local URI, remove any query params
+    if (uri.charAt(0) == '#') { uri = '#' + (new goog.Uri(uri.substr(1))).getPath(); }
     return uri;
 }
-link.Request.prototype.get_query = function() { return this.query_; }
+link.Request.prototype.get_query = function() {
+    var uri = this.get_uri();
+    if (uri.charAt(0) == '#') { uri = uri.substr(1); }
+    return (new goog.Uri(uri)).getQueryData();
+}
 link.Request.prototype.get_method = function() { return this.method_; }
 link.Request.prototype.get_headers = function() { return this.headers_; }
 link.Request.prototype.get_header = function(key) { return this.headers_.get(key); }
@@ -46,17 +56,7 @@ link.Request.prototype.get_body = function() { return this.body_; }
 // Builder interface
 //
 link.Request.prototype.uri = function(uri) {
-    // Create our in-app URI if it's a hash
-    var had_hash = false;
-    if (uri.indexOf('#') != -1) {
-        uri = uri.substr(uri.indexOf('#') + 1);
-        had_hash = true;
-    }
-    // Parse URI
-    var parsed_uri = new goog.Uri(uri);
-    this.uri_ = (had_hash ? '#' : '') + parsed_uri.getPath();
-    this.query_ = parsed_uri.getQueryData();
-    return this;
+    this.uri_ = uri; return this;
 }
 link.Request.prototype.method = function(method) {
     this.method_ = method; return this;

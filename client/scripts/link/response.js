@@ -36,7 +36,9 @@ link.Response.prototype.headers = function(kvs) {
 }
 link.Response.prototype.body = function(body, content_type) {
     this.body_ = body;
-    this.headers_.set('content-type', content_type);
+    if (content_type) {
+        this.headers_.set('content-type', content_type);
+    }
     return this;
 }
 link.Response.prototype.renderer = function(fn) {

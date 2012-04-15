@@ -135,12 +135,32 @@ link.App.handle_request = function(request, callback) {
     // Make sure the request isn't malformed
     // :TODO:
     var request_uri = request.get_uri();
+
+    // Create deferred
     var final_def;
     if (callback instanceof goog.async.Deferred) {
         final_def = callback;
     } else {
         final_def = new goog.async.Deferred();
         final_def.addCallback(callback);
+    }
+
+    // Remote request? Use ajax
+    if (request_uri.charAt(0) != '#') {
+        var xhr = new goog.net.XhrIo();
+        goog.events.listen(xhr, goog.net.EventType.COMPLETE, function(e) {
+            // Build response
+            var response = new link.Response(this.getStatus(), this.getStatusText());
+            response.headers(this.getAllResponseHeaders());
+            response.body(this.getResponse());
+            // Send on to the callback
+            final_def.callback(response);
+        });
+        // Build ajax request
+        var headers = request.get_headers().toObject();
+        headers['x-link-dest'] = request.get_uri(); // Instruct proxy on destination
+        xhr.send(window.location.hostname, request.get_method(), request.get_body(), headers); // Send to local
+        return;
     }
 
     // Get all applicable resources (eg for #/a/b/c, gather #, #/a, #/a/b, and #/a/b/c)
