@@ -21,12 +21,12 @@ link.Request = function(uri) {
     this.headers_ = new goog.structs.Map();
     this.uri_params_ = new goog.structs.Map();
     this.body_ = null;
-}
+};
 
 //
 // Getters
 //
-link.Request.prototype.get_uri = function() {
+link.Request.prototype.build_uri_from_params = function() {
     var uri = this.uri_;
     // Do any param replacements
     if (!this.uri_params_.isEmpty()) {
@@ -35,62 +35,66 @@ link.Request.prototype.get_uri = function() {
             uri = uri.replace('{{'+keys[i]+'}}', this.uri_params_.get(keys[i]));
         }
     }
+    return uri;
+};
+link.Request.prototype.get_uri = function() {
+    var uri = this.build_uri_from_params();
     // Try to remove everything before the hash
     var cur_uri = new String(window.location); cur_uri = cur_uri.substr(0, cur_uri.indexOf('#'));
     uri = uri.replace(cur_uri, '');
     // If it is a local URI, remove any query params
     if (uri.charAt(0) == '#') { uri = '#' + (new goog.Uri(uri.substr(1))).getPath(); }
     return uri;
-}
+};
 link.Request.prototype.get_query = function() {
-    var uri = this.get_uri();
+    var uri = this.build_uri_from_params();
     if (uri.charAt(0) == '#') { uri = uri.substr(1); }
     return (new goog.Uri(uri)).getQueryData();
-}
-link.Request.prototype.get_method = function() { return this.method_; }
-link.Request.prototype.get_headers = function() { return this.headers_; }
-link.Request.prototype.get_header = function(key) { return this.headers_.get(key); }
-link.Request.prototype.get_body = function() { return this.body_; }
+};
+link.Request.prototype.get_method = function() { return this.method_; };
+link.Request.prototype.get_headers = function() { return this.headers_; };
+link.Request.prototype.get_header = function(key) { return this.headers_.get(key); };
+link.Request.prototype.get_body = function() { return this.body_; };
 
 //
 // Builder interface
 //
 link.Request.prototype.uri = function(uri) {
     this.uri_ = uri; return this;
-}
+};
 link.Request.prototype.method = function(method) {
     this.method_ = method; return this;
-}
+};
 link.Request.prototype.header = function(k, v) {
     this.headers_.set(k, v); return this;
-}
+};
 link.Request.prototype.headers = function(kvs) {
     this.headers_.addAll(kvs); return this;
-}
+};
 link.Request.prototype.uri_param = function(k, v) {
     this.uri_params_.set(k, v); return this;
-}
+};
 link.Request.prototype.uri_params = function(kvs) {
     this.uri_params_.addAll(kvs); return this;
-}
+};
 link.Request.prototype.body = function(body, content_type) {
     this.body_ = body;
     this.headers_.set('content-type', content_type);
     return this;
-}
+};
 
 //
 // Common requests
 //
 link.Request.prototype.for_javascript = function() {
     return this.method('get').headers({'accept': 'application/javascript, text/javascript'});
-}
+};
 link.Request.prototype.for_json = function() {
     return this.method('get').headers({'accept': 'application/json'});
-}
+};
 link.Request.prototype.for_html = function() {
     return this.method('get').headers({'accept': 'text/html'});
-}
+};
 
 /**
  * Request properties match helper
@@ -104,4 +108,4 @@ link.Request.prototype.matches = function(props) {
         if (this.headers_.containsKey(key) && prop != this.headers_.get(key)) { return false; }
     }
     return true;
-}
+};
