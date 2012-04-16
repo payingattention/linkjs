@@ -55,9 +55,9 @@
 link.App.add_resource_type('Winbox.Fixture.Service', {
     // Data
     "messages": {
-        '1': { date:new Date() - Math.random() * 300000, author:'rodger', recp:['bsmith'], subject:'Hey, Buddy!', body:'How are you doing?', re:null, read:false },
-        '2': { date:new Date() - Math.random() * 300000, author:'bsmith', recp:['bsmith', 'asmitherson'], subject:'About the meeting', body:'Important business conversation. Things people talk about and stuff', re:null, read:true },
-        '3': { date:new Date() - Math.random() * 300000, author:'asmitherson', recp:['bsmith', 'asmitherson'], subject:'RE: About the meeting', body:'Other stuff about business or whatever.', re:2, read:false }
+        '1': { date:new Date(), author:'rodger', recp:['bsmith'], subject:'Hey, Buddy!', body:'How are you doing?', re:null, read:false },
+        '2': { date:new Date(), author:'bsmith', recp:['bsmith', 'asmitherson'], subject:'About the meeting', body:'Important business conversation. Things people talk about and stuff', re:null, read:true },
+        '3': { date:new Date(), author:'asmitherson', recp:['bsmith', 'asmitherson'], subject:'RE: About the meeting', body:'Other stuff about business or whatever.', re:2, read:false }
     },
     "username": "fixtureuser",
 
@@ -78,8 +78,6 @@ link.App.add_resource_type('Winbox.Fixture.Service', {
                 }
                 respond(200, ret_messages, 'application/json');
             }
-            // Message send
-            // :TODO:
         },
         '^/([0-9]+)$': function(request, uri_params, respond) {
             // Message view
@@ -185,7 +183,8 @@ link.App.add_resource_type('Winbox.Fixture.Service', {
                 return respond(200, {
                     name: 'Fixture',
                     compose_link: this.config.uri + '/new',
-                    config_link: this.config.uri + '/config'
+                    config_link: this.config.uri + '/config',
+                    color: '#aaa'
                 }, 'application/json');
             }
             // Config interface fetch

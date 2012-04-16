@@ -79,7 +79,9 @@ link.Request.prototype.uri_params = function(kvs) {
 };
 link.Request.prototype.body = function(body, content_type) {
     this.body_ = body;
-    this.headers_.set('content-type', content_type);
+    if (content_type) {
+        this.headers_.set('content-type', content_type);
+    }
     return this;
 };
 

@@ -51,9 +51,11 @@ link.App.add_resource_type('Winbox', {
                 // Sync
                 for (var uri in self.services) {
                     self.sync_service_inbox(uri, function() {
-                        // Redraw all messages
-                        var messages_table = document.getElementById('winbox-messages');
-                        if (messages_table) { messages_table.innerHTML = self.html_messages(self.get_all_service_messages()); }
+                        if (self.active_service == null) { // make sure we're still here
+                            // Redraw all messages
+                            var messages_table = document.getElementById('winbox-messages');
+                            if (messages_table) { messages_table.innerHTML = self.html_messages(self.get_all_service_messages()); }
+                        }
                     });
                 }
                 // Render response now, let syncs update as it goes
@@ -73,9 +75,15 @@ link.App.add_resource_type('Winbox', {
                 this.active_service = param_servicename;
                 // Sync
                 self.sync_service_inbox(param_servicename, function() {
-                    var messages_html = self.html_messages(service.messages);
-                    respond(200, self.html_box(messages_html), 'text/html');
+                    if (self.active_service == param_servicename) { // make sure we're still here
+                        var messages_table = document.getElementById('winbox-messages');
+                        if (messages_table) { messages_table.innerHTML = self.html_messages(service.messages); }
+                    }
                 });
+                // Render response now, let syncs update as it goes
+                var messages_html = self.html_messages(service.messages);
+                if (!messages_html) { messages_html = '<tr><td colspan="3">Loading...</td></tr>'; }
+                respond(200, self.html_box(messages_html), 'text/html');
             } else { respond(400); }
         },
         // Winbox settings
@@ -84,15 +92,18 @@ link.App.add_resource_type('Winbox', {
                 this.active_service = '__settings';
                 // Request config UIs from all services
                 var html = '<h2>Winbox Config</h2><hr />';
+                var self = this;
                 for (var slug in this.services) {
-                    var service = this.services[slug];
-                    // send request
-                    link.App.handle_request((new link.Request(service.config.config_link)).for_html(), function(response) {
-                        var service_div = document.getElementById('cfg-' + slug);
-                        if (service_div) { service_div.innerHTML = response.get_body(); }
-                    });
-                    // build slot to receive html
-                    html += ['<div id="cfg-', slug, '"></div><hr />'].join('');
+                    (function(slug) {
+                        var service = self.services[slug];
+                        // send request
+                        link.App.handle_request((new link.Request(service.config.config_link)).for_html(), function(response) {
+                            var service_div = document.getElementById('cfg-' + slug);
+                            if (service_div) { service_div.innerHTML = response.get_body(); }
+                        });
+                        // build slot to receive html
+                        html += ['<div id="cfg-', slug, '"></div><hr />'].join('');
+                    })(slug);
                 }
                 // Render layout
                 respond(200, html, 'text/html');
@@ -219,13 +230,13 @@ link.App.add_resource_type('Winbox', {
             }
             messages = arr;
         }
-        // Sort by date        
-        messages.sort(function(a,b) { return a.date < b.date });
+        // Sort by date
+        messages.sort(function(a,b) { return ((a.date.getTime() < b.date.getTime()) ? 1 : -1); });
         // Generate html
         for (var k in messages) {
             var message = messages[k];
             var msgmoment = moment(message.date);
-            html += '<tr><td><input type="checkbox" value="' + message.view_link + '" /></td><td>' + (message.read ? '' : '<i class="icon-flag" title="unread"></i>') + '</td><td><span class="label">' + message.service + '</span></td><td><a href="' + message.view_link + '">' + message.summary + '</a></td><td title="' + msgmoment.calendar() + '">' + msgmoment.fromNow() + '</td></tr>';
+            html += '<tr><td><input type="checkbox" value="' + message.view_link + '" /></td><td>' + (message.read ? '' : '<i class="icon-flag" title="unread"></i>') + '</td><td><span class="label" style="background: ' + this.services[message.service_slug].config.color + '">' + message.service + '</span></td><td><a href="' + message.view_link + '">' + message.summary + '</a></td><td title="' + msgmoment.calendar() + '">' + msgmoment.fromNow() + '</td></tr>';
         }
         return html;
     },

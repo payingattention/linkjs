@@ -158,8 +158,12 @@ link.App.handle_request = function(request, callback) {
         });
         // Build ajax request
         var headers = request.get_headers().toObject();
-        headers['x-link-dest'] = request.get_uri(); // Instruct proxy on destination
-        xhr.send(window.location.hostname, request.get_method(), request.get_body(), headers); // Send to local
+        headers['x-link-dest'] = request_uri; // Instruct proxy on destination
+        if (headers['content-type']) {
+            headers['Content-Type'] = headers['content-type']; // Closure will overwrite-- it's not very case-sensitive
+            delete headers['content-type']; // It will duplicate
+        } 
+        xhr.send('http://' + window.location.hostname, request.get_method(), request.get_body(), headers); // Send to local
         return;
     }
 

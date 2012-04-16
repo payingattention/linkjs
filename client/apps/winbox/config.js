@@ -14,7 +14,8 @@ link.App.require_script([
         // depends on templates.js
         link.App.require_script([
             '/apps/winbox/main.js',
-            '/apps/winbox/services/fixture.js'
+            '/apps/winbox/services/fixture.js',
+            '/apps/winbox/services/twitter.js'
         ]);
     });
 });
@@ -24,6 +25,9 @@ link.App.configure_uris({
     },
     "#/winbox/services/fixture": {
         "->isa": "Winbox.Fixture.Service"
+    },
+    "#/winbox/services/twitter": {
+        "->isa": "Winbox.Twitter.Service"
     },
 
     // TODO...
