@@ -5,6 +5,12 @@ separated into modules which behave like REST resources and communicate using HT
 (to local or remote targets). The goal is to create web apps which can be extended and customized
 by adding new code on the client-side.
 
+Link uses RequireJS but has no dependencies otherwise. It currently runs in-browser only; it'll
+be factored for server-side as well in the near future. To see it in action, go to (some link)
+or pull down a copy and open `examples/inbox/index.html`.
+
+*Note, none of that second paragraph is currently true. I'm still finishing up the refactor.*
+
 ## Usage
 
 In Link, Modules provide a set of routes:
@@ -30,13 +36,13 @@ Which are instantiated into the URI structure during init:
     // addTo() can be called any number of times; a new module will be instantiated for each
 ```
 
-After `app.init()`, Link intercepts <a> clicks and <form> submits. If their targets start with
-a hash (#), the modules will respond to the request. Those modules can also build their own requests:
+After `app.init()`, Link intercepts `<a>` clicks and `<form>` submits. If their targets start with
+a hash (#), the modules' handlers will respond to the request. Those modules can also build their
+own requests:
 
 ```javascript
-    var request = (new Request()).method('get')
-                                 .uri(this.users_link)
-                                 .header({ accept:'application/json' });
+    var request = (new Request())
+    request.method('get').uri(this.users_link).header({ accept:'application/json' });
     request.dispatch(function(request, response) {
         if (response.ok()) {
             this.users = response.body();
@@ -53,9 +59,9 @@ Which are responded to with handlers:
 ```
 
 This sacrifices succinctness to expose the internals of the application in a discoverable
-and extensible way. Like web traffic, developers can log requests and responses when they need
-to understand application flow. Then, either by configuration or convention (through
-`app.findModules()`) components can recognize and interface with each other to form the application.
+and extensible way. Developers can log request traffic to understand application flow. Then,
+either by configuration or convention (via `app.findModules()`) components can interface with
+each other to form the application.
 
 ## Response Composition
 
@@ -74,7 +80,7 @@ handler chain which respects the order of declaration:
 ```
 
 If handlers from multiple modules match, then precedence is enforced by the depth of the module
-URIs. That is, the handlers for a module at '#/a' would be called before the handlers for one at
+URIs. That is, the handlers for a module at '#/a' would be called before the handlers for a module at
 '#/a/b'. Like DOM events, you can choose to handle the bubble phase of the request if you want
 to run at the end of the chain. This allows code like the previous example to work across modules.
 
@@ -96,6 +102,18 @@ to run at the end of the chain. This allows code like the previous example to wo
 :TODO:
 
 ## Advanced Usage
+
+**App.findModules**
+
+:TODO:
+
+**Immediate Response with Async**
+
+:TODO:
+
+**Custom Response Rendering**
+
+:TODO:
 
 **Request Factories**
 
