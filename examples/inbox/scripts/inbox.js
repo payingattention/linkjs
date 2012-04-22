@@ -10,6 +10,9 @@ define(['link/module', 'link/request', 'link/app', './templates'], function(Modu
         this.newMessagesRequest     = Request.Factory('get', '',          { accept:'application/json' });
         this.newSettingsJsonRequest = Request.Factory('get', '/settings', { accept:'application/json' });
         this.newSettingsHtmlRequest = Request.Factory('get', '/settings', { accept:'text/html', pragma:'partial' });
+
+        // Load styles
+        linkApp.addStylesheet('style.css');
     });
     
     // Routes

@@ -5,17 +5,19 @@ define(function() {
         var recps = [];
         for (var i=0; i < message.recp.length; i++) {
             var user = message.recp[i];
-            recps.push('<span class="label label-info">' + user + '</span>');
+            recps.push('<span class="label">' + user + '</span>');
         }
         return recursive_join([
-            '<h2 style="margin-bottom:5px">@', message.author, '</h2>',
-            '<p><small>',[
-                'Sent on <span class="label" style="background:#444">', new Date(message.date).toLocaleDateString(), ' @', new Date(message.date).toLocaleTimeString(), '</span>',
-                ' by <span class="label label-success">', message.author, '</span>',
-                ' to ', recps.join(', '),
-                ' with <strong>Twitter</strong>',
-            ], '</small></p>',
-            '<hr /><p>', message.body, '</p>'
+            '<p>', [
+                '<strong style="margin-bottom:5px">', message.subject, '</strong><br/>',
+                '<small>',[
+                    'Sent on <span class="label">', new Date(message.date).toLocaleDateString(), ' @', new Date(message.date).toLocaleTimeString(), '</span>',
+                    ' by <span class="label">', message.author, '</span>',
+                    ' to ', recps.join(', '),
+                    ' with <strong>Fixture</strong>',
+                ], '</small>'
+            ], '</p>',
+            '<p>', message.body, '</p>'
         ]);
     };
     

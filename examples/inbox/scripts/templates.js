@@ -5,21 +5,23 @@ define(function() {
         // Nav
         // :TODO: active item
         var navHtmlParts = [
-            '<li class="nav-header">Local Inbox</li>',
-            '<li><a href="', inboxService.uri(), '"><i class="icon-inbox"></i> Messages</a></li>',
-            '<li><a href="', inboxService.uri(), '/settings"><i class="icon-cog"></i> Settings</a></li>',
-            '<li class="nav-header">Services</li>'
+            '<li>Services</li>'
         ];
         for (var slug in inboxService.services) {
             var service = inboxService.services[slug];
             if (!service || !service.settings) { continue; }
-            navHtmlParts.push('<li><a href="', service.uri, '"><i class="icon-folder-open"></i> ', service.settings.name, '</a></li>');
+            navHtmlParts.push('<li><a href="', service.uri, '">', service.settings.name, '</a></li>');
         }
         // Layout
         return recursive_join([
             '<div id="inbox-container">', [
-                '<div id="inbox-nav" class="well">', [
-                    '<ul class="nav nav-list">', recursive_join(navHtmlParts), '</ul>'
+                '<div id="inbox-nav">', [
+                    '<ul>', [
+                        '<li>Inbox</li>',
+                        '<li><a href="', inboxService.uri(), '">Messages</a></li>',
+                        '<li><a href="', inboxService.uri(), '/settings">Settings</a></li>',
+                    ], '</ul>',
+                    '<ul>', recursive_join(navHtmlParts), '</ul>'
                 ], '</div>',
                 '<div id="inbox-content">', innerHtml, '</div>'
             ], '</div>'
@@ -37,20 +39,16 @@ define(function() {
         }
         // Generate layout html
         return recursive_join([
-            '<div class="btn-toolbar">', [
+            '<div class="toolbar">', [
                 '<form method="post">', [
-                    '<div class="btn-group">', [
-                        '<button class="btn" formaction="TODO" title="Check for new messages"><i class="icon-refresh"></i></button>',
-                        '<button class="btn" title="Compose a message"><i class="icon-pencil"></i></button>'
-                    ], '</div>'
+                    '<button formaction="TODO" title="Check for new messages">Refresh</button>',
                 ], '</form>'
             ], '</div>',
-            '<table class="table table-condensed">', recursive_join(messageHtmlParts), '</table>'
+            '<table>', recursive_join(messageHtmlParts), '</table>'
         ]);
     };
     templates.settings = function(innerHTML) {
         return recursive_join([
-            '<h2>Inbox Config</h2><hr />',
             innerHTML
         ]);
     };

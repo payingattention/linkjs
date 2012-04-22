@@ -1,10 +1,10 @@
 define(['link/module', './templates'], function(Module, templates) {
-    // Module Definition
-    // =================
+    // Fixture
+    // =======
+    // Provides static debug data
     var FixtureService = Module(function() {
         // Attributes
         this.messages = {};
-        this.username = "fixtureuser";
 
         // Fixture data
         this.messages['1'] = { date:new Date(), author:'rodger', recp:['bsmith'], subject:'Hey, Buddy!', body:'How are you doing?', re:null };
@@ -36,9 +36,7 @@ define(['link/module', './templates'], function(Module, templates) {
     };
     FixtureService.prototype.settingsJsonHandler = function(request) {
         request.respond(200, {
-            name: 'Fixture',
-            color: '#aaa',
-            username: this.username
+            name: 'Fixture'
         }, 'application/json');
     };
     FixtureService.prototype.settingsHtmlHandler = function(request) {
