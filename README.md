@@ -5,9 +5,12 @@ separated into modules which behave like REST resources and communicate using HT
 (to local or remote targets). The goal is to create web apps which can be extended and customized
 by adding new code on the client-side.
 
-Link uses RequireJS but has no dependencies otherwise. It currently runs in-browser only; it'll
-be factored for server-side as well in the near future. To see it in action, go to (some link)
-or pull down a copy and open `examples/inbox/index.html`.
+Link is similar to HMVC frameworks, but without the MVC. It provides a mediator for modules
+and command objects which are built in the REST style.
+
+Link uses RequireJS. It currently supports ______; it'll
+be factored for server-side as well in the near future. To see the demo, go to (some link)
+or clone the repo and open `examples/inbox/index.html`.
 
 *Note, none of that second paragraph is currently true. I'm still finishing up the refactor.*
 
@@ -22,9 +25,9 @@ In Link, Modules provide a set of routes:
         messages:[]
     });
     // Add routes
-    AccountModule.get({ uri:'^/?$', accept:'text/html' },                        dashboardHandler);
-    AccountModule.route({ uri:'^/message/([0-9]+)/?$' },                         messageHandler);
-    AccountModule.get({ uri:'^/message/updates/?$', accept:'application/json' }, messageUpdatesHandler);
+    AccountModule.get({ uri:'^/?$', accept:'text/html' },   dashboardHandler);
+    AccountModule.route({ uri:'^/message/([0-9]+)/?$' },    messageHandler);
+    AccountModule.post({ uri:'^/message/([0-9]+/reply?$' }, messageReplyHandler);
 ```
 
 Which are instantiated into the URI structure during init:
@@ -33,15 +36,15 @@ Which are instantiated into the URI structure during init:
     ShopModule.addTo('#');
     AccountModule.addTo('#/account');
     CartModule.addTo('#/cart');
-    // addTo() can be called any number of times; a new module will be instantiated for each
+    // the routes operate relative to the module's configured URI
 ```
 
 After `app.init()`, Link intercepts `<a>` clicks and `<form>` submits. If their targets start with
-a hash (#), the modules' handlers will respond to the request. Those modules can also build their
-own requests:
+a hash (#), the modules' handlers will respond to the request, and Link will render the response.
+Those modules can also build their own requests:
 
 ```javascript
-    var request = (new Request())
+    var request = new Request();
     request.method('get').uri(this.users_link).header({ accept:'application/json' });
     request.dispatch(function(request, response) {
         if (response.ok()) {
@@ -58,14 +61,14 @@ Which are responded to with handlers:
     });
 ```
 
-This sacrifices succinctness to expose the internals of the application in a discoverable
-and extensible way. Developers can log request traffic to understand application flow. Then,
-either by configuration or convention (via `app.findModules()`) components can interface with
-each other to form the application.
+While this style may not be succinct, it exposes the internals of the application in a discoverable
+and extensible way. Developers can log request traffic to learn about the application flow. Then,
+either by configuration or convention (via `app.findModules()`) components can be written to interface
+with each other to form the application.
 
 ## Response Composition
 
-Multiple handlers can be configured to match the same route. In that event, they are built into a
+Multiple handlers can be configured to match the same route. In that event, they are added into a
 handler chain which respects the order of declaration:
 
 ```javascript
@@ -79,10 +82,13 @@ handler chain which respects the order of declaration:
     });
 ```
 
-If handlers from multiple modules match, then precedence is enforced by the depth of the module
+If handlers from multiple modules match a request, then precedence is enforced by the depth of the module
 URIs. That is, the handlers for a module at '#/a' would be called before the handlers for a module at
-'#/a/b'. Like DOM events, you can choose to handle the bubble phase of the request if you want
-to run at the end of the chain. This allows code like the previous example to work across modules.
+'#/a/b'.
+
+Like DOM events, you can also choose to handle the bubble phase of the request if you want
+the callback to run at the end of the chain. This allows code like the previous example to work
+across modules.
 
 ```javascript
     // Configured to '#'
@@ -107,7 +113,7 @@ to run at the end of the chain. This allows code like the previous example to wo
 
 :TODO:
 
-**Immediate Response with Async**
+**Immediate Response During Ajax**
 
 :TODO:
 
@@ -127,6 +133,6 @@ to run at the end of the chain. This allows code like the previous example to wo
 
 :TODO:
 
-## License
+# License
 
 Link is released under the MIT License (found in the LICENSE file).
