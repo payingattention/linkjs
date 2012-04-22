@@ -1,30 +1,70 @@
-require(function() {
+define(function() {
+    // Templates
     var templates = {};
-
-    templates.message = function(message) {
-        var recps = [];
-        for (var i=0; i < message.recp.length; i++) {
-            var user = message.recp[i];
-            recps.push('<span class="label label-info">' + user + '</span>');
+    templates.layout = function(inboxService, innerHtml) {
+        // Nav
+        // :TODO: active item
+        var navHtmlParts = [
+            '<li class="nav-header">Local Inbox</li>',
+            '<li><a href="', inboxService.uri(), '"><i class="icon-inbox"></i> Messages</a></li>',
+            '<li><a href="', inboxService.uri(), '/settings"><i class="icon-cog"></i> Settings</a></li>',
+            '<li class="nav-header">Services</li>'
+        ];
+        for (var slug in inboxService.services) {
+            var service = inboxService.services[slug];
+            if (!service || !service.settings) { continue; }
+            navHtmlParts.push('<li><a href="', service.uri, '"><i class="icon-folder-open"></i> ', service.settings.name, '</a></li>');
         }
+        // Layout
         return recursive_join([
-            '<h2 style="margin-bottom:5px">@', message.author, '</h2>',
-            '<p><small>',[
-                'Sent on <span class="label" style="background:#444">', new Date(message.date).toLocaleDateString(), ' @', new Date(message.date).toLocaleTimeString(), '</span>',
-                ' by <span class="label label-success">', message.author, '</span>',
-                ' to ', recps.join(', '),
-                ' with <strong>Twitter</strong>',
-            ], '</small></p>',
-            '<hr /><p>', message.body, '</p>'
+            '<div id="inbox-container">', [
+                '<div id="inbox-nav" class="well">', [
+                    '<ul class="nav nav-list">', recursive_join(navHtmlParts), '</ul>'
+                ], '</div>',
+                '<div id="inbox-content">', innerHtml, '</div>'
+            ], '</div>'
         ]);
     };
-    
+    templates.inbox = function(messages) {
+        if (!messages) { return ''; }
+        // Sort by date
+        messages.sort(function(a,b) { return ((a.date.getTime() < b.date.getTime()) ? 1 : -1); });
+        // Generate message html
+        var messageHtmlParts = [];
+        for (var i=0; i < messages.length; i++) {
+            var message = messages[i];
+            messageHtmlParts.push('<tr><td><input type="checkbox" value="' + message.view_link + '" /></td><td><span class="label">' + message.service + '</span></td><td><a href="' + message.view_link + '">' + message.summary + '</a></td><td>' + message.date + '</td></tr>');
+        }
+        // Generate layout html
+        return recursive_join([
+            '<div class="btn-toolbar">', [
+                '<form method="post">', [
+                    '<div class="btn-group">', [
+                        '<button class="btn" formaction="TODO" title="Check for new messages"><i class="icon-refresh"></i></button>',
+                        '<button class="btn" title="Compose a message"><i class="icon-pencil"></i></button>'
+                    ], '</div>'
+                ], '</form>'
+            ], '</div>',
+            '<table class="table table-condensed">', recursive_join(messageHtmlParts), '</table>'
+        ]);
+    };
+    templates.settings = function(innerHTML) {
+        return recursive_join([
+            '<h2>Inbox Config</h2><hr />',
+            innerHTML
+        ]);
+    };
+    templates.error = function(message) {
+        return recursive_join([
+            '<div class="alert alert-error">', message, '</div>'
+        ]);
+    };
 
     // Helper
     var recursive_join = function(arr) {
         for (var i=0, ii=arr.length; i < ii; i++) {
             if (Array.isArray(arr[i])) {
-                arr[i] = this.recursive_join(arr[i]);
+                arr[i] = recursive_join(arr[i]);
             }
         }
         return arr.join('');

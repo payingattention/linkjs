@@ -1,13 +1,10 @@
 require([
     "link/app",
-    "inbox/module",
+    "inbox",
     "services/fixture"
-    //"services/email",
-    //"services/twitter"
-], function(app, Inbox, FixtureService/*, EmailService, TwitterService*/) {
-    var inbox = Inbox.addTo('#');
-    FixtureService.addTo('#/service/fixture');
-    //EmailService.addTo('#/service/email');
-    //TwitterService.addTo('#/service/twitter');
+], function(app, Inbox, FixtureService) {
+    app.addModule(new Inbox('#'));
+    app.addModule(new FixtureService('#/services/fixture'));
+    app.logMode('traffic', true);
     app.init();
 });
