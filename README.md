@@ -1,16 +1,9 @@
-Link
-====
+# Link
 
-**Link has not yet had it's first official release, so you'll probably suffer if you try to run it. Packaging, documentation, and demos should be ready in 2 weeksish.**
-
-Designed to help separate user interfaces from the web services they consume; enables users to customize, reuse, and independently evolve their interfaces and their services.
-
-Browser JS apps are composed of client-side REST resources which may (or may not) poll remote servers for data, effectively behaving as proxies. This allows server-like decisions about response construction, but within the client, and with access to the client state.
-
-
-## Contributing
-
-If you would like to get involved, contact Paul Frazee at pfrazee@gmail.com.
+A Javascript app framework designed for composability in browser applications. Functionality is
+separated into modules which behave like REST resources, then uses HTTP requests to communicate
+(with local or remote resources). The goal is to create an environment which users can extend
+and customize by dropping in new code.
 
 ## License
 
