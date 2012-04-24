@@ -20,6 +20,7 @@ define(['link/module', 'link/request', 'link/app', './templates'], function(Modu
     Inbox.get({ uri:'^/?$', accept:'text/html' },                  'mainInboxHandler');
     Inbox.get({ uri:'^/services/([^/]+)/?$', accept:'text/html' }, 'serviceInboxHandler');
     Inbox.get({ uri:'^/settings/?$', accept:'text/html' },         'settingsHandler');
+    Inbox.post({ uri:'^/sync/?$' },                                'syncHandler');
     
     // Init Preprocessor
     // =================
@@ -74,16 +75,7 @@ define(['link/module', 'link/request', 'link/app', './templates'], function(Modu
         request.respond(200, this.templates.inbox(this.getAllMessages()), 'text/html');
 
         // Have all services sync and re-render each time
-        for (var slug in this.services) {
-            var req = this.newMessagesRequest(this.services[slug].uri);
-            req.service = this.services[slug];
-            req.dispatch(function(request, response) {
-                if (response.ok()) {
-                    request.service.messages = response.body();
-                    document.getElementById('inbox-content').innerHTML = this.templates.inbox(this.getAllMessages());
-                }
-            }, this);
-        }
+        this.syncAllServices();
     };
     Inbox.prototype.serviceInboxHandler = function(request, response, urimatch) {
         // Find the service
@@ -98,7 +90,7 @@ define(['link/module', 'link/request', 'link/app', './templates'], function(Modu
         this.newMessagesRequest(service.uri).dispatch(function(request, response) {
             if (response.ok()) {
                 service.messages = response.body();
-                document.getElementById('inbox-content').innerHTML = this.templates.inbox(service.messages);
+                document.getElementById('inbox-content').innerHTML = this.templates.inbox(this, service.messages);
             }
         }, this);
     };
@@ -115,6 +107,12 @@ define(['link/module', 'link/request', 'link/app', './templates'], function(Modu
             this // context
         );
     };
+    Inbox.prototype.syncHandler = function(request) {
+        // Respond success, do nothing
+        request.respond(205);
+        // Sync and re-render
+        this.syncAllServices();
+    };
 
     // Helpers
     // =======
@@ -128,6 +126,18 @@ define(['link/module', 'link/request', 'link/app', './templates'], function(Modu
             }
         }
         return messages;
+    };
+    Inbox.prototype.syncAllServices = function() {
+        for (var slug in this.services) {
+            var req = this.newMessagesRequest(this.services[slug].uri);
+            req.service = this.services[slug];
+            req.dispatch(function(request, response) {
+                if (response.ok()) {
+                    request.service.messages = response.body();
+                    document.getElementById('inbox-content').innerHTML = this.templates.inbox(this, this.getAllMessages());
+                }
+            }, this);
+        }
     };
     
     return Inbox;

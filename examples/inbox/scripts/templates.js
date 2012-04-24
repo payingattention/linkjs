@@ -5,29 +5,29 @@ define(function() {
         // Nav
         // :TODO: active item
         var navHtmlParts = [
-            '<li>Services</li>'
+            '<li class="nav-header">Services</li>'
         ];
         for (var slug in inboxService.services) {
             var service = inboxService.services[slug];
             if (!service || !service.settings) { continue; }
-            navHtmlParts.push('<li><a href="', service.uri, '">', service.settings.name, '</a></li>');
+            navHtmlParts.push('<li><a href="', service.uri, '"><i class="icon-envelope"></i> ', service.settings.name, '</a></li>');
         }
         // Layout
         return recursive_join([
             '<div id="inbox-container">', [
-                '<div id="inbox-nav">', [
-                    '<ul>', [
-                        '<li>Inbox</li>',
-                        '<li><a href="', inboxService.uri(), '">Messages</a></li>',
-                        '<li><a href="', inboxService.uri(), '/settings">Settings</a></li>',
-                    ], '</ul>',
-                    '<ul>', recursive_join(navHtmlParts), '</ul>'
+                '<div id="inbox-nav" class="well">', [
+                    '<ul class="nav nav-list">', [
+                        '<li class="nav-header">Inbox</li>',
+                        '<li><a href="', inboxService.uri(), '"><i class="icon-inbox"></i> Messages</a></li>',
+                        '<li><a href="', inboxService.uri(), '/settings"><i class="icon-cog"></i> Settings</a></li>',
+                        recursive_join(navHtmlParts),
+                    ], '</ul>'
                 ], '</div>',
                 '<div id="inbox-content">', innerHtml, '</div>'
             ], '</div>'
         ]);
     };
-    templates.inbox = function(messages) {
+    templates.inbox = function(inbox, messages) {
         if (!messages) { return ''; }
         // Sort by date
         messages.sort(function(a,b) { return ((a.date.getTime() < b.date.getTime()) ? 1 : -1); });
@@ -35,16 +35,16 @@ define(function() {
         var messageHtmlParts = [];
         for (var i=0; i < messages.length; i++) {
             var message = messages[i];
-            messageHtmlParts.push('<tr><td><input type="checkbox" value="' + message.view_link + '" /></td><td><span class="label">' + message.service + '</span></td><td><a href="' + message.view_link + '">' + message.summary + '</a></td><td>' + new Date(message.date).toLocaleDateString() + ' @' + new Date(message.date).toLocaleTimeString() + '</td></tr>');
+            messageHtmlParts.push('<tr><td><span class="label">' + message.service + '</span></td><td><a href="' + message.view_link + '">' + message.summary + '</a></td><td>' + new Date(message.date).toLocaleDateString() + ' @' + new Date(message.date).toLocaleTimeString() + '</td></tr>');
         }
         // Generate layout html
         return recursive_join([
             '<div class="toolbar">', [
                 '<form method="post">', [
-                    '<button formaction="TODO" title="Check for new messages">Refresh</button>',
+                    '<button class="btn" formaction="', inbox.uri(), '/sync" title="Check for new messages"><i class="icon-refresh"></i></button>',
                 ], '</form>'
             ], '</div>',
-            '<table>', recursive_join(messageHtmlParts), '</table>'
+            '<table class="table table-condensed">', recursive_join(messageHtmlParts), '</table>'
         ]);
     };
     templates.settings = function(innerHTML) {

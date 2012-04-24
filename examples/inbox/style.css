@@ -1,47 +1,13 @@
-body {
-    font-family: sans-serif;
-    font-size: 14px;
-    margin-top: 1em;
-}
 #inbox-nav {
     width: 120px;
+    padding: 4px 0;
+    margin: 10px;
     float: left;
 }
-#inbox-nav ul {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    margin-bottom: 4px;
-}
-#inbox-nav ul li:first-child {
-    font-size: 1.2em;
-    border-bottom: 1px solid #999;
-}
-#inbox-nav ul li:hover {
-    background: #eee;
-}
-#inbox-nav ul li:first-child:hover {
-    background: transparent;
-}
-#inbox-nav ul li a {
-    padding-left: 10px;
-    color: #555;
-    text-decoration: none;
-}
 #inbox-content {
-    margin-left: 130px;
+    margin-left: 155px;
+    padding-top: 10px;
 }
 #inbox-content table {
     margin-top: 10px;
-}
-#inbox-content table tr:first-child td {
-    border-top: 1px solid #dfdfdf;
-}
-#inbox-content table tr td {
-    border-bottom: 1px solid #dfdfdf;
-}
-
-span.label {
-    padding: 0 2px;
-    color: #555;
 }

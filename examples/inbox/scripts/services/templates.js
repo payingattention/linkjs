@@ -8,14 +8,15 @@ define(function() {
             recps.push('<span class="label">' + user + '</span>');
         }
         return recursive_join([
+            '<h3 style="margin-bottom:5px">', message.subject, '</h3>',
             '<p>', [
-                '<strong style="margin-bottom:5px">', message.subject, '</strong><br/>',
                 '<small>',[
                     'Sent on <span class="label">', new Date(message.date).toLocaleDateString(), ' @', new Date(message.date).toLocaleTimeString(), '</span>',
                     ' by <span class="label">', message.author, '</span>',
                     ' to ', recps.join(', '),
                 ], '</small>'
             ], '</p>',
+            '<hr />',
             '<p>', message.body, '</p>'
         ]);
     };
