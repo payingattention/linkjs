@@ -1,22 +1,12 @@
 # Link
 
-A Javascript app framework designed for composability in browser applications. Functionality is
-separated into modules which behave like REST resources and communicate using HTTP requests
-(to local or remote targets). The goal is to create web apps which can be extended and customized
-by adding new code on the client-side.
+A Javascript mediator framework designed for composability in browser applications using the REST style.
 
-Link is similar to HMVC frameworks, but without the MVC. It provides a mediator for modules
-and command objects which are built in the REST style.
-
-Link uses RequireJS. It currently supports ______; it'll
-be factored for server-side as well in the near future. To see the demo, go to (some link)
-or clone the repo and open `examples/inbox/index.html`.
-
-*Note, none of that second paragraph is currently true. I'm still finishing up the refactor.*
+### [Click here for a live demo](#todo)
 
 ## Usage
 
-In Link, Modules provide a set of routes:
+Modules export routes for handling HTTP requests:
 
 ```javascript
     // Declare attributes in the constructor
@@ -25,12 +15,12 @@ In Link, Modules provide a set of routes:
         messages:[]
     });
     // Add routes
-    AccountModule.get({ uri:'^/?$', accept:'text/html' },   dashboardHandler);
-    AccountModule.route({ uri:'^/message/([0-9]+)/?$' },    messageHandler);
-    AccountModule.post({ uri:'^/message/([0-9]+/reply?$' }, messageReplyHandler);
+    AccountModule.get({ uri:'^/?$', accept:'text/html' },   'dashboardHandler');
+    AccountModule.route({ uri:'^/message/([0-9]+)/?$' },    'messageHandler');
+    AccountModule.post({ uri:'^/message/([0-9]+/reply?$' }, 'messageReplyHandler');
 ```
 
-Which are instantiated into the URI structure during init:
+The modules are then configured into a URI structure to compose the application:
 
 ```javascript
     ShopModule.addTo('#');
@@ -41,11 +31,11 @@ Which are instantiated into the URI structure during init:
 
 After `app.init()`, Link intercepts `<a>` clicks and `<form>` submits. If their targets start with
 a hash (#), the modules' handlers will respond to the request, and Link will render the response.
-Those modules can also build their own requests:
+
+Modules can also build their own requests:
 
 ```javascript
-    var request = new Request();
-    request.method('get').uri(this.users_link).header({ accept:'application/json' });
+    var request = new Request('get', this.users_link, { accept:'application/json' });
     request.dispatch(function(request, response) {
         if (response.ok()) {
             this.users = response.body();
@@ -65,6 +55,8 @@ While this style may not be succinct, it exposes the internals of the applicatio
 and extensible way. Developers can log request traffic to learn about the application flow. Then,
 either by configuration or convention (via `app.findModules()`) components can be written to interface
 with each other to form the application.
+
+To get a better feel for this, check out the inbox application in `examples/`.
 
 ## Response Composition
 
