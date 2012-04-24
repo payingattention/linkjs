@@ -5,11 +5,12 @@ define(['link/module', './templates'], function(Module, templates) {
     var FixtureService = Module(function() {
         // Attributes
         this.messages = {};
+        this.serviceName = "Local";
 
         // Fixture data
-        this.messages['1'] = { date:new Date(), author:'rodger', recp:['bsmith'], subject:'Hey, Buddy!', body:'How are you doing?', re:null };
-        this.messages['2'] = { date:new Date(), author:'bsmith', recp:['bsmith', 'asmitherson'], subject:'About the meeting', body:'Important business conversation. Things people talk about and stuff', re:null };
-        this.messages['3'] = { date:new Date(), author:'asmitherson', recp:['bsmith', 'asmitherson'], subject:'RE: About the meeting', body:'Other stuff about business or whatever.', re:2 };
+        this.messages['1'] = { date:'April 23 2012 21:20', author:'rodger', recp:['bsmith'], subject:'Hey, Buddy!', body:'How are you doing?', re:null };
+        this.messages['2'] = { date:'April 24 2012 12:49', author:'bsmith', recp:['bsmith', 'asmitherson'], subject:'About the meeting', body:'Important business conversation. Things people talk about and stuff', re:null };
+        this.messages['3'] = { date:'April 25 2012 15:12', author:'asmitherson', recp:['bsmith', 'asmitherson'], subject:'RE: About the meeting', body:'Other stuff about business or whatever.', re:2 };
     });
     
     // Routes
@@ -36,7 +37,7 @@ define(['link/module', './templates'], function(Module, templates) {
     };
     FixtureService.prototype.settingsJsonHandler = function(request) {
         request.respond(200, {
-            name: 'Fixture'
+            name:this.serviceName
         }, 'application/json');
     };
     FixtureService.prototype.settingsHtmlHandler = function(request) {
@@ -53,7 +54,9 @@ define(['link/module', './templates'], function(Module, templates) {
         message.id = id;
         for (var i=0,ii=fields.length; i < ii; i++) {
             if (fields[i] == 'service') {
-                message['service'] = 'Fixture';
+                message['service'] = this.serviceName;
+            } else if (fields[i] == 'date') {
+                message['date'] = new Date(org.date);
             } else if (fields[i] == 'summary') {
                 message['summary'] = '<strong>' + org.author + '</strong> ' + org.subject;
             } else if (fields[i] == 'view_link') {

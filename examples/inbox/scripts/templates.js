@@ -35,7 +35,7 @@ define(function() {
         var messageHtmlParts = [];
         for (var i=0; i < messages.length; i++) {
             var message = messages[i];
-            messageHtmlParts.push('<tr><td><input type="checkbox" value="' + message.view_link + '" /></td><td><span class="label">' + message.service + '</span></td><td><a href="' + message.view_link + '">' + message.summary + '</a></td><td>' + message.date + '</td></tr>');
+            messageHtmlParts.push('<tr><td><input type="checkbox" value="' + message.view_link + '" /></td><td><span class="label">' + message.service + '</span></td><td><a href="' + message.view_link + '">' + message.summary + '</a></td><td>' + new Date(message.date).toLocaleDateString() + ' @' + new Date(message.date).toLocaleTimeString() + '</td></tr>');
         }
         // Generate layout html
         return recursive_join([

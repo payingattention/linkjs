@@ -1,0 +1,5 @@
+{
+    "1":{ "date":"April 24 2012 8:30", "author":"gggreg", "recp":["bsmith"], "subject":"Hey", "body":"Got the stuff if you need it." },
+    "2":{ "date":"April 24 2012 13:05", "author":"jones", "recp":["bsmith"], "subject":"not sure if you heard", "body":"greg's got the stuff" },
+    "3":{ "date":"April 25 2012 11:59", "author":"gggreg", "recp":["bsmith"], "subject":"dude...", "body":"I lost the stuff." }
+}

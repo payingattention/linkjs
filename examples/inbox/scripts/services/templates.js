@@ -14,7 +14,6 @@ define(function() {
                     'Sent on <span class="label">', new Date(message.date).toLocaleDateString(), ' @', new Date(message.date).toLocaleTimeString(), '</span>',
                     ' by <span class="label">', message.author, '</span>',
                     ' to ', recps.join(', '),
-                    ' with <strong>Fixture</strong>',
                 ], '</small>'
             ], '</p>',
             '<p>', message.body, '</p>'

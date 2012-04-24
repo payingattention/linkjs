@@ -3,40 +3,57 @@ define(['link/module', 'link/request', './fixture'], function(Module, Request, F
     // ==============
     // Provides static debug data from a remote source
     var RemoteFixture = Module.Extend(Fixture, function() {
-        this.remoteSource = 'http://github.com/pfraze/link/examples/inbox/fixture.json';
+        // Attributes
+        this.remoteSource = 'remote_fixture.json';
+        this.serviceName = 'Remote';
+
+        // Request Templates
         this.newGetMessagesRequest = Request.Factory('get', '', { accept:'application/json' });
     });
 
+    // Helpers
+    // =======
+    RemoteFixture.prototype.getMessages = function(cb) {
+        // Get messages
+        // (you'd want some kind of caching in real life)
+        this.newGetMessagesRequest(this.remoteSource).dispatch(function(request, response) {
+            if (response.fail()) { cb.call(this, response.code()); }
+            // Collect into a response
+            try {
+                this.messages = JSON.parse(response.body());
+                cb.call(this, null);
+            } catch (e) {
+                console.log(e);
+                cb.call(this, 500);
+            }
+        }, this);
+    };
+
     // Handlers
     // ========
-    RemoteFixture.prototype.messagesJsonHandler = function(orgRequest) {
-        // Get messages
-        this.newGetMessagesRequest(this.remoteSource).dispatch(function(request, response) {
-            if (response.fail()) { return orgRequest.respond(response); }
-            // Collect into a response
-            this.messages = response.body();
+    RemoteFixture.prototype.messagesJsonHandler = function(request) {
+        this.getMessages(function(err) {
+            if (err) {
+                return request.respond(err);
+            }
+            // Build response
             var retMessages = [];
             for (var mid in this.messages) {
                 retMessages.push(this.buildMessage(mid, ['service','date','summary','view_link']));
             }
-            orgRequest.respond(200, retMessages, 'application/json');
-        }, this);
+            request.respond(200, retMessages, 'application/json');
+        });
     };    
-    RemoteFixture.prototype.messageHtmlHandler = function(orgRequest, response, urimatch) {
-        // Get messages
-        this.newGetMessagesRequest(this.remoteSource).dispatch(function(request, response) {
-            if (response.fail()) { return orgRequest.respond(response); }
+    RemoteFixture.prototype.messageHtmlHandler = function(request, response, urimatch) {
+        this.getMessages(function(err) {
+            if (err) {
+                return request.respond(500, 'Malformed Json');
+            }
             // Build response
-            this.messages = response.body();
             var message = this.messages[urimatch[1]];
-            if (!message) { return orgRequest.respond(404); }
-            orgRequest.respond(200, this.templates.message(message), 'text/html');
-        }, this);
-    };
-    RemoteFixture.prototype.settingsJsonHandler = function(request) {
-        request.respond(200, {
-            name: 'Remote Fixture'
-        }, 'application/json');
+            if (!message) { return request.respond(404); }
+            request.respond(200, this.templates.message(message), 'text/html');
+        });
     };
     RemoteFixture.prototype.settingsHtmlHandler = function(request) {
         // :TODO:
