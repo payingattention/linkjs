@@ -57,6 +57,11 @@ define(['link/module', 'link/request', 'link/app', './templates'], function(Modu
     // ======================
     Inbox.get({ uri:'.*', accept:'text/html', bubble:true }, function(request, response) { // (will run last; bubble handlers are FILO)
         if (request.header('pragma') != 'partial') { // not a partial request...
+            // 404
+            if (!response) {
+                return request.respond(200, this.templates.layout(this, this.templates.error("404 not found")));
+            }
+            
             // No errors, wrap in our layout
             if (response.code() < 300) {
                 response.body(this.templates.layout(this, response.body()), 'text/html'); // wrap in our layout
