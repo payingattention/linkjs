@@ -7,7 +7,7 @@ require([
     "services/remotefixture",
 ], function(app, Test, CLI, Inbox, FixtureService, RemoteFixtureService) {
     app.addModule(new CLI('#/cli'));
-    app.addModule(new Test('#/cli/test'));
+    app.addModule(new Test('#/test'));
     app.addModule(new Inbox('#'));
     app.addModule(new FixtureService('#/services/local'));
     app.addModule(new RemoteFixtureService('#/services/remote'));

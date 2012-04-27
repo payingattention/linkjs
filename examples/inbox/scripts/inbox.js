@@ -17,6 +17,8 @@ define(['link/module', 'link/request', 'link/app', './templates'], function(Modu
     
     // Routes
     // ======
+    Inbox.route({ uri:'.*', accept:'text/html' },                  'initPreprocessor');
+    Inbox.get({ uri:'.*', accept:'text/html', bubble:true },       'htmlLayout');
     Inbox.get({ uri:'^/?$', accept:'text/html' },                  'mainInboxHandler');
     Inbox.get({ uri:'^/services/([^/]+)/?$', accept:'text/html' }, 'serviceInboxHandler');
     Inbox.get({ uri:'^/settings/?$', accept:'text/html' },         'settingsHandler');
@@ -24,7 +26,7 @@ define(['link/module', 'link/request', 'link/app', './templates'], function(Modu
     
     // Init Preprocessor
     // =================
-    Inbox.route({ uri:'.*', accept:'text/html' }, function(orgRequest, response) {
+    Inbox.prototype.initPreprocessor = function(orgRequest, response) {
         if (this.hasRunInit) { return orgRequest.respond(); }        
         
         // Get services configged to ./services/*/
@@ -51,11 +53,11 @@ define(['link/module', 'link/request', 'link/app', './templates'], function(Modu
             }, 
             this // context
         );
-    });
+    };
 
     // HTML GET postprocessor
     // ======================
-    Inbox.get({ uri:'.*', accept:'text/html', bubble:true }, function(request, response) { // (will run last; bubble handlers are FILO)
+    Inbox.prototype.htmlLayout = function(request, response) { // (will run last; bubble handlers are FILO)
         if (request.header('pragma') != 'partial') { // not a partial request...
             // 404
             if (!response) {
@@ -71,7 +73,7 @@ define(['link/module', 'link/request', 'link/app', './templates'], function(Modu
             return request.respond(200, this.templates.layout(this, this.templates.error("Error getting '"+request.uri()+"': "+response.code())));
         }
         request.respond(response);
-    });
+    };
 
     // Handlers
     // ========
@@ -107,8 +109,10 @@ define(['link/module', 'link/request', 'link/app', './templates'], function(Modu
         }
         Request.batchDispatch(
             requests, // request list
-            function(request, response) { if (response.ok()) { innerContent += response.body(); } }, // individual response
-            function() { orgRequest.respond(200, this.templates.settings(innerContent), 'text/html'); }, // after all responses
+            function(request, response) {
+                if (response.ok()) { innerContent += response.body(); } }, // individual response
+            function() {
+                orgRequest.respond(200, this.templates.settings(innerContent), 'text/html'); }, // after all responses
             this // context
         );
     };
