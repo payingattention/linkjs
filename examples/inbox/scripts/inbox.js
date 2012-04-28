@@ -1,4 +1,4 @@
-define(['link/module', 'link/request', 'link/app', './templates'], function(Module, Request, linkApp, templates) {
+define(['link/module', 'link/request', 'link/app', './views'], function(Module, Request, linkApp, Views) {
     // Module Definition
     // =================
     var Inbox = Module(function() {
@@ -61,16 +61,16 @@ define(['link/module', 'link/request', 'link/app', './templates'], function(Modu
         if (request.header('pragma') != 'partial') { // not a partial request...
             // 404
             if (!response) {
-                return request.respond(200, this.templates.layout(this, this.templates.error("404 not found")));
+                return request.respond(200, this.Views.layout(this, this.Views.error("404 not found")));
             }
             
             // No errors, wrap in our layout
             if (response.code() < 300) {
-                response.body(this.templates.layout(this, response.body()), 'text/html'); // wrap in our layout
+                response.body(this.Views.layout(this, response.body()), 'text/html'); // wrap in our layout
                 return request.respond(response);
             }
             // An error, replace with our error display
-            return request.respond(200, this.templates.layout(this, this.templates.error("Error getting '"+request.uri()+"': "+response.code())));
+            return request.respond(200, this.Views.layout(this, this.Views.error("Error getting '"+request.uri()+"': "+response.code())));
         }
         request.respond(response);
     };
@@ -79,7 +79,7 @@ define(['link/module', 'link/request', 'link/app', './templates'], function(Modu
     // ========
     Inbox.prototype.mainInboxHandler = function(request) {
         // Respond with the out-of-date messages now
-        request.respond(200, this.templates.inbox(this.getAllMessages()), 'text/html');
+        request.respond(200, this.Views.inbox(this.getAllMessages()), 'text/html');
 
         // Have all services sync and re-render each time
         this.syncAllServices();
@@ -91,13 +91,13 @@ define(['link/module', 'link/request', 'link/app', './templates'], function(Modu
         if (!service) { return request.respond(404); }
         
         // Render an out-of-date response now
-        request.respond(200, this.templates.inbox(service.messages), 'text/html');
+        request.respond(200, this.Views.inbox(service.messages), 'text/html');
 
         // Now resync the service
         this.newMessagesRequest(service.uri).dispatch(function(request, response) {
             if (response.ok()) {
                 service.messages = response.body();
-                document.getElementById('inbox-content').innerHTML = this.templates.inbox(this, service.messages);
+                document.getElementById('inbox-content').innerHTML = this.Views.inbox(this, service.messages);
             }
         }, this);
     };
@@ -112,7 +112,7 @@ define(['link/module', 'link/request', 'link/app', './templates'], function(Modu
             function(request, response) {
                 if (response.ok()) { innerContent += response.body(); } }, // individual response
             function() {
-                orgRequest.respond(200, this.templates.settings(innerContent), 'text/html'); }, // after all responses
+                orgRequest.respond(200, this.Views.settings(innerContent), 'text/html'); }, // after all responses
             this // context
         );
     };
@@ -125,7 +125,7 @@ define(['link/module', 'link/request', 'link/app', './templates'], function(Modu
 
     // Helpers
     // =======
-    Inbox.prototype.templates = templates;
+    Inbox.prototype.Views = Views;
     Inbox.prototype.getAllMessages = function() {
         var messages = [];
         for (var s in this.services) {
@@ -143,7 +143,7 @@ define(['link/module', 'link/request', 'link/app', './templates'], function(Modu
             req.dispatch(function(request, response) {
                 if (response.ok()) {
                     request.service.messages = response.body();
-                    document.getElementById('inbox-content').innerHTML = this.templates.inbox(this, this.getAllMessages());
+                    document.getElementById('inbox-content').innerHTML = this.Views.inbox(this, this.getAllMessages());
                 }
             }, this);
         }

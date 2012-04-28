@@ -1,0 +1,10 @@
+<div class="toolbar">
+    <form method="post">
+        <button class="btn" formaction="$inboxUri;/sync" title="Check for new messages"><i class="icon-refresh"></i></button>
+    </form>
+</div>
+<table class="table table-condensed">
+    $message(service, uri, title, date){
+        <tr><td><span class="label">$service;</span></td><td><a href="$uri;">$title;</a></td><td>$date;</td></tr>
+    }message;
+</table>
