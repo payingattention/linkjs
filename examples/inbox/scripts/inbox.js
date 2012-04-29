@@ -1,4 +1,4 @@
-define(['link/module', 'link/request', 'link/app', './views'], function(Module, Request, linkApp, Views) {
+define(['link/module', 'link/request', 'link/response', 'link/app', './views'], function(Module, Request, Response, linkApp, Views) {
     // Module Definition
     // =================
     var Inbox = Module(function() {
@@ -61,7 +61,7 @@ define(['link/module', 'link/request', 'link/app', './views'], function(Module, 
         if (request.header('pragma') != 'partial') { // not a partial request...
             // 404
             if (!response) {
-                return request.respond(200, this.Views.layout(this, this.Views.error("404 not found")));
+                return request.respond(new Response(404, 'Not Found', {}, this.Views.layout(this, this.Views.error("404 not found")), 'text/html'));
             }
             
             // No errors, wrap in our layout
@@ -70,7 +70,7 @@ define(['link/module', 'link/request', 'link/app', './views'], function(Module, 
                 return request.respond(response);
             }
             // An error, replace with our error display
-            return request.respond(200, this.Views.layout(this, this.Views.error("Error getting '"+request.uri()+"': "+response.code())));
+            return request.respond(response.code(), this.Views.layout(this, this.Views.error("Error getting '"+request.uri()+"': "+response.code())));
         }
         request.respond(response);
     };
