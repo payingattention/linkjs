@@ -46,7 +46,7 @@ define(['link/tint', 'text!templates/layout.html', 'text!templates/inbox.html'],
         return content;
     };
     Views.error = function(message) {
-        return ['<div class="alert alert-error">', message, '</div>'].join();
+        return ['<div class="alert alert-error">', message, '</div>'].join('');
     };
 
     // Export
