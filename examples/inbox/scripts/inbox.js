@@ -1,51 +1,57 @@
 define(['link/module', 'link/request', 'link/response', 'link/app', './views'], function(Module, Request, Response, linkApp, Views) {
     // Module Definition
     // =================
-    var Inbox = Module(function() {
-        // Attributes
+    var Inbox = Module({
+        // Handler routes (in addition to resources)
+        routes:[
+            { prehandler:{ uri:'.*', accept:'text/html' }},
+            { htmlLayout:{ uri:'.*', method:'get', accept:'text/html', bubble:true }}
+        ],
+        // Styles (added on init)
+        stylesheets:['style.css']
+    }, function() {
+        // Constructor
         this.hasRunInit = false;
         this.services = [];
-        
-        // Common Requests
-        this.newMessagesRequest     = Request.Factory('get', 0,               { accept:'application/json' });
-        this.newSettingsJsonRequest = Request.Factory('get', [0,'/settings'], { accept:'application/json' });
-        this.newSettingsHtmlRequest = Request.Factory('get', [0,'/settings'], { accept:'text/html', pragma:'partial' });
 
-        // Load styles
-        linkApp.addStylesheet('style.css');
+        // Add default resources
+        this.addResource('', this.mainInboxResource);
+        this.addResource('settings', this.settingsResource);
     });
     
-    // Routes
-    // ======
-    Inbox.route({ uri:'.*', accept:'text/html' },                  'initPreprocessor');
-    Inbox.get({ uri:'.*', accept:'text/html', bubble:true },       'htmlLayout');
-    Inbox.get({ uri:'^/?$', accept:'text/html' },                  'mainInboxHandler');
-    Inbox.get({ uri:'^/services/([^/]+)/?$', accept:'text/html' }, 'serviceInboxHandler');
-    Inbox.get({ uri:'^/settings/?$', accept:'text/html' },         'settingsHandler');
-    Inbox.post({ uri:'^/sync/?$' },                                'syncHandler');
-    
-    // Init Preprocessor
-    // =================
-    Inbox.prototype.initPreprocessor = function(orgRequest, response) {
+    // Pre-handler init
+    // ================
+    Inbox.prototype.prehandler = function(orgRequest, response) {
         if (this.hasRunInit) { return orgRequest.respond(); }        
         
-        // Get services configged to ./services/*/
-        this.services = linkApp.findModules(
-            this.uri() + '/services/([^/]+)',
-            function(match) { return match[1]; } // use the slug for the key
-        );
+        // Add resources for all services configged to ./services/*/
+        var serviceUris = linkApp.findResources(this.uri() + '/services/([^/]+)');
+        for (var i=0; i < serviceUris.length; i++) {
+            // Extract from match...
+            var serviceUri = serviceUris[i][0]
+            ,   slug = serviceUris[i][1];
+            
+            // Add resource
+            var res = this.addResource(['services', slug], this.serviceInboxResource);
+            this.services.push(res);
+            
+            // Add some links to the resource
+            res.messagesJson = Request.Link(serviceUri, { accept:'application/json' });
+            res.settingsJson = Request.Link(serviceUri + '/settings', { accept:'application/json' });
+            res.settingsHtml = Request.Link(serviceUri + '/settings', { accept:'text/html' });
+        }
         
         // Request the config from every service
-        var requests = [];
-        for (var slug in this.services) {
-            var req = this.newSettingsJsonRequest(this.services[slug].uri);
-            req.service = this.services[slug];
-            requests.push(req)
-        }
-        Request.batchDispatch(
-            requests, // request list
-            function(request, response) { // individual response
-                if (response.ok()) { request.service.settings = response.body(); }
+        Util.batchAsync(
+            function(cb) {
+                for (var i=0; i < this.services.length; i++) {
+                    // dispatch requests
+                    this.services[i].settingsJson.get(function(request, response) {
+                        if (response.ok()) { this.settings = response.body(); }
+                        cb(); // inform batchAsync
+                    }, this.services[i]);
+                }
+                return this.services.length; // expected cb count
             }, 
             function() { // after all responses
                 this.hasRunInit = true;
@@ -59,73 +65,80 @@ define(['link/module', 'link/request', 'link/response', 'link/app', './views'], 
     // ======================
     Inbox.prototype.htmlLayout = function(request, response) { // (will run last; bubble handlers are FILO)
         if (request.header('pragma') != 'partial') { // not a partial request...
-            // 404
-            if (!response) {
-                return request.respond(new Response(404, 'Not Found', {}, this.Views.layout(this, this.Views.error("404 not found")), 'text/html'));
-            }
-            
-            // No errors, wrap in our layout
-            if (response.code() < 300) {
-                response.body(this.Views.layout(this, response.body()), 'text/html'); // wrap in our layout
-                return request.respond(response);
-            }
-            // An error, replace with our error display
-            return request.respond(response.code(), this.Views.layout(this, this.Views.error("Error getting '"+request.uri()+"': "+response.code())));
+            var content = (response.code() < 300) ?
+                request.body() :
+                "<div class=\"alert alert-error\">Error getting '"+request.uri()+"': "+response.code()+"</div>";
+            // Wrap in layout
+            layoutView = new View.Layout(this.uri(), content);
+            response.body(layoutView.toString()); response.header({ 'content-type':'text/html' });
+            return request.respond(response);
+
         }
         request.respond(response);
     };
 
-    // Handlers
-    // ========
-    Inbox.prototype.mainInboxHandler = function(request) {
+    // Resource Handlers
+    // =================
+    Inbox.prototype.mainInboxResource = function(resource, request) {
         // Respond with the out-of-date messages now
-        request.respond(200, this.Views.inbox(this.getAllMessages()), 'text/html');
+        request.respond(200, this.renderMainInbox(), 'text/html');
 
-        // Have all services sync and re-render each time
-        this.syncAllServices();
+        // Have all services sync
+        var orgLocation = window.location;
+        for (var i=0; i < this.services.length; i++) {
+            // Dispatch for messages
+            this.services[i].messagesJson.get(function(request, response) {
+                // Cache
+                if (response.ok()) { this.service.messages = response.body(); }
+                // Render
+                if (orgLocation == window.location) {
+                    document.getElementById('inbox-content').innerHTML = this.renderMainInbox();
+                }
+            }, { service:this.services[i], inbox:inbox });
+        }
     };
-    Inbox.prototype.serviceInboxHandler = function(request, response, urimatch) {
-        // Find the service
-        var service_slug = urimatch[1];
-        var service = this.services[service_slug];
-        if (!service) { return request.respond(404); }
-        
+    Inbox.prototype.serviceInboxResource = function(resource, request, response) {
         // Render an out-of-date response now
-        request.respond(200, this.Views.inbox(service.messages), 'text/html');
-
-        // Now resync the service
-        this.newMessagesRequest(service.uri).dispatch(function(request, response) {
-            if (response.ok()) {
-                service.messages = response.body();
-                document.getElementById('inbox-content').innerHTML = this.Views.inbox(this, service.messages);
+        request.respond(200, this.renderMainInbox(), 'text/html');
+        
+        // Dispatch for messages
+        var orgLocation = window.location;
+        resource.messagesJson.get(function(request, response) {
+            // Cache
+            if (response.ok()) { this.messages = response.body(); }
+            // Render
+            if (orgLocation == window.location) {
+                var inboxView = new Views.Inbox(this.uri());
+                inboxView.addMessages(this.messages);
+                document.getElementById('inbox-content').innerHTML = inboxView.toString();
             }
-        }, this);
+        }, resource);
     };
     Inbox.prototype.settingsHandler = function(orgRequest) {
-        // Request the settings form html for each service
-        var innerContent = '', requests = [];
-        for (var slug in this.services) {
-            requests.push(this.newSettingsHtmlRequest(this.services[slug].uri));
-        }
-        Request.batchDispatch(
-            requests, // request list
-            function(request, response) {
-                if (response.ok()) { innerContent += response.body(); } }, // individual response
-            function() {
-                orgRequest.respond(200, this.Views.settings(innerContent), 'text/html'); }, // after all responses
+        // Request the config from every service
+        Util.batchAsync(
+            function(cb) {
+                var innerContent = '';
+                // request dispatch
+                for (var i=0; i < this.services.length; i++) {
+                    this.services[i].settingsHtml.get(function(request, response) {
+                        // individual response
+                        if (response.ok()) { innerContent += response.body(); }
+                        cb(); // inform batchAsync
+                    }, this.services[i]);
+                }
+                return this.services.length; // expected cb count
+            }, 
+            function() { // after all responses
+                // :TODO: generate html
+                orgRequest.respond(200, innerContent, 'text/html');
+            }, 
             this // context
         );
-    };
-    Inbox.prototype.syncHandler = function(request) {
-        // Respond success, do nothing
-        request.respond(205);
-        // Sync and re-render
-        this.syncAllServices();
     };
 
     // Helpers
     // =======
-    Inbox.prototype.Views = Views;
     Inbox.prototype.getAllMessages = function() {
         var messages = [];
         for (var s in this.services) {
@@ -136,17 +149,10 @@ define(['link/module', 'link/request', 'link/response', 'link/app', './views'], 
         }
         return messages;
     };
-    Inbox.prototype.syncAllServices = function() {
-        for (var slug in this.services) {
-            var req = this.newMessagesRequest(this.services[slug].uri);
-            req.service = this.services[slug];
-            req.dispatch(function(request, response) {
-                if (response.ok()) {
-                    request.service.messages = response.body();
-                    document.getElementById('inbox-content').innerHTML = this.Views.inbox(this, this.getAllMessages());
-                }
-            }, this);
-        }
+    Inbox.prototype.renderMainInbox = function() {
+        var inboxView = new Views.Inbox(this.uri());
+        inboxView.addMessages(this.getAllMessages());
+        return inboxView.toString();
     };
     
     return Inbox;
