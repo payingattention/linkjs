@@ -15,8 +15,8 @@ define(['link/module', 'link/request', 'link/response', 'link/app', './views'], 
         this.services = [];
 
         // Add default resources
-        this.addResource('', this.mainInboxResource);
-        this.addResource('settings', this.settingsResource);
+        this.addResource('/', this.mainInboxResource);
+        this.addResource('/settings', this.settingsResource);
     });
     
     // Pre-handler init
@@ -32,7 +32,7 @@ define(['link/module', 'link/request', 'link/response', 'link/app', './views'], 
             ,   slug = serviceUris[i][1];
             
             // Add resource
-            var res = this.addResource(['services', slug], this.serviceInboxResource);
+            var res = this.addResource('/services/' + slug], this.serviceInboxResource);
             this.services.push(res);
             
             // Add some links to the resource

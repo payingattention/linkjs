@@ -1,37 +1,25 @@
-define(function() {
-    var templates = {};
+define(['link/tint', 'text!templates/message.html', function(Tint, messageHtml) {
 
-    templates.message = function(message) {
-        var recps = [];
+    // Message
+    // =======
+    var Message = Tint.compile(messageHtml, function(message) {
+        this.subject(message.subject);
+        this.date(new Date(message.date).toLocaleDateString());
+        this.time(new Date(message.date).toLocaleTimeString());
+        this.author(message.author);
         for (var i=0; i < message.recp.length; i++) {
-            var user = message.recp[i];
-            recps.push('<span class="label">' + user + '</span>');
-        }
-        return recursive_join([
-            '<h3 style="margin-bottom:5px">', message.subject, '</h3>',
-            '<p>', [
-                '<small>',[
-                    'Sent on <span class="label">', new Date(message.date).toLocaleDateString(), ' @', new Date(message.date).toLocaleTimeString(), '</span>',
-                    ' by <span class="label">', message.author, '</span>',
-                    ' to ', recps.join(', '),
-                ], '</small>'
-            ], '</p>',
-            '<hr />',
-            '<p>', message.body, '</p>'
-        ]);
-    };
-    
-
-    // Helper
-    var recursive_join = function(arr) {
-        for (var i=0, ii=arr.length; i < ii; i++) {
-            if (Array.isArray(arr[i])) {
-                arr[i] = recursive_join(arr[i]);
+            if (i < message.recp.length - 1) {
+                this.recp().add(message.recp[i]);
+            } else {
+                this.recp().last(message.recp[i]);
             }
         }
-        return arr.join('');
-    };
+        this.addRecipients(message.recp);
+        this.body(message.body);
+    });
 
     // Export
-    return templates;
+    return {
+        Message:Message
+    };
 });

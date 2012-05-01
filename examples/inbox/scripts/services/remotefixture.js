@@ -1,14 +1,21 @@
-define(['link/module', 'link/request', './fixture'], function(Module, Request, Fixture) {
+define(['link/module', 'link/request', './views'], function(Module, Request, Views) {
     // Remote Fixture
     // ==============
     // Provides static debug data from a remote source
-    var RemoteFixture = Module.Extend(Fixture, function() {
+    var RemoteFixture = Module({
+        // Handler routes
+        routes:[
+            { messageHandler:{ uri:'^/([0-9]+)/?$', accept:'text/html' }}
+        ],
+    }, function() {
         // Attributes
+        this.messages = {};
         this.remoteSource = 'remote_fixture.json';
         this.serviceName = 'Remote';
-
-        // Request Templates
-        this.newGetMessagesRequest = Request.Factory('get', '', { accept:'application/json' });
+        
+        // Fixed resources
+        this.addResource('/', this.messagesResource);
+        this.addResource('/settings', this.settingsResource);
     });
 
     // Helpers
@@ -16,9 +23,10 @@ define(['link/module', 'link/request', './fixture'], function(Module, Request, F
     RemoteFixture.prototype.getMessages = function(cb) {
         // Get messages
         // (you'd want some kind of caching in real life)
-        this.newGetMessagesRequest(this.remoteSource).dispatch(function(request, response) {
+        var request = new Request('get', this.remoteSource, { accept:'application/json' });
+        request.dispatch(function(request, response) {
             if (response.fail()) { cb.call(this, response.code()); }
-            // Collect into a response
+            // Parse JSON
             try {
                 this.messages = JSON.parse(response.body());
                 cb.call(this, null);
@@ -29,13 +37,12 @@ define(['link/module', 'link/request', './fixture'], function(Module, Request, F
         }, this);
     };
 
-    // Handlers
+    // Resources
     // ========
-    RemoteFixture.prototype.messagesJsonHandler = function(request) {
-        this.getMessages(function(err) {
-            if (err) {
-                return request.respond(err);
-            }
+    RemoteFixture.prototype.messagesResource = function(resource, request) {
+        if (!request.matches({ accept:'application/json' })) { return request.nextHandler(); }
+        this.getMessages(function(errCode) {
+            if (errCode) { return request.respond(errCode); }
             // Build response
             var retMessages = [];
             for (var mid in this.messages) {
@@ -45,19 +52,48 @@ define(['link/module', 'link/request', './fixture'], function(Module, Request, F
         });
     };    
     RemoteFixture.prototype.messageHtmlHandler = function(request, response, urimatch) {
-        this.getMessages(function(err) {
-            if (err) {
-                return request.respond(500, 'Malformed Json');
-            }
+        this.getMessages(function(errCode) {
+            if (errCode) { return request.respond(errCode); }
             // Build response
             var message = this.messages[urimatch[1]];
             if (!message) { return request.respond(404); }
-            request.respond(200, this.templates.message(message), 'text/html');
+            var messageView = new Views.Message(message);
+            request.respond(200, messageView.toString(), 'text/html');
         });
     };
-    RemoteFixture.prototype.settingsHtmlHandler = function(request) {
-        // :TODO:
-        request.respond(200, 'Remote Fixture Settings', 'text/html');
+    RemoteFixture.prototype.settingsResource = function(request) {
+        if (request.matches({ accept:'application/json' })) {
+            return request.respond(200, {
+                name:this.serviceName
+            }, 'application/json');
+        } else if (request.matches({ accept:'text/html' })) {
+            // :TODO:
+            request.respond(200, 'Remote Fixture Settings', 'text/html');
+        }
+        return request.nextHandler();
+    };
+        
+    // Helpers
+    // =======
+    RemoteFixture.prototype.buildMessage = function(id, fields) {
+        var message={}, org=this.messages[id];
+        if (!org) { return {}; }
+        // Assemble the return object from the fields requested
+        message.id = id;
+        for (var i=0,ii=fields.length; i < ii; i++) {
+            if (fields[i] == 'service') {
+                message['service'] = this.serviceName;
+            } else if (fields[i] == 'date') {
+                message['date'] = new Date(org.date);
+            } else if (fields[i] == 'summary') {
+                message['summary'] = '<strong>' + org.author + '</strong> ' + org.subject;
+            } else if (fields[i] == 'view_link') {
+                message['view_link'] = this.uri() + '/' + id;
+            } else {
+                message[fields[i]] = org[fields[i]];
+            }
+        }
+        return message;
     };
 
     return RemoteFixture;
