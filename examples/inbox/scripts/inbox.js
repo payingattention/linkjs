@@ -5,17 +5,16 @@ define(['link/module', 'link/request', 'link/response', 'link/app', 'link/util',
         // Handler routes (in addition to resources)
         routes:[
             { prehandler:{ uri:'.*', accept:'text/html' }},
-            { htmlLayout:{ uri:'.*', method:'get', accept:'text/html', bubble:true }}
+            { htmlLayout:{ uri:'.*', method:'get', accept:'text/html', bubble:true }},
+            { mainInbox:{ uri:'$/?^', method:'get', accept:'text/html' }},
+            { serviceInbox:{ uri:'$/services/([^/]+)/?$', method:'get', accept:'text/html' }},
+            { settings:{ uri:'$/settings/?^', method:'get', accept:'text/html' }}
         ],
         // Attributes
         hasRunInit:false,
-        services:[]
+        services:{}
     }, function() {
         // Constructor
-        // Add default resources
-        this.addResource('/', this.mainInboxResource);
-        this.addResource('/settings', this.settingsResource);
-
         // Load stylesheet
         linkApp.addStylesheet('style.css');
     });
@@ -32,27 +31,27 @@ define(['link/module', 'link/request', 'link/response', 'link/app', 'link/util',
             var serviceUri = serviceUris[i][0]
             ,   slug = serviceUris[i][1];
             
-            // Add resource
-            var res = this.addResource('/services/' + slug, this.serviceInboxResource);
-            this.services.push(res);
-            
-            // Add some links to the resource
-            res.messagesJson = new Request.Link(serviceUri, { accept:'application/json' });
-            res.settingsJson = new Request.Link(serviceUri + 'settings', { accept:'application/json' });
-            res.settingsHtml = new Request.Link(serviceUri + 'settings', { accept:'text/html', pragma:'partial' });
+            // Store links to the service
+            this.services[slug] = {
+                messagesJson:new Request.Link(serviceUri, { accept:'application/json' }),
+                settingsJson:new Request.Link(serviceUri + 'settings', { accept:'application/json' }),
+                settingsHtml:new Request.Link(serviceUri + 'settings', { accept:'text/html', pragma:'partial' })
+            };
         }
         
         // Request the config from every service
         Util.batchAsync(
             function(cb) {
-                for (var i=0; i < this.services.length; i++) {
+                var reqCount = 0;
+                for (var slug in this.services.length) {
                     // dispatch requests
-                    this.services[i].settingsJson.get(function(request, response) {
+                    this.services[slug].settingsJson.get(function(request, response) {
                         if (response.ok()) { this.settings = response.body(); }
                         cb(); // inform batchAsync
-                    }, this.services[i]);
+                    }, this.services[slug]);
+                    reqCount++;
                 }
-                return this.services.length; // expected cb count
+                return reqCount; // expected cb count
             }, 
             function() { // after all responses
                 this.hasRunInit = true;
@@ -83,7 +82,7 @@ define(['link/module', 'link/request', 'link/response', 'link/app', 'link/util',
 
     // Resource Handlers
     // =================
-    Inbox.prototype.mainInboxResource = function(resource, request) {
+    Inbox.prototype.mainInbox = function(request) {
         // Respond with the out-of-date messages now
         request.respond(200, this.renderMainInbox(), 'text/html');
 
@@ -101,11 +100,12 @@ define(['link/module', 'link/request', 'link/response', 'link/app', 'link/util',
             }, { service:this.services[i], inbox:this });
         }
     };
-    Inbox.prototype.serviceInboxResource = function(resource, request, response) {
+    Inbox.prototype.serviceInbox = function(request, response) {
         // Render an out-of-date response now
         request.respond(200, this.renderMainInbox(), 'text/html');
         
         // Dispatch for messages
+        var service = null; // :TODO: get service
         var orgLocation = window.location;
         resource.messagesJson.get(function(request, response) {
             // Cache
@@ -116,9 +116,9 @@ define(['link/module', 'link/request', 'link/response', 'link/app', 'link/util',
                 inboxView.addMessages(this.messages);
                 document.getElementById('inbox-content').innerHTML = inboxView.toString();
             }
-        }, resource);
+        }, service);
     };
-    Inbox.prototype.settingsResource = function(resource, orgRequest) {
+    Inbox.prototype.settings = function(orgRequest) {
         // Request the config from every service
         var innerContent = '';
         Util.batchAsync(
