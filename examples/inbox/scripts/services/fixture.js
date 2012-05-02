@@ -19,7 +19,7 @@ define(['link/module', './views'], function(Module, Views) {
     
     // Resources
     // ========
-    FixtureService.prototype.messages = function(resource, request) {
+    FixtureService.prototype.messagesResource = function(resource, request) {
         if (request.matches({ 'accept':'application/json' })) {
             // Collect messages
             var retMessages = [];
@@ -34,7 +34,7 @@ define(['link/module', './views'], function(Module, Views) {
         var messageView = new Views.Message(resource);
         request.respond(200, messageView.toString(), 'text/html');
     };
-    FixtureService.prototype.settingsResource = function(request) {
+    FixtureService.prototype.settingsResource = function(resource, request) {
         if (request.matches({ accept:'application/json' })) {
             return request.respond(200, {
                 name:this.serviceName

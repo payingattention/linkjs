@@ -3,6 +3,7 @@ define(['link/tint', 'text!templates/layout.html', 'text!templates/inbox.html'],
     // Layout
     // ======
     var Layout = Tint.compile(layoutHtml, function(baseUri, content) {
+        this.baseUri = baseUri;
         // Standard nav
         this.nav.item().header('Inbox');
         this.nav.item().link('Messages', 'inbox', baseUri);
@@ -11,9 +12,9 @@ define(['link/tint', 'text!templates/layout.html', 'text!templates/inbox.html'],
         // Set content
         this.content = content;
     });
-    Layout.addNavService = function(service) {
+    Layout.prototype.addNavService = function(service) {
         if (!service || !service.settings) { return; }
-        this.nav.item().link(service.settings.name, 'envelope', service.uri)
+        this.nav.item().link(service.settings.name, 'envelope', this.baseUri + service.uri)
     };
     
     // Inbox
@@ -21,7 +22,7 @@ define(['link/tint', 'text!templates/layout.html', 'text!templates/inbox.html'],
     var Inbox = Tint.compile(inboxHtml, function(uri) {
         this.inboxUri = uri;
     });
-    Inbox.addMessages = function(messages) {
+    Inbox.prototype.addMessages = function(messages) {
         if (!messages) { return ''; }
         // Sort by date
         messages.sort(function(a,b) { return ((a.date.getTime() < b.date.getTime()) ? 1 : -1); });
@@ -30,7 +31,7 @@ define(['link/tint', 'text!templates/layout.html', 'text!templates/inbox.html'],
             this.addMessage(messages[i]);
         }        
     };
-    Inbox.addMessage = function(message) {
+    Inbox.prototype.addMessage = function(message) {
         this.message(message.service, message.view_link, message.summary, new Date(message.date).toLocaleDateString() + ' @' + new Date(message.date).toLocaleTimeString());
     };
 

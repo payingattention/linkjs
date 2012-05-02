@@ -1,4 +1,4 @@
-define(['link/module', 'link/request', 'link/response', 'link/app', './views'], function(Module, Request, Response, linkApp, Views) {
+define(['link/module', 'link/request', 'link/response', 'link/app', 'link/util', './views'], function(Module, Request, Response, linkApp, Util, Views) {
     // Module Definition
     // =================
     var Inbox = Module({
@@ -7,16 +7,17 @@ define(['link/module', 'link/request', 'link/response', 'link/app', './views'], 
             { prehandler:{ uri:'.*', accept:'text/html' }},
             { htmlLayout:{ uri:'.*', method:'get', accept:'text/html', bubble:true }}
         ],
-        // Styles (added on init)
-        stylesheets:['style.css']
+        // Attributes
+        hasRunInit:false,
+        services:[]
     }, function() {
         // Constructor
-        this.hasRunInit = false;
-        this.services = [];
-
         // Add default resources
         this.addResource('/', this.mainInboxResource);
         this.addResource('/settings', this.settingsResource);
+
+        // Load stylesheet
+        linkApp.addStylesheet('style.css');
     });
     
     // Pre-handler init
@@ -25,20 +26,20 @@ define(['link/module', 'link/request', 'link/response', 'link/app', './views'], 
         if (this.hasRunInit) { return orgRequest.respond(); }        
         
         // Add resources for all services configged to ./services/*/
-        var serviceUris = linkApp.findResources(this.uri() + '/services/([^/]+)');
+        var serviceUris = linkApp.findResources(this.uri() + '/services/([^/]+)/$');
         for (var i=0; i < serviceUris.length; i++) {
             // Extract from match...
             var serviceUri = serviceUris[i][0]
             ,   slug = serviceUris[i][1];
             
             // Add resource
-            var res = this.addResource('/services/' + slug], this.serviceInboxResource);
+            var res = this.addResource('/services/' + slug, this.serviceInboxResource);
             this.services.push(res);
             
             // Add some links to the resource
-            res.messagesJson = Request.Link(serviceUri, { accept:'application/json' });
-            res.settingsJson = Request.Link(serviceUri + '/settings', { accept:'application/json' });
-            res.settingsHtml = Request.Link(serviceUri + '/settings', { accept:'text/html' });
+            res.messagesJson = new Request.Link(serviceUri, { accept:'application/json' });
+            res.settingsJson = new Request.Link(serviceUri + 'settings', { accept:'application/json' });
+            res.settingsHtml = new Request.Link(serviceUri + 'settings', { accept:'text/html', pragma:'partial' });
         }
         
         // Request the config from every service
@@ -64,12 +65,15 @@ define(['link/module', 'link/request', 'link/response', 'link/app', './views'], 
     // HTML GET postprocessor
     // ======================
     Inbox.prototype.htmlLayout = function(request, response) { // (will run last; bubble handlers are FILO)
-        if (request.header('pragma') != 'partial') { // not a partial request...
+        if (response && request.header('pragma') != 'partial') { // not a partial request...
             var content = (response.code() < 300) ?
-                request.body() :
+                response.body() :
                 "<div class=\"alert alert-error\">Error getting '"+request.uri()+"': "+response.code()+"</div>";
             // Wrap in layout
-            layoutView = new View.Layout(this.uri(), content);
+            layoutView = new Views.Layout(this.uri(), content);
+            for (var i=0; i < this.services.length; i++) {
+                layoutView.addNavService(this.services[i]);
+            }
             response.body(layoutView.toString()); response.header({ 'content-type':'text/html' });
             return request.respond(response);
 
@@ -92,9 +96,9 @@ define(['link/module', 'link/request', 'link/response', 'link/app', './views'], 
                 if (response.ok()) { this.service.messages = response.body(); }
                 // Render
                 if (orgLocation == window.location) {
-                    document.getElementById('inbox-content').innerHTML = this.renderMainInbox();
+                    document.getElementById('inbox-content').innerHTML = this.inbox.renderMainInbox();
                 }
-            }, { service:this.services[i], inbox:inbox });
+            }, { service:this.services[i], inbox:this });
         }
     };
     Inbox.prototype.serviceInboxResource = function(resource, request, response) {
@@ -108,17 +112,17 @@ define(['link/module', 'link/request', 'link/response', 'link/app', './views'], 
             if (response.ok()) { this.messages = response.body(); }
             // Render
             if (orgLocation == window.location) {
-                var inboxView = new Views.Inbox(this.uri());
+                var inboxView = new Views.Inbox('todo');
                 inboxView.addMessages(this.messages);
                 document.getElementById('inbox-content').innerHTML = inboxView.toString();
             }
         }, resource);
     };
-    Inbox.prototype.settingsHandler = function(orgRequest) {
+    Inbox.prototype.settingsResource = function(resource, orgRequest) {
         // Request the config from every service
+        var innerContent = '';
         Util.batchAsync(
             function(cb) {
-                var innerContent = '';
                 // request dispatch
                 for (var i=0; i < this.services.length; i++) {
                     this.services[i].settingsHtml.get(function(request, response) {

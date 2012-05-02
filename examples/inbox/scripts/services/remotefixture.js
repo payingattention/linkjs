@@ -51,7 +51,7 @@ define(['link/module', 'link/request', './views'], function(Module, Request, Vie
             request.respond(200, retMessages, 'application/json');
         });
     };    
-    RemoteFixture.prototype.messageHtmlHandler = function(request, response, urimatch) {
+    RemoteFixture.prototype.messageHandler = function(request, response, urimatch) {
         this.getMessages(function(errCode) {
             if (errCode) { return request.respond(errCode); }
             // Build response
@@ -61,14 +61,14 @@ define(['link/module', 'link/request', './views'], function(Module, Request, Vie
             request.respond(200, messageView.toString(), 'text/html');
         });
     };
-    RemoteFixture.prototype.settingsResource = function(request) {
+    RemoteFixture.prototype.settingsResource = function(resource, request) {
         if (request.matches({ accept:'application/json' })) {
             return request.respond(200, {
                 name:this.serviceName
             }, 'application/json');
         } else if (request.matches({ accept:'text/html' })) {
             // :TODO:
-            request.respond(200, 'Remote Fixture Settings', 'text/html');
+            return request.respond(200, 'Remote Fixture Settings', 'text/html');
         }
         return request.nextHandler();
     };
