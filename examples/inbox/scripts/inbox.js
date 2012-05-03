@@ -22,14 +22,13 @@ define(['link/module', 'link/request', 'link/response', 'link/app', 'link/util',
     // Pre-handler init
     // ================
     Inbox.prototype.prehandler = function(orgRequest, response) {
-        if (this.hasRunInit) { return orgRequest.respond(); }        
+        if (this.hasRunInit) { return orgRequest.respond(); }
         
         // Add resources for all services configged to ./services/*/
-        var serviceUris = linkApp.findResources(this.uri() + '/services/([^/]+)/$');
-        for (var i=0; i < serviceUris.length; i++) {
+        _.each(linkApp.findResources(this.uri() + '/services/([^/]+)/$'), function(serviceMatch) {
             // Extract from match...
-            var serviceUri = serviceUris[i][0]
-            ,   slug = serviceUris[i][1];
+            var serviceUri = serviceMatch[0]
+            ,   slug = serviceMatch[1];
             
             // Store links to the service
             this.services[slug] = {
@@ -37,28 +36,19 @@ define(['link/module', 'link/request', 'link/response', 'link/app', 'link/util',
                 settingsJson:new Request.Link(serviceUri + 'settings', { accept:'application/json' }),
                 settingsHtml:new Request.Link(serviceUri + 'settings', { accept:'text/html', pragma:'partial' })
             };
-        }
+        }, this);
         
         // Request the config from every service
-        Util.batchAsync(
-            function(cb) {
-                var reqCount = 0;
-                for (var slug in this.services.length) {
-                    // dispatch requests
-                    this.services[slug].settingsJson.get(function(request, response) {
-                        if (response.ok()) { this.settings = response.body(); }
-                        cb(); // inform batchAsync
-                    }, this.services[slug]);
-                    reqCount++;
-                }
-                return reqCount; // expected cb count
-            }, 
-            function() { // after all responses
-                this.hasRunInit = true;
-                orgRequest.respond();
-            }, 
-            this // context
-        );
+        var respondToOrg = _.after(this.services.length, function() { 
+            this.hasRunInit = true; 
+            orgRequest.respond(); 
+        });
+        _.each(this.services, function(service, slug) {
+            service.settingsJson.get(function(request, response) {
+                if (response.ok()) { service.settings = response.body(); }
+                respondToOrg();
+            });
+        })
     };
 
     // HTML GET postprocessor
