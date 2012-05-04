@@ -1,153 +1,134 @@
-define(['link/module', 'link/request', 'link/response', 'link/app', 'link/util', './views'], function(Module, Request, Response, linkApp, Util, Views) {
+define(['link/module', 'link/app', './views'], function(Module, app, Views) {
     // Module Definition
     // =================
     var Inbox = Module({
-        // Handler routes (in addition to resources)
+        // Handler routes
         routes:[
-            { prehandler:{ uri:'.*', accept:'text/html' }},
-            { htmlLayout:{ uri:'.*', method:'get', accept:'text/html', bubble:true }},
-            { mainInbox:{ uri:'$/?^', method:'get', accept:'text/html' }},
-            { serviceInbox:{ uri:'$/services/([^/]+)/?$', method:'get', accept:'text/html' }},
-            { settings:{ uri:'$/settings/?^', method:'get', accept:'text/html' }}
+            { cb:'prehandler', uri:'.*', accept:'text/html' },
+            { cb:'htmlLayout', uri:'.*', method:'get', accept:'text/html', bubble:true },
+            { cb:'mainInbox', uri:'$/?^', method:'get', accept:'text/html' },
+            { cb:'serviceInbox', uri:'$/services/([^/]+)/?$', method:'get', accept:'text/html' },
+            { cb:'settings', uri:'$/settings/?^', method:'get', accept:'text/html' }
         ],
         // Attributes
-        hasRunInit:false,
-        services:{}
-    }, function() {
-        // Constructor
-        // Load stylesheet
-        linkApp.addStylesheet('style.css');
+        services:{},
+        serviceCount:0,
+        cachedInboxHtml:''
     });
     
-    // Pre-handler init
-    // ================
-    Inbox.prototype.prehandler = function(orgRequest, response) {
-        if (this.hasRunInit) { return orgRequest.respond(); }
+    // Pre-handler
+    // ===========
+    Inbox.prototype.prehandler = function(request) {        
+        // Do one-time init
+        if (this.serviceCount > 0) { return; }
+        var promise = _.makePromise();
         
-        // Add resources for all services configged to ./services/*/
-        _.each(linkApp.findResources(this.uri() + '/services/([^/]+)/$'), function(serviceMatch) {
-            // Extract from match...
-            var serviceUri = serviceMatch[0]
-            ,   slug = serviceMatch[1];
-            
+        // Load stylesheet
+        app.addStylesheet('style.css');
+        
+        // Find all services configged to ./services/*/
+        _.each(app.findModules(this.uri + '/services/([^/]+)/?$'), function(serviceUri, slug) {
             // Store links to the service
             this.services[slug] = {
-                messagesJson:new Request.Link(serviceUri, { accept:'application/json' }),
-                settingsJson:new Request.Link(serviceUri + 'settings', { accept:'application/json' }),
-                settingsHtml:new Request.Link(serviceUri + 'settings', { accept:'text/html', pragma:'partial' })
+                messagesLink:{ uri:serviceUri, accept:'js/array' },
+                settingsLink:{ uri:serviceUri + 'settings', accept:'js/object' },
+                settingsHtmlLink:{ uri:serviceUri + 'settings', accept:'text/html', pragma:'partial' },
+                cachedInboxHtml:''
             };
+            this.serviceCount++;
         }, this);
         
         // Request the config from every service
-        var respondToOrg = _.after(this.services.length, function() { 
-            this.hasRunInit = true; 
-            orgRequest.respond(); 
-        });
+        var respond = _.after(this.serviceCount, function() { promise.fulfill(); });
         _.each(this.services, function(service, slug) {
-            service.settingsJson.get(function(request, response) {
-                if (response.ok()) { service.settings = response.body(); }
-                respondToOrg();
+            app.get(service.settingsLink, function(response) {
+                if (response.code == 200) { service.settings = response.body; }
+                respond();
             });
-        })
+        });
+        return promise;
     };
-
-    // HTML GET postprocessor
-    // ======================
+    
+    // HTML layout postprocessor
+    // =========================
     Inbox.prototype.htmlLayout = function(request, response) { // (will run last; bubble handlers are FILO)
-        if (response && request.header('pragma') != 'partial') { // not a partial request...
-            var content = (response.code() < 300) ?
-                response.body() :
-                "<div class=\"alert alert-error\">Error getting '"+request.uri()+"': "+response.code()+"</div>";
+        if (response && !_.include(request.pragma, 'partial')) { // not a partial request...
+            // Get content
+            var content = (response.code < 300) ?
+                response.body :
+                "<div class=\"alert alert-error\">Error getting '"+request.uri+"': "+response.code+"</div>";
+            
             // Wrap in layout
-            layoutView = new Views.Layout(this.uri(), content);
-            for (var i=0; i < this.services.length; i++) {
-                layoutView.addNavService(this.services[i]);
-            }
-            response.body(layoutView.toString()); response.header({ 'content-type':'text/html' });
-            return request.respond(response);
-
+            var layoutView = new Views.Layout(this.uri, content);
+            _.each(this.services, function(service) {
+                layoutView.addNavService(service);
+            });
+            response.body = layoutView.toString();
+            response.contenttype = 'text/html';
         }
-        request.respond(response);
+        return response;
     };
 
     // Resource Handlers
     // =================
-    Inbox.prototype.mainInbox = function(request) {
-        // Respond with the out-of-date messages now
-        request.respond(200, this.renderMainInbox(), 'text/html');
-
-        // Have all services sync
-        var orgLocation = window.location;
-        for (var i=0; i < this.services.length; i++) {
-            // Dispatch for messages
-            this.services[i].messagesJson.get(function(request, response) {
+    Inbox.prototype.mainInbox = function() {
+        // Sync all services, then render to the DOM as each responds
+        var orgLocation = window.location, allMessages = [];
+        _.each(this.services, function(service) {
+            app.get(service.messagesLink, function(response) {
                 // Cache
-                if (response.ok()) { this.service.messages = response.body(); }
+                if (response.code == 200) {
+                    service.messages = response.body;
+                    allMessages = allMessages.concat(service.messages);
+                }
                 // Render
                 if (orgLocation == window.location) {
-                    document.getElementById('inbox-content').innerHTML = this.inbox.renderMainInbox();
+                    var inboxView = new Views.Inbox(this.uri());
+                    inboxView.addMessages(allMessages);
+                    document.getElementById('inbox-content').innerHTML = this.cachedInboxHtml = inboxView.toString();
                 }
-            }, { service:this.services[i], inbox:this });
-        }
+            }, this);
+        }, this);
+
+        // Respond with cached inbox now
+        return { code:200, contenttype:'text/html', body:this.cachedInboxHtml };
     };
-    Inbox.prototype.serviceInbox = function(request, response) {
-        // Render an out-of-date response now
-        request.respond(200, this.renderMainInbox(), 'text/html');
+    Inbox.prototype.serviceInbox = function(request, response, urimatch) {
+        // Get the service
+        var service = this.services[urimatch[1]];
+        if (!service) { return { code:404 }; }
         
         // Dispatch for messages
-        var service = null; // :TODO: get service
         var orgLocation = window.location;
-        resource.messagesJson.get(function(request, response) {
+        app.get(service.messagesLink, function(response) {
             // Cache
-            if (response.ok()) { this.messages = response.body(); }
+            if (response.code == 200) { this.messages = response.body(); }
             // Render
             if (orgLocation == window.location) {
-                var inboxView = new Views.Inbox('todo');
-                inboxView.addMessages(this.messages);
-                document.getElementById('inbox-content').innerHTML = inboxView.toString();
+                var inboxView = new Views.Inbox('todo'); //:TODO:
+                inboxView.addMessages(service.messages);
+                document.getElementById('inbox-content').innerHTML = service.cachedInbox = inboxView.toString();
             }
         }, service);
+
+        // Respond now with cached html
+        return { code:200, contenttype:'text/html', body:service.cachedInbox };
     };
-    Inbox.prototype.settings = function(orgRequest) {
-        // Request the config from every service
-        var innerContent = '';
-        Util.batchAsync(
-            function(cb) {
-                // request dispatch
-                for (var i=0; i < this.services.length; i++) {
-                    this.services[i].settingsHtml.get(function(request, response) {
-                        // individual response
-                        if (response.ok()) { innerContent += response.body(); }
-                        cb(); // inform batchAsync
-                    }, this.services[i]);
-                }
-                return this.services.length; // expected cb count
-            }, 
-            function() { // after all responses
-                // :TODO: generate html
-                orgRequest.respond(200, innerContent, 'text/html');
-            }, 
-            this // context
-        );
+    Inbox.prototype.settings = function(request) {
+        // Set up async response
+        var promise = _.makePromise();
+        var finalResponse = { code:200, contenttype:'text/html', body:'' };
+        var respond = _.after(this.serviceCount, function() { promise.fulfill(finalResponse); });
+        
+        // Get the settings html from each service
+        _.each(this.services, function(service, slug) {
+            app.get(service.settingsHtmlLink, function(response) {
+                if (response.code == 200) { finalResponse.body += response.body; }
+                respond();
+            });
+        });
+        return promise;
     };
 
-    // Helpers
-    // =======
-    Inbox.prototype.getAllMessages = function() {
-        var messages = [];
-        for (var s in this.services) {
-            if (!this.services[s].messages) { continue; }
-            for (var m=0; m < this.services[s].messages.length; m++) {
-                messages.push(this.services[s].messages[m]);
-            }
-        }
-        return messages;
-    };
-    Inbox.prototype.renderMainInbox = function() {
-        var inboxView = new Views.Inbox(this.uri());
-        inboxView.addMessages(this.getAllMessages());
-        return inboxView.toString();
-    };
-    
     return Inbox;
 });

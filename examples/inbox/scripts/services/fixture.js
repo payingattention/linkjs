@@ -2,79 +2,54 @@ define(['link/module', './views'], function(Module, Views) {
     // Fixture
     // =======
     // Provides static debug data
-    var FixtureService = Module({}, function() {
+    var FixtureService = Module({
+        // Handler routes
+        routes:[
+            { cb:'messagesHandler', uri:'^/?$', accept:'js/array' },
+            { cb:'messageHtmlHandler', uri:'^/([0-9]+)/?$', accept:'text/html' },
+            { cb:'settingsHandler', uri:'^/settings/?$' }
+        ],
         // Attributes
-        this.messages = {};
-        this.serviceName = "Local";
-
-        // Fixed resources
-        this.addResource('/', this.messagesResource);
-        this.addResource('/settings', this.settingsResource);
-
+        serviceName:'Local',
         // Fixture data
-        this.messages['1'] = this.addResource('/1', this.messageResource, { date:'April 23 2012 21:20', author:'rodger', recp:['bsmith'], subject:'Hey, Buddy!', body:'How are you doing?', re:null });
-        this.messages['2'] = this.addResource('/2', this.messageResource, { date:'April 24 2012 12:49', author:'bsmith', recp:['bsmith', 'asmitherson'], subject:'About the meeting', body:'Important business conversation. Things people talk about and stuff', re:null });
-        this.messages['3'] = this.addResource('/3', this.messageResource, { date:'April 25 2012 15:12', author:'asmitherson', recp:['bsmith', 'asmitherson'], subject:'RE: About the meeting', body:'Other stuff about business or whatever.', re:2 });
+        messages: [
+            { date:new Date('April 23 2012 21:20'), author:'rodger', recp:['bsmith'], subject:'Hey, Buddy!', body:'How are you doing?', re:null },
+            { date:new Date('April 24 2012 12:49'), author:'bsmith', recp:['bsmith', 'asmitherson'], subject:'About the meeting', body:'Important business conversation. Things people talk about and stuff', re:null },
+            { date:new Date('April 25 2012 15:12'), author:'asmitherson', recp:['bsmith', 'asmitherson'], subject:'RE: About the meeting', body:'Other stuff about business or whatever.', re:2 }
+        ]
     });
     
-    // Resources
+    // Handlers
     // ========
-    FixtureService.prototype.messagesResource = function(resource, request) {
-        if (request.matches({ 'accept':'application/json' })) {
-            // Collect messages
-            var retMessages = [];
-            for (var mid in this.messages) {
-                retMessages.push(this.buildMessage(mid, ['service','date','summary','view_link']));
-            }
-            return request.respond(200, retMessages, 'application/json');
-        }
-        return request.nextHandler();
+    FixtureService.prototype.messagesHandler = function(request) {
+        // Collect messages
+        var retMessages = [];
+        _.each(this.messages, function(message, mid) {
+            retMessages.push({
+                id:mid,
+                service:this.serviceName,
+                date:message.date,
+                summary:'<strong>' + message.author + '</strong> ' + message.subject,
+                view_link:this.uri + '/' + mid
+            });
+        }, this);
+        return { code:200, body:retMessages, contenttype:'js/array' };
     };    
-    FixtureService.prototype.messageResource = function(resource, request) {
-        var messageView = new Views.Message(resource);
-        request.respond(200, messageView.toString(), 'text/html');
+    FixtureService.prototype.messageHtmlHandler = function(request, response, urimatch) {
+        // Find message
+        var message = this.messages[urimatch[1]];
+        if (!message) { return { code:404 }; }
+        // Build html
+        var messageView = new Views.Message(message);
+        return { code:200, body:messageView.toString(), contenttype:'text/html' };
     };
-    FixtureService.prototype.settingsResource = function(resource, request) {
-        if (request.matches({ accept:'application/json' })) {
-            return request.respond(200, {
-                name:this.serviceName
-            }, 'application/json');
-        } else if (request.matches({ accept:'text/html' })) {
+    FixtureService.prototype.settingsHandler = function(request) {
+        if (request.accept == 'js/object') {
+            return { code:200, body:{ name:this.serviceName }, contenttype:'js/array' };
+        } else if (request.accept == 'text/html') {
             // :TODO:
-            return request.respond(200, 'Fixture Settings', 'text/html');
+            return { code:200, body:'Fixture Settings', contenttype:'text/html' };
         }
-        return request.nextHandler();
-    };
-
-    // Helpers
-    // =======
-    FixtureService.prototype.buildMessage = function(id, fields) {
-        var message={}, org=this.messages[id];
-        if (!org) { return {}; }
-        // Assemble the return object from the fields requested
-        message.id = id;
-        for (var i=0,ii=fields.length; i < ii; i++) {
-            if (fields[i] == 'service') {
-                message['service'] = this.serviceName;
-            } else if (fields[i] == 'date') {
-                message['date'] = new Date(org.date);
-            } else if (fields[i] == 'summary') {
-                message['summary'] = '<strong>' + org.author + '</strong> ' + org.subject;
-            } else if (fields[i] == 'view_link') {
-                message['view_link'] = this.uri() + '/' + id;
-            } else {
-                message[fields[i]] = org[fields[i]];
-            }
-        }
-        return message;
-    };
-    FixtureService.prototype.getNewID = function() {
-        for (var id=1; id < Number.MAX_VALUE; id++) {
-            if (!(id in this.messages)) {
-                return id;
-            }
-        }
-        return null; // lets assume this never happens
     };
 
     return FixtureService;

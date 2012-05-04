@@ -1,21 +1,18 @@
-define(['link/module', 'link/request', './views'], function(Module, Request, Views) {
+define(['link/module', 'link/app', './views'], function(Module, app, Views) {
     // Remote Fixture
     // ==============
     // Provides static debug data from a remote source
     var RemoteFixture = Module({
         // Handler routes
         routes:[
-            { messageHandler:{ uri:'^/([0-9]+)/?$', accept:'text/html' }}
+            { cb:'messagesHandler', uri:'^/?$', accept:'js/array' },
+            { cb:'messageHtmlHandler', uri:'^/([0-9]+)/?$', accept:'text/html' },
+            { cb:'settingsHandler', uri:'^/settings/?$' }
         ],
-    }, function() {
         // Attributes
-        this.messages = {};
-        this.remoteSource = 'remote_fixture.json';
-        this.serviceName = 'Remote';
-        
-        // Fixed resources
-        this.addResource('/', this.messagesResource);
-        this.addResource('/settings', this.settingsResource);
+        messages:{},
+        remoteLink:{ uri:'/inbox/remote_fixture.json', accept:'application/json' }
+        serviceName:'Remote'
     });
 
     // Helpers
@@ -23,13 +20,12 @@ define(['link/module', 'link/request', './views'], function(Module, Request, Vie
     RemoteFixture.prototype.getMessages = function(cb) {
         // Get messages
         // (you'd want some kind of caching in real life)
-        var request = new Request('get', this.remoteSource, { accept:'application/json' });
-        request.dispatch(function(request, response) {
-            if (response.fail()) { cb.call(this, response.code()); }
+        app.get(this.remoteLink, function(response) {
+            if (response.code >= 300) { cb.call(this, response.code); }
             // Parse JSON
             try {
-                this.messages = JSON.parse(response.body());
-                cb.call(this, null);
+                this.messages = JSON.parse(response.body);
+                cb.call(this, false);
             } catch (e) {
                 console.log(e);
                 cb.call(this, 500);
@@ -37,63 +33,49 @@ define(['link/module', 'link/request', './views'], function(Module, Request, Vie
         }, this);
     };
 
-    // Resources
+    // Handlers
     // ========
-    RemoteFixture.prototype.messagesResource = function(resource, request) {
-        if (!request.matches({ accept:'application/json' })) { return request.nextHandler(); }
+    RemoteFixture.prototype.messagesHandler = function(request) {
+        var promise = _.makePromise();
+        // Sync messages
         this.getMessages(function(errCode) {
-            if (errCode) { return request.respond(errCode); }
+            if (errCode) { return promise.fulfill({ code:errCode }); }
             // Build response
             var retMessages = [];
-            for (var mid in this.messages) {
-                retMessages.push(this.buildMessage(mid, ['service','date','summary','view_link']));
-            }
-            request.respond(200, retMessages, 'application/json');
+            _.each(this.messages, function(message, mid) {
+                retMessages.push({
+                    id:mid,
+                    service:this.serviceName,
+                    date:new Date(message.date),
+                    summary:'<strong>' + message.author + '</strong> ' + message.subject,
+                    view_link:this.uri + '/' + mid
+                });
+            });
+            promise.fulfill({ code:200, body:retMessages, contenttype:'js/array' });
         });
+        return promise;
     };    
-    RemoteFixture.prototype.messageHandler = function(request, response, urimatch) {
+    RemoteFixture.prototype.messageHtmlHandler = function(request, response, urimatch) {
+        var promise = _.makePromise();
+        // Sync messages
         this.getMessages(function(errCode) {
-            if (errCode) { return request.respond(errCode); }
-            // Build response
+            if (errCode) { return promise.fulfill({ code:errCode }); }
+            // Get message
             var message = this.messages[urimatch[1]];
-            if (!message) { return request.respond(404); }
+            if (!message) { return promise.fulfill({ code:404 }); }
+            // Build response
             var messageView = new Views.Message(message);
-            request.respond(200, messageView.toString(), 'text/html');
+            promise.fulfill({ code:200, body:messageView.toString(), contenttype:'text/html');
         });
+        return promise;
     };
-    RemoteFixture.prototype.settingsResource = function(resource, request) {
-        if (request.matches({ accept:'application/json' })) {
-            return request.respond(200, {
-                name:this.serviceName
-            }, 'application/json');
-        } else if (request.matches({ accept:'text/html' })) {
+    RemoteFixture.prototype.settingsResource = function(request) {
+        if (request.accept == 'js/object') {
+            return { code:200, body:{ name:this.serviceName }, contenttype:'js/array' };
+        } else if (request.accept == 'text/html') {
             // :TODO:
-            return request.respond(200, 'Remote Fixture Settings', 'text/html');
+            return { code:200, body:'Remote Fixture Settings', contenttype:'text/html' };
         }
-        return request.nextHandler();
-    };
-        
-    // Helpers
-    // =======
-    RemoteFixture.prototype.buildMessage = function(id, fields) {
-        var message={}, org=this.messages[id];
-        if (!org) { return {}; }
-        // Assemble the return object from the fields requested
-        message.id = id;
-        for (var i=0,ii=fields.length; i < ii; i++) {
-            if (fields[i] == 'service') {
-                message['service'] = this.serviceName;
-            } else if (fields[i] == 'date') {
-                message['date'] = new Date(org.date);
-            } else if (fields[i] == 'summary') {
-                message['summary'] = '<strong>' + org.author + '</strong> ' + org.subject;
-            } else if (fields[i] == 'view_link') {
-                message['view_link'] = this.uri() + '/' + id;
-            } else {
-                message[fields[i]] = org[fields[i]];
-            }
-        }
-        return message;
     };
 
     return RemoteFixture;
