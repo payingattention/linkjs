@@ -2,9 +2,9 @@ require([
     "link/app",
     "link/modules/test",
     "link/modules/cli",
-    "inbox",
-    "services/fixture",
-    "services/remotefixture",
+    "inbox/main",
+    "inbox/services/fixture",
+    "inbox/services/remotefixture",
 ], function(app, Test, CLI, Inbox, FixtureService, RemoteFixtureService) {
     app.addModule(new CLI('#/cli'));
     app.addModule(new Test('#/test'));
