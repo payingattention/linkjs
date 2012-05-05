@@ -1,25 +1,23 @@
-define(['link/tint', 'text!templates/layout.html', 'text!templates/inbox.html'], function(Tint, layoutHtml, inboxHtml) {
-    
-    // Layout
+var Views = Views || {};
+(function(Views) {
+    // Nav
     // ======
-    var Layout = Tint.compile(layoutHtml, function(baseUri, content) {
+    var navTmplElem = document.getElementById('nav-template');
+    var Nav = Tint.compile(navTmplElem.innerHTML, function(baseUri) {
         this.baseUri = baseUri;
-        // Standard nav
-        this.nav.item().header('Inbox');
-        this.nav.item().link('Messages', 'inbox', baseUri);
-        this.nav.item().link('Settings', 'cog', baseUri + '/settings');
-        this.nav.item().header('Services');
-        // Set content
-        this.content = content;
+        this.item().header('Inbox');
+        this.item().link('Messages', 'inbox', baseUri);
+        this.item().link('Settings', 'cog', baseUri + '/settings');
+        this.item().header('Services');
     });
-    Layout.prototype.addNavService = function(service) {
-        if (!service || !service.settings) { return; }
-        this.nav.item().link(service.settings.name, 'envelope', this.baseUri + service.uri)
+    Nav.prototype.addService = function(service) {
+        this.item().link(service.name, 'envelope', this.baseUri + service.uri)
     };
     
     // Inbox
     // =====
-    var Inbox = Tint.compile(inboxHtml, function(uri) {
+    var inboxTmplElem = document.getElementById('inbox-template');
+    var Inbox = Tint.compile(inboxTmplElem.innerHTML, function(uri) {
         this.inboxUri = uri;
     });
     Inbox.prototype.addMessages = function(messages) {
@@ -35,9 +33,26 @@ define(['link/tint', 'text!templates/layout.html', 'text!templates/inbox.html'],
         this.message(message.service, message.view_link, message.summary, new Date(message.date).toLocaleDateString() + ' @' + new Date(message.date).toLocaleTimeString());
     };
 
+    // Message
+    // =======
+    var messageTmplElem = document.getElementById('message-template');
+    var Message = Tint.compile(messageTmplElem.innerHTML, function(message) {
+        this.subject = message.subject;
+        this.date = new Date(message.date).toLocaleDateString();
+        this.time = new Date(message.date).toLocaleTimeString();
+        this.author = message.author;
+        for (var i=0; i < message.recp.length; i++) {
+            if (i < message.recp.length - 1) {
+                this.recp().add(message.recp[i]);
+            } else {
+                this.recp().last(message.recp[i]);
+            }
+        }
+        this.body = message.body;
+    });
+
     // Export
-    return {
-        Layout:Layout,
-        Inbox:Inbox
-    };
-});
+    Views.Nav = Nav;
+    Views.Inbox = Inbox;
+    Views.Message = Message;
+})(Views);

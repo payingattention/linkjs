@@ -1,7 +1,7 @@
-define(['link/module', 'link/app', './views'], function(Module, app, Views) {
+(function(Modules) {
     // Module Definition
     // =================
-    var Inbox = Module({
+    var Inbox = Link.Module({
         // Handler routes
         routes:[
             { cb:'prehandler', uri:'.*', accept:'text/html' },
@@ -27,7 +27,7 @@ define(['link/module', 'link/app', './views'], function(Module, app, Views) {
         app.addStylesheet('style.css');
         
         // Find all services configged to ./services/*/
-        _.each(app.findModules(this.uri + '/services/([^/]+)/?$'), function(serviceUri, slug) {
+        _.each(app.findModules(this.uri + '/services/([^/]+)/?$', 1), function(serviceUri, slug) {
             // Store links to the service
             this.services[slug] = {
                 messagesLink:{ uri:serviceUri, accept:'js/array' },
@@ -39,11 +39,11 @@ define(['link/module', 'link/app', './views'], function(Module, app, Views) {
         }, this);
         
         // Request the config from every service
-        var respond = _.after(this.serviceCount, function() { promise.fulfill(); });
+        promise.isLiesUntil(this.serviceCount);
         _.each(this.services, function(service, slug) {
             app.get(service.settingsLink, function(response) {
                 if (response.code == 200) { service.settings = response.body; }
-                respond();
+                promise.fulfill();
             });
         });
         return promise;
@@ -130,5 +130,6 @@ define(['link/module', 'link/app', './views'], function(Module, app, Views) {
         return promise;
     };
 
-    return Inbox;
-});
+    // Export
+    Modules.Inbox = Inbox;
+})(Modules);

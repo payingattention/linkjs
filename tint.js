@@ -1,5 +1,15 @@
-define(['./util'], function(Util) {
-    var compile = function(tmpl, constructor) {
+(function() {
+    // Set up namespace
+    var Tint;
+    if (typeof exports != 'undefined') {
+        Tint = exports;
+    } else {
+        Tint = this.Tint = {};
+    }
+
+    // Creates a string-builder prototype using the interface described in the template
+    // - `tmpl` must be a string
+    var compile = function(tmpl, opt_constructor) {
         // Parse the definition
         var builder = new TintBlockPrototype();
         builder.parse(tmpl);
@@ -7,7 +17,7 @@ define(['./util'], function(Util) {
         // Create the type
         var TintTmpl = function() {
             tintBlockConstructor.call(this);
-            constructor.apply(this, arguments);
+            opt_constructor && opt_constructor.apply(this, arguments);
         };
         TintTmpl.prototype = builder;
         
@@ -20,7 +30,7 @@ define(['./util'], function(Util) {
         }
     };
 
-    var TintBlockPrototype = function() {
+    var TintBlockPrototype = function _TintBlockPrototype() {
         this._outVarNames = [];
         this._outParts = [];
         this._blocks = {};
@@ -177,8 +187,6 @@ define(['./util'], function(Util) {
         };
     };
 
-    // Export
-    return {
-        compile:compile
-    };
-});
+    // Exports
+    Tint.compile = compile;
+}).call(this);

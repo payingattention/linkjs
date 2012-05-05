@@ -4,10 +4,78 @@
         <meta charset="utf-8">
         <meta author="pfraze">
         <title>Link - Inbox Example</title>
-        <script data-main="inbox" src="vendor/require.js"></script>
+        <script src="link.js"></script>
+        <script src="tint.js"></script>
+        <script>var Modules = {};</script>
+        <script src="inbox/views.js"></script>
+        <script src="inbox/layout.js"></script>
+        <script src="inbox/inbox.js"></script>
+        <script src="inbox/nav.js"></script>
+        <script src="inbox/services/fixture.js"></script>
+        <script src="inbox/services/remote.js"></script>
+        <script>
+            function app_init() {
+                // Application frame
+                Link.addModule('#', new Modules.Layout());
+                
+                // Nav frame
+                var nav = Link.addFrame('nav');
+                nav.addModule('#', new Modules.Nav());
+                
+                // Content frame
+                var content = Link.addFrame('content');
+                content.addModule('#', new Modules.Inbox());
+                content.addModule('#/services/local', new Modules.FixtureService());
+                content.addModule('#/services/remote', new Modules.RemoteFixtureService());
+                
+                Link.logMode('traffic', true);
+                Link.attachToWindow();
+            };
+        </script>
         <link rel="stylesheet" type="text/css" href="vendor/bootstrap/css/bootstrap.css" />
     </head>
-    <body>
-        Loading...
+    <body onload="app_init()">
+        <div id="layout">
+            <div id="nav" class="well"></div>
+            <div id="content">Loading...</div>
+        </div>
+
+        <script id="nav-template" type="text/html">
+            <ul class="nav nav-list">
+                $item() {
+                $header(label) {<li class="nav-header">$label;</li>}header;
+                $link(label, icon, uri) {<li><a href="$uri;"><i class="icon-$icon;"></i> $label;</a></li>}link;
+                }item;
+            </ul>
+        </script>
+
+        <script id="inbox-template" type="text/html">
+            <div class="toolbar">
+                <form method="get">
+                    <button class="btn" formaction="$inbox_uri;" title="Check for new messages"><i class="icon-refresh"></i></button>
+                </form>
+            </div>
+            <table class="table table-condensed">
+                $message(service, uri, title, date){
+                <tr><td><span class="label">$service;</span></td><td><a href="$uri;">$title;</a></td><td>$date;</td></tr>
+                }message;
+            </table>
+        </script>
+
+        <script id="message-template" type="text/html">
+            <h3 style="margin-bottom:5px">$subject;</h3>
+            <p> 
+                <small>
+                    Sent on <span class="label">$date; @$time;</span>
+                    by <span class="label">$author;</span>
+                    to $recp(){
+                    $add(name){<span class="label">$name;,</span>}add;
+                    $last(name){<span class="label">$name;</span>}last;
+                    }recp;
+                </small>
+            </p>
+            <hr />
+            <p>$body;</p>
+        </script>
     </body>
 </html>
