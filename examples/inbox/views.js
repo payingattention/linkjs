@@ -1,4 +1,3 @@
-var Views = Views || {};
 (function(Views) {
     // Nav
     // ======

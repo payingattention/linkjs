@@ -4,35 +4,9 @@
         <meta charset="utf-8">
         <meta author="pfraze">
         <title>Link - Inbox Example</title>
+        <link rel="stylesheet" type="text/css" href="bootstrap/css/bootstrap.css" />
         <script src="link.js"></script>
         <script src="tint.js"></script>
-        <script>var Modules = {};</script>
-        <script src="inbox/views.js"></script>
-        <script src="inbox/layout.js"></script>
-        <script src="inbox/inbox.js"></script>
-        <script src="inbox/nav.js"></script>
-        <script src="inbox/services/fixture.js"></script>
-        <script src="inbox/services/remote.js"></script>
-        <script>
-            function app_init() {
-                // Application frame
-                Link.addModule('#', new Modules.Layout());
-                
-                // Nav frame
-                var nav = Link.addFrame('nav');
-                nav.addModule('#', new Modules.Nav());
-                
-                // Content frame
-                var content = Link.addFrame('content');
-                content.addModule('#', new Modules.Inbox());
-                content.addModule('#/services/local', new Modules.FixtureService());
-                content.addModule('#/services/remote', new Modules.RemoteFixtureService());
-                
-                Link.logMode('traffic', true);
-                Link.attachToWindow();
-            };
-        </script>
-        <link rel="stylesheet" type="text/css" href="vendor/bootstrap/css/bootstrap.css" />
     </head>
     <body onload="app_init()">
         <div id="layout">
@@ -76,6 +50,36 @@
             </p>
             <hr />
             <p>$body;</p>
+        </script>
+        
+        <script>
+            var Modules = {};
+            var Views = {};
+        </script>
+        <script src="inbox/views.js"></script>
+        <script src="inbox/layout.js"></script>
+        <script src="inbox/inbox.js"></script>
+        <script src="inbox/nav.js"></script>
+        <script src="inbox/services/fixture.js"></script>
+        <script src="inbox/services/remotefixture.js"></script>
+        <script>
+            function app_init() {
+                // Create mediators
+                var app = new Link.Mediator();
+                var nav = new Link.Mediator('nav');
+                var content = new Link.Mediator('content');
+            
+                // Configure modules
+                app.addModule('#', new Modules.Layout(nav, content));
+                nav.addModule('#', new Modules.Nav());
+                content.addModule('#', new Modules.Inbox());
+                content.addModule('#/services/local', new Modules.FixtureService());
+                content.addModule('#/services/remote', new Modules.RemoteFixtureService());
+                
+                // Start application
+                Link.logMode('traffic', true);
+                Link.attachToWindow(app);
+            };
         </script>
     </body>
 </html>

@@ -1,26 +1,27 @@
-define(['link/module', 'link/app', './views'], function(Module, app, Views) {
+(function(Modules) {
     // Remote Fixture
     // ==============
     // Provides static debug data from a remote source
-    var RemoteFixture = Module({
-        // Handler routes
-        routes:[
-            { cb:'messagesHandler', uri:'^/?$', accept:'js/array' },
-            { cb:'messageHtmlHandler', uri:'^/([0-9]+)/?$', accept:'text/html' },
-            { cb:'settingsHandler', uri:'^/settings/?$' }
-        ],
-        // Attributes
-        messages:{},
-        remoteLink:{ uri:'/inbox/remote_fixture.json', accept:'application/json' }
-        serviceName:'Remote'
-    });
+    var RemoteFixture = function() {
+        this.messages = {};
+        this.remoteLink = { uri:'/inbox/remote_fixture.json', accept:'application/json' };
+        this.serviceName = 'Remote';
+    };
+    
+    // Handler Routes
+    // ==============
+    RemoteFixture.prototype.routes = [
+        { cb:'messagesHandler', uri:'^/?$', accept:'js/array' },
+        { cb:'messageHtmlHandler', uri:'^/([0-9]+)/?$', accept:'text/html' },
+        { cb:'settingsHandler', uri:'^/settings/?$' }
+    ];
 
     // Helpers
     // =======
     RemoteFixture.prototype.getMessages = function(cb) {
         // Get messages
         // (you'd want some kind of caching in real life)
-        app.get(this.remoteLink, function(response) {
+        this.mediator.get(this.remoteLink, function(response) {
             if (response.code >= 300) { cb.call(this, response.code); }
             // Parse JSON
             try {
@@ -36,13 +37,14 @@ define(['link/module', 'link/app', './views'], function(Module, app, Views) {
     // Handlers
     // ========
     RemoteFixture.prototype.messagesHandler = function(request) {
-        var promise = _.makePromise();
+        var promise = new Link.Promise();
         // Sync messages
         this.getMessages(function(errCode) {
             if (errCode) { return promise.fulfill({ code:errCode }); }
             // Build response
             var retMessages = [];
-            _.each(this.messages, function(message, mid) {
+            for (var mid in this.messages) {
+                var message = this.messages[mid];
                 retMessages.push({
                     id:mid,
                     service:this.serviceName,
@@ -50,13 +52,13 @@ define(['link/module', 'link/app', './views'], function(Module, app, Views) {
                     summary:'<strong>' + message.author + '</strong> ' + message.subject,
                     view_link:this.uri + '/' + mid
                 });
-            });
-            promise.fulfill({ code:200, body:retMessages, contenttype:'js/array' });
+            }
+            promise.fulfill({ code:200, body:retMessages, 'content-type':'js/array' });
         });
         return promise;
     };    
     RemoteFixture.prototype.messageHtmlHandler = function(request, response, urimatch) {
-        var promise = _.makePromise();
+        var promise = new Link.Promise();
         // Sync messages
         this.getMessages(function(errCode) {
             if (errCode) { return promise.fulfill({ code:errCode }); }
@@ -65,18 +67,19 @@ define(['link/module', 'link/app', './views'], function(Module, app, Views) {
             if (!message) { return promise.fulfill({ code:404 }); }
             // Build response
             var messageView = new Views.Message(message);
-            promise.fulfill({ code:200, body:messageView.toString(), contenttype:'text/html');
+            promise.fulfill({ code:200, body:messageView.toString(), 'content-type':'text/html' });
         });
         return promise;
     };
-    RemoteFixture.prototype.settingsResource = function(request) {
+    RemoteFixture.prototype.settingsHandler = function(request) {
         if (request.accept == 'js/object') {
-            return { code:200, body:{ name:this.serviceName }, contenttype:'js/array' };
+            return { code:200, body:{ name:this.serviceName }, 'content-type':'js/object' };
         } else if (request.accept == 'text/html') {
             // :TODO:
-            return { code:200, body:'Remote Fixture Settings', contenttype:'text/html' };
+            return { code:200, body:'Remote Fixture Settings', 'content-type':'text/html' };
         }
     };
 
-    return RemoteFixture;
-});
+    // Export
+    Modules.RemoteFixtureService = RemoteFixture;
+})(Modules);

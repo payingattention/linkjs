@@ -1,13 +1,13 @@
-#inbox-nav {
+#nav {
     width: 120px;
     padding: 4px 0;
     margin: 10px;
     float: left;
 }
-#inbox-content {
+#content {
     margin-left: 155px;
     padding-top: 10px;
 }
-#inbox-content table {
+#content table {
     margin-top: 10px;
 }

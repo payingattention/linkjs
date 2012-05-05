@@ -8,54 +8,42 @@
         Link = this.Link = {};
     }
 
-    // ModuleMediator
-    // ==============
+    // Mediator
+    // ========
     // passes requests/responses around a uri structure of modules
-    var ModuleMediator = function _ModuleMediator(id) {
+    var Mediator = function _Mediator(id) {
         this.id = id;
-        this.app_modules = [];
-        this.child_mediators = {};
-    };
-    
-    // Creates a child mediator structure
-    // - used for browser frames
-    ModuleMediator.prototype.addFrame = function(name) {
-        if (name in this.child_mediators) { return this.child_mediators[name]; }
-        this.child_mediators[name] = new ModuleMediator(name);        
-    };
-    
-    // Get a child frame
-    ModuleMediator.prototype.getFrame = function(name) {
-        return this.child_mediators[name];
+        this.modules = [];
     };
 
     // Configures the module into the uri structure
     //  - maintains precedence in ordering according to the URI
     //    '#/a' is before '#/a/b' is before '#/a/b/c'
     //  - a duplicate URI is inserted after existing modules
-    ModuleMediator.prototype.addModule = function(new_uri, module) {
-        // Find the last URI that fits inside or matches the new one
+    Mediator.prototype.addModule = function(new_uri, module) {
         module.uri = new_uri;
+        module.mediator = this;
+        // Find the last URI that fits inside or matches the new one
         var new_uri_len = new_uri.length;
-        for (var i=0; i < this.app_modules.length; i++) {
+        for (var i=0; i < this.modules.length; i++) {
             // Lower URI? done
-            var existing_uri = this.app_modules[i].uri;
+            var existing_uri = this.modules[i].uri;
             if ((existing_uri.indexOf(new_uri) == 0) && (new_uri_len < existing_uri.length)) {
                 break;
             }
         }
-        this.app_modules.splice(i, 0, module);
+        this.modules.splice(i, 0, module);
     };
 
     // Gives URIs to modules that match the given regex
     // - if opt_key_index is given, the corresponding group in the regex will be used as they key of
     //   the returned object
-    ModuleMediator.prototype.findModules = function(re, opt_key_index) {
+    Mediator.prototype.findModules = function(re, opt_key_index) {
         var matched_modules = {};
         // Make sure we have a regexp
         if (typeof(re) == 'string') { re = new RegExp(re, 'i'); }
-        for (var i=0; i < this.app_modules.length; i++) {
-            var module = this.app_modules[i];
+        for (var i=0; i < this.modules.length; i++) {
+            var module = this.modules[i];
             // Does the module's uri match?
             var match = re.exec(module.uri);
             if (match) {
@@ -70,10 +58,10 @@
     // Searches modules for handlers for the given request
     //  - returns an array of objects with the keys { cb, module, urimatch, route }
     //  - returns the handlers in the order of module precedence
-    ModuleMediator.prototype.findHandlers = function(request) {
+    Mediator.prototype.findHandlers = function(request) {
         var matched_handlers = [];
-        for (var i=0; i < this.app_modules.length; i++) {
-            var module = this.app_modules[i];
+        for (var i=0; i < this.modules.length; i++) {
+            var module = this.modules[i];
             // See if the module's configured URI fits inside the request URI
             var rel_uri_index = request.uri.indexOf(module.uri);
             if (rel_uri_index != -1) {
@@ -84,20 +72,25 @@
                     var urimatch;
                     // Test URI first
                     if (route.uri) {
+                        if (typeof(route.uri) == 'string') { route.uri = new RegExp(route.uri, 'i'); }
                         urimatch = route.uri.exec(rel_uri);
                         if (!urimatch) { continue; }
                     }
                     // Test the rest
                     var no_match = false;
                     for (var k in route) {
-                        if (k == 'uri') { continue; }
+                        if (k == 'uri' || k == 'cb' || k == 'bubble') { continue; }
+                        if (!(k in request)) {
+                            no_match = true;
+                            break;
+                        }
                         if (route[k] instanceof RegExp) {
                             if (!route[k].test(request[k])) {
                                 no_match = true;
                                 break;
                             }
                         } else {
-                            if (route[k] != request[pk]) {
+                            if (route[k] != request[k]) {
                                 no_match = true;
                                 break;
                             }
@@ -105,13 +98,16 @@
                     }
                     if (no_match) { continue; }
                     // A match, add to the list
-                    var cb = route.handler;
+                    var cb = route.cb;
                     if (typeof(cb) == 'string') {
                         cb = module[cb];
                     }
+                    if (!cb) {
+                        throw "Handler callback not found for route";
+                    }
                     matched_handlers.push({
                         cb:cb,
-                        module:module,
+                        context:module,
                         urimatch:urimatch,
                         route:route
                     });
@@ -125,12 +121,18 @@
     //  - When finished, calls the given cb with the response
     //  - If the request target URI does not start with a hash, will run the remote handler
     var cur_mid = 1;
-    ModuleMediator.prototype.dispatch = function(request, opt_cb, opt_context) {
+    Mediator.prototype.dispatch = function(request, opt_cb, opt_context) {
+        // Clone the request
+        var req_clone = {};
+        for (var k in request) {
+            req_clone[k] = request[k];
+        }
+        request = req_clone;
         // Assign an id, for debugging
         request.__mid = cur_mid++;
         // Log
-        if (linkApp.logMode('traffic')) {
-            console.log('[traffic]', request.mid, request, request.uri, request.accept ? '['+request.accept+']' : '');
+        if (logMode('traffic')) {
+            console.log(this.id ? this.id+'|request' : 'request', request.__mid, request.uri, request.accept ? '['+request.accept+']' : '', request);
         }
         // If remote, use ajax
         if (request.uri.charAt(0) != '#') {
@@ -150,24 +152,25 @@
             }
         }
         // Store the dispatcher handler
-        this.__dispatcher_handler = { cb:opt_cb, context:opt_context };
+        request.__dispatcher_handler = { cb:opt_cb, context:opt_context };
         // Begin handling next tick
-        var self = this;
-        setTimeout(function() { self.runHandlers(request); }, 0);
+        //var self = this;
+        //setTimeout(function() { self.runHandlers(request); }, 0);
+        this.runHandlers(request); // :DEBUG:
     };
 
     // Dispatch sugars
-    ModuleMediator.prototype.get = function(request, opt_cb, opt_context) {
+    Mediator.prototype.get = function(request, opt_cb, opt_context) {
         request.method = 'get';
         this.dispatch(request, opt_cb, opt_context);
     };
-    ModuleMediator.prototype.post = function(request, opt_cb, opt_context) {
+    Mediator.prototype.post = function(request, opt_cb, opt_context) {
         request.method = 'post';
         this.dispatch(request, opt_cb, opt_context);
     };
     
     // (ASYNC) Responds to `dest_request` with the response from `src_request`
-    ModuleMediator.prototype.pipe = function(src_request, dest_request) {
+    Mediator.prototype.pipe = function(src_request, dest_request) {
         this.dispatch(src_request, function(response) {
             var handler = dest_request.__dispatcher_handler;
             if (handler) {
@@ -177,33 +180,33 @@
     };
         
     // Processes the request's handler chain
-    ModuleMediator.prototype.runHandlers = function(request, opt_cur_response) {
+    Mediator.prototype.runHandlers = function(request, response) {
         // Find next handler
         var handler = request.__capture_handlers.shift();
         if (!handler) { handler = request.__bubble_handlers.shift(); }
-        if (!handler) {
-            handler = request.__dispatcher_handler;
+        if (handler) {
+            // Run the handler
+            var promise = handler.cb.call(handler.context, request, response, handler.urimatch);
+            Promise.when(promise, function(response) {
+                this.runHandlers(request, response);
+            }, this);
+        } else {
             // Last callback-- create a response if we dont have one
             if (!response) { response = { code:404 }; }
             // Log
             if (logMode('traffic')) {
-                console.log('[traffic]', request.mid, response, request.uri, response.contenttype ? '['+response.contenttype+']' : '');
+                console.log(this.id ? this.id+'|response' : 'response', request.__mid, request.uri, response['content-type'] ? '['+response['content-type']+']' : '', response);
+            }
+            // Send to dispatcher
+            handler = request.__dispatcher_handler;
+            if (handler && handler.cb) {
+                handler.cb.call(handler.context, response);
             }
         }
-        if (!handler || !handler.cb) {
-            this.renderResponse(request, opt_cur_response);
-            return;
-        } // we're done
-        // Run the handler
-        var promise = handler.cb.call(handler.context, request, opt_cur_response, handler.urimatch);
-        var self = this;
-        Promise.when(promise, function(response) {
-            self.runHandlers(request, response);
-        });
     };
 
     // Renders the response to the mediator's element, if it exists
-    ModuleMediator.prototype.renderResponse = function(request, response) {
+    Mediator.prototype.renderResponse = function(request, response) {
         // Find target element
         var elem = (this.id ? document.getElementById(this.id) : document.body);
         if (!elem) { return; }
@@ -223,6 +226,7 @@
 
     // Promise
     // =======
+    // a value which can defer fulfillment; used for conditional async
     var Promise = function _Promise() {
         this.is_fulfilled = false;
         this.value = null;
@@ -237,6 +241,7 @@
             this.lies_remaining--;
             return;
         }
+        this.is_fulfilled = true;
         // Store
         this.value = value;
         // Call thens
@@ -260,18 +265,18 @@
     // Tells the promise to ignore `fulfill()` calls until the given number
     // - useful for batch async, when you want to run `then` after they all complete
     Promise.prototype.isLiesUntil = function(fulfill_count) {
-        this.lies_remaining = fulfill_count;
+        this.lies_remaining = fulfill_count - 1;
     };
 
-    // Are we still lying?
-    Promise.prototype.isStillLies = function() {
+    // Will the next `fulfill()` execute the callbacks?
+    Promise.prototype.stillLying = function() {
         return (this.lies_remaining > 0);
     };
 
     // Helper to register a then if the given value is a promise (or call immediately if it's another value)
     Promise.when = function(value, cb, opt_context) {
         if (value instanceof Promise) {
-            promise.then(cb, opt_context);
+            value.then(cb, opt_context);
         } else {
             cb.call(opt_context, value);
         }
@@ -279,12 +284,12 @@
 
     // Window Behavior
     // ===============
-    // The top-level mediator for the app
-    var main_frame = new ModuleMediator();
+    // Mediator listening to window events
+    var window_mediator = null;
     // Used to avoid duplicate hash-change handling
-    main_frame.expected_hashchange = null;
+    var expected_hashchange = null;
     // Hash of enabled logging mods
-    main_frame.activeLogModes = {};
+    var activeLogModes = {};
     
     // Adds a style-sheet to the document
     var addStylesheet = function(url) {
@@ -309,7 +314,7 @@
     };
 
     // Helper to send ajax requests
-    var sendAjaxRequest = function(request, opt_cb, opt_cb_context) {
+    var sendAjaxRequest = function(request, opt_cb, opt_context) {
         // Create remote request
         var xhrRequest = new XMLHttpRequest();
         xhrRequest.open(request.method, request.uri, true);
@@ -329,8 +334,8 @@
                 xhrResponse.code = xhrRequest.status;
                 xhrResponse.reason = xhrRequest.statusText;
                 xhrResponse.body = xhrRequest.responseText;
-                if (linkApp.logMode('traffic')) {
-                    console.log('[traffic]', request.__mid, xhrResponse, request.uri, xhrResponse.contenttype ? '['+xhrResponse.contenttype+']' : '');
+                if (logMode('traffic')) {
+                    console.log(this.id ? this.id+'|response' : 'response', request.__mid, request.uri, xhrResponse['content-type'] ? '['+xhrResponse['content-type']+']' : '', xhrResponse);
                 }
                 // Pass on
                 opt_cb.call(opt_context, xhrResponse);
@@ -423,7 +428,7 @@
             request.uri = target_uri;
         } else {
             request.body = data;
-            request.contenttype = enctype;
+            request['content-type'] = enctype;
         }
         
         // Handle
@@ -445,17 +450,16 @@
 
     // Dispatches a request, then renders it to the window on return
     var followRequest = function(request) {
-        main_frame.dispatch(request, function(response) {
+        window_mediator.dispatch(request, function(response) {
             // If a redirect, do that now
             if (response.code >= 300 && response.code < 400) {
                 followRequest({ method:'get', uri:response.location, accept:'text/html' });
                 return;
             }
-            // Render to window
-            // :TODO: move to the frame
-            //renderResponse(document.body);
+            // Render
+            window_mediator.renderResponse(request, response);
             // If not a 205 Reset Content, then change our hash
-            if (response.code() != 205) {
+            if (response.code != 205) {
                 expected_hashchange = request.uri;
                 window.location.hash = request.uri;
             }
@@ -463,7 +467,9 @@
     };
     
     // Registers event listeners to the window and handles the current URI
-    var attachToWindow = function() {
+    var attachToWindow = function(mediator) {
+        window_mediator = mediator;
+        
         // Register handlers
         document.onclick = windowClickHandler;
         document.onsubmit = windowSubmitHandler;
@@ -477,22 +483,9 @@
     
     // Exports
     // =======
-    // Promises
-    Link.Promise        = Promise;
-    // Frames
-    Link.addFrame       = main_frame.addFrame;
-    Link.getFrame       = main_frame.getFrame;
-    // Modules
-    Link.addModule      = main_frame.addModule;
-    Link.findModules    = main_frame.findModules;
-    // Requests
-    Link.dispatch       = main_frame.dispatch;
-    Link.get            = main_frame.get;
-    Link.post           = main_frame.post;
-    Link.pipe           = main_frame.pipe;
-    // Util
-    Link.addStylesheet  = addStyleSheet;
-    Link.logMode        = logMode;
-    // Window
-    Link.attachToWindow = attachToWindow;
+    Link.Promise         = Promise;
+    Link.Mediator        = Mediator;
+    Link.logMode         = logMode;
+    Link.addStylesheet   = addStylesheet;
+    Link.attachToWindow  = attachToWindow;
 }).call(this);

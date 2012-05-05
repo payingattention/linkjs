@@ -1,39 +1,41 @@
-define(['link/module', './views'], function(Module, Views) {
+(function(Modules) {
     // Fixture
     // =======
     // Provides static debug data
-    var FixtureService = Module({
-        // Handler routes
-        routes:[
-            { cb:'messagesHandler', uri:'^/?$', accept:'js/array' },
-            { cb:'messageHtmlHandler', uri:'^/([0-9]+)/?$', accept:'text/html' },
-            { cb:'settingsHandler', uri:'^/settings/?$' }
-        ],
-        // Attributes
-        serviceName:'Local',
-        // Fixture data
-        messages: [
+    var FixtureService = function() {
+        this.serviceName = 'Local';
+        // fixture data
+        this.messages = [
             { date:new Date('April 23 2012 21:20'), author:'rodger', recp:['bsmith'], subject:'Hey, Buddy!', body:'How are you doing?', re:null },
             { date:new Date('April 24 2012 12:49'), author:'bsmith', recp:['bsmith', 'asmitherson'], subject:'About the meeting', body:'Important business conversation. Things people talk about and stuff', re:null },
             { date:new Date('April 25 2012 15:12'), author:'asmitherson', recp:['bsmith', 'asmitherson'], subject:'RE: About the meeting', body:'Other stuff about business or whatever.', re:2 }
-        ]
-    });
+        ];
+    };
+    
+    // Handler Routes
+    // ==============
+    FixtureService.prototype.routes = [
+        { cb:'messagesHandler', uri:'^/?$', accept:'js/array' },
+        { cb:'messageHtmlHandler', uri:'^/([0-9]+)/?$', accept:'text/html' },
+        { cb:'settingsHandler', uri:'^/settings/?$' }
+    ];
     
     // Handlers
     // ========
     FixtureService.prototype.messagesHandler = function(request) {
         // Collect messages
         var retMessages = [];
-        _.each(this.messages, function(message, mid) {
+        for (var i=0; i < this.messages.length; i++) {
+            var message = this.messages[i];
             retMessages.push({
-                id:mid,
+                id:i,
                 service:this.serviceName,
                 date:message.date,
                 summary:'<strong>' + message.author + '</strong> ' + message.subject,
-                view_link:this.uri + '/' + mid
+                view_link:this.uri + '/' + i
             });
-        }, this);
-        return { code:200, body:retMessages, contenttype:'js/array' };
+        }
+        return { code:200, body:retMessages, 'content-type':'js/array' };
     };    
     FixtureService.prototype.messageHtmlHandler = function(request, response, urimatch) {
         // Find message
@@ -41,16 +43,17 @@ define(['link/module', './views'], function(Module, Views) {
         if (!message) { return { code:404 }; }
         // Build html
         var messageView = new Views.Message(message);
-        return { code:200, body:messageView.toString(), contenttype:'text/html' };
+        return { code:200, body:messageView.toString(), 'content-type':'text/html' };
     };
     FixtureService.prototype.settingsHandler = function(request) {
         if (request.accept == 'js/object') {
-            return { code:200, body:{ name:this.serviceName }, contenttype:'js/array' };
+            return { code:200, body:{ name:this.serviceName }, 'content-type':'js/object' };
         } else if (request.accept == 'text/html') {
             // :TODO:
-            return { code:200, body:'Fixture Settings', contenttype:'text/html' };
+            return { code:200, body:'Fixture Settings', 'content-type':'text/html' };
         }
     };
 
-    return FixtureService;
-});
+    // Export
+    Modules.FixtureService = FixtureService;
+})(Modules);

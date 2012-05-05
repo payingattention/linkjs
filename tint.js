@@ -147,14 +147,14 @@
             var param = this[varName];
             if (!param) { param = ''; }
             if (Array.isArray(param)) {
-                param = Util.arrayToString(param);
+                param = arrayToString(param);
             }
             if (typeof(param) == 'object') {
                 param = param.toString();
             }
             if (typeof(param) == 'function') {
                 if (this['_' + varName]) {
-                    param = Util.arrayToString(this['_' + varName]);
+                    param = arrayToString(this['_' + varName]);
                 } else {
                     param = '';
                 }
@@ -164,7 +164,7 @@
         if (!params) { return ''; }
         // Run arrayToString using our children as params
         params.unshift(this._outParts);
-        return Util.arrayToString.apply(null, params);
+        return arrayToString.apply(null, params);
     };
 
     var TintFunction = function(name, paramList, BlockDef) {
@@ -185,6 +185,27 @@
             this['_' + name].push(newBlock);
             return newBlock;
         };
+    };
+
+    // Takes an array of strings and an arbitrary number of arguments
+    //  - if the array element is a number, will replace that element with the argument in that position
+    //  - recurses any elements which are arrays
+    var arrayToString = function(arr) {
+        var str = '', args = Array.prototype.splice.call(arguments, 1);
+        for (var i=0; i < arr.length; i++) {
+            if (typeof(arr[i]) == 'string') {
+                str += arr[i];
+            } else if (typeof(arr[i]) == 'number') {
+                str += args[arr[i]];
+            } else if (Array.isArray(arr[i])) {
+                args.unshift(arr[i]);
+                str += arrayToString.apply(null, args);
+                args.shift();
+            } else {
+                str += arr[i].toString();
+            }
+        }
+        return str;
     };
 
     // Exports
