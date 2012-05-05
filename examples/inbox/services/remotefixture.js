@@ -2,10 +2,10 @@
     // Remote Fixture
     // ==============
     // Provides static debug data from a remote source
-    var RemoteFixture = function() {
+    var RemoteFixture = function(name) {
+        this.serviceName = name;
         this.messages = {};
         this.remoteLink = { uri:'/inbox/remote_fixture.json', accept:'application/json' };
-        this.serviceName = 'Remote';
     };
     
     // Handler Routes
@@ -13,7 +13,7 @@
     RemoteFixture.prototype.routes = [
         { cb:'messagesHandler', uri:'^/?$', accept:'js/array' },
         { cb:'messageHtmlHandler', uri:'^/([0-9]+)/?$', accept:'text/html' },
-        { cb:'settingsHandler', uri:'^/settings/?$' }
+        { cb:'settingsHandler', uri:'^/settings/?$', accept:'text/html' }
     ];
 
     // Helpers
@@ -72,12 +72,8 @@
         return promise;
     };
     RemoteFixture.prototype.settingsHandler = function(request) {
-        if (request.accept == 'js/object') {
-            return { code:200, body:{ name:this.serviceName }, 'content-type':'js/object' };
-        } else if (request.accept == 'text/html') {
-            // :TODO:
-            return { code:200, body:'Remote Fixture Settings', 'content-type':'text/html' };
-        }
+        // :TODO:
+        return { code:200, body:'Remote Fixture Settings', 'content-type':'text/html' };
     };
 
     // Export

@@ -2,15 +2,14 @@
     // Nav
     // ======
     var navTmplElem = document.getElementById('nav-template');
-    var Nav = Tint.compile(navTmplElem.innerHTML, function(baseUri) {
-        this.baseUri = baseUri;
+    var Nav = Tint.compile(navTmplElem.innerHTML, function() {
         this.item().header('Inbox');
-        this.item().link('Messages', 'inbox', baseUri);
-        this.item().link('Settings', 'cog', baseUri + '/settings');
+        this.item().link('Messages', 'inbox', '#');
+        this.item().link('Settings', 'cog', '#/settings');
         this.item().header('Services');
     });
     Nav.prototype.addService = function(service) {
-        this.item().link(service.name, 'envelope', this.baseUri + service.uri)
+        this.item().link(service.name, 'envelope', service.uri)
     };
     
     // Inbox

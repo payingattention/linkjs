@@ -2,8 +2,8 @@
     // Fixture
     // =======
     // Provides static debug data
-    var FixtureService = function() {
-        this.serviceName = 'Local';
+    var FixtureService = function(name) {
+        this.serviceName = name;
         // fixture data
         this.messages = [
             { date:new Date('April 23 2012 21:20'), author:'rodger', recp:['bsmith'], subject:'Hey, Buddy!', body:'How are you doing?', re:null },
@@ -17,7 +17,7 @@
     FixtureService.prototype.routes = [
         { cb:'messagesHandler', uri:'^/?$', accept:'js/array' },
         { cb:'messageHtmlHandler', uri:'^/([0-9]+)/?$', accept:'text/html' },
-        { cb:'settingsHandler', uri:'^/settings/?$' }
+        { cb:'settingsHandler', uri:'^/settings/?$', accept:'text/html' }
     ];
     
     // Handlers
@@ -46,12 +46,8 @@
         return { code:200, body:messageView.toString(), 'content-type':'text/html' };
     };
     FixtureService.prototype.settingsHandler = function(request) {
-        if (request.accept == 'js/object') {
-            return { code:200, body:{ name:this.serviceName }, 'content-type':'js/object' };
-        } else if (request.accept == 'text/html') {
-            // :TODO:
-            return { code:200, body:'Fixture Settings', 'content-type':'text/html' };
-        }
+        // :TODO:
+        return { code:200, body:'Fixture Settings', 'content-type':'text/html' };
     };
 
     // Export

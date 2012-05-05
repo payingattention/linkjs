@@ -64,6 +64,12 @@
         <script src="inbox/services/remotefixture.js"></script>
         <script>
             function app_init() {
+                // Service configuration
+                var services = {
+                    local:{ module:Modules.FixtureService, name:'Fixture' },
+                    remote:{ module:Modules.RemoteFixtureService, name:'Remote' }
+                };                    
+            
                 // Create mediators
                 var app = new Link.Mediator();
                 var nav = new Link.Mediator('nav');
@@ -71,10 +77,13 @@
             
                 // Configure modules
                 app.addModule('#', new Modules.Layout(nav, content));
-                nav.addModule('#', new Modules.Nav());
+                nav.addModule('#', new Modules.Nav(services));
                 content.addModule('#', new Modules.Inbox());
-                content.addModule('#/services/local', new Modules.FixtureService());
-                content.addModule('#/services/remote', new Modules.RemoteFixtureService());
+                for (var uri in services) {
+                    var mod = services[uri].module;
+                    var inst = new mod(services[uri].name);
+                    content.addModule('#/services/' + uri, inst);
+                }
                 
                 // Start application
                 Link.logMode('traffic', true);

@@ -14,8 +14,10 @@
 
     // Handlers
     Layout.prototype.rerouter = function(request) {
-        // Inform nav of the new URI
-        // :TODO:
+        // Get the nav, with highlighting for the given uri
+        this.navMediator.get({ uri:'#', accept:'text/html' }, function(response) {
+            this.navMediator.renderResponse(request, response);
+        }, this);
         // Pipe request to content directly
         this.contentMediator.dispatch(request, function(response) {
             this.contentMediator.renderResponse(request, response);

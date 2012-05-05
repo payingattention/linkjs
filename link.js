@@ -154,9 +154,8 @@
         // Store the dispatcher handler
         request.__dispatcher_handler = { cb:opt_cb, context:opt_context };
         // Begin handling next tick
-        //var self = this;
-        //setTimeout(function() { self.runHandlers(request); }, 0);
-        this.runHandlers(request); // :DEBUG:
+        var self = this;
+        setTimeout(function() { self.runHandlers(request); }, 0);
     };
 
     // Dispatch sugars
@@ -213,7 +212,7 @@
 
         // Set the frame data
         if (request) {
-            elem.setAttribute('data-frame-uri', request.uri);
+            elem.setAttribute('data-uri', request.uri);
         }
         
         // Render

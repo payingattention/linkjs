@@ -21,7 +21,6 @@
     // one-time init
     Inbox.prototype.prehandler = function(request) {  
         if (this.serviceCount > 0) { return; }
-        var promise = new (Link.Promise)();
         
         // Load stylesheet
         Link.addStylesheet('inbox/style.css');
@@ -32,30 +31,17 @@
             // Store links to the service
             this.services[slug] = {
                 messagesLink:{ uri:serviceUris[slug], accept:'js/array' },
-                settingsLink:{ uri:serviceUris[slug] + '/settings', accept:'js/object' },
-                settingsHtmlLink:{ uri:serviceUris[slug] + '/settings', accept:'text/html', pragma:'partial' },
+                settingsLink:{ uri:serviceUris[slug] + '/settings', accept:'text/html', pragma:'partial' },
             };
             this.serviceCount++;
         }
-        
-        // Request the config from every service
-        promise.isLiesUntil(this.serviceCount); // only run CBs after all services have responded
-        for (var slug in this.services) {
-            (function(mediator, service) {
-                mediator.get(service.settingsLink, function(response) {
-                    if (response.code == 200) { service.settings = response.body; }
-                    promise.fulfill();
-                });
-            })(this.mediator, this.services[slug]);
-        }
-        return promise;
     };
 
     // Resource Handlers
     // =================
     Inbox.prototype.mainInbox = function() {
         // Promise to respond after the services all sync
-        var promise = new (Link.Promise)();
+        var promise = new Link.Promise();
         promise.isLiesUntil(this.serviceCount);
         // Get messages from all services
         var allMessages = [];
@@ -92,10 +78,10 @@
         if (!service) { return { code:404 }; }
         
         // Dispatch for messages
-        var promise = new (Link.Promise)();
+        var promise = new Link.Promise();
         this.mediator.get(service.messagesLink, function(response) {
             // Cache
-            if (response.code == 200) { this.messages = response.body(); }
+            if (response.code == 200) { this.messages = response.body; }
             // Render & respond
             var inboxView = new Views.Inbox('todo'); //:TODO:
             inboxView.addMessages(service.messages);
@@ -109,14 +95,14 @@
     };
     Inbox.prototype.settings = function(request) {
         // Set up async response
-        var promise = new (Link.Promise)();
+        var promise = new Link.Promise();
         promise.isLiesUntil(this.serviceCount);
         var finalResponse = { code:200, 'content-type':'text/html', body:'' };
         
         // Get the settings html from each service
         for (var slug in this.services) {
             (function(mediator, service) {
-                mediator.get(service.settingsHtmlLink, function(response) {
+                mediator.get(service.settingsLink, function(response) {
                     if (response.code == 200) { finalResponse.body += response.body; }
                     promise.fulfill(finalResponse);
                 });
