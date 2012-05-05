@@ -1,97 +1,88 @@
 (function(Modules) {
     // Module Definition
     // =================
-    var Inbox = Link.Module({
-        // Handler routes
-        routes:[
-            { cb:'prehandler', uri:'.*', accept:'text/html' },
-            { cb:'htmlLayout', uri:'.*', method:'get', accept:'text/html', bubble:true },
-            { cb:'mainInbox', uri:'$/?^', method:'get', accept:'text/html' },
-            { cb:'serviceInbox', uri:'$/services/([^/]+)/?$', method:'get', accept:'text/html' },
-            { cb:'settings', uri:'$/settings/?^', method:'get', accept:'text/html' }
-        ],
-        // Attributes
-        services:{},
-        serviceCount:0,
-        cachedInboxHtml:''
-    });
+    var Inbox = function() {
+        this.services = {};
+        this.serviceCount = 0;
+    };
+
+    // Handler routes
+    Inbox.prototype.routes = [
+        { cb:'prehandler', uri:'.*', accept:'text/html' },
+        { cb:'mainInbox', uri:'$/?^', method:'get', accept:'text/html' },
+        { cb:'serviceInbox', uri:'$/services/([^/]+)/?$', method:'get', accept:'text/html' },
+        { cb:'settings', uri:'$/settings/?^', method:'get', accept:'text/html' }
+    ];
     
     // Pre-handler
     // ===========
-    Inbox.prototype.prehandler = function(request) {        
-        // Do one-time init
+    // one-time init
+    Inbox.prototype.prehandler = function(request) {  
         if (this.serviceCount > 0) { return; }
-        var promise = _.makePromise();
+        var promise = new Link.Promise();
         
         // Load stylesheet
-        app.addStylesheet('style.css');
+        Link.addStylesheet('style.css');
         
         // Find all services configged to ./services/*/
-        _.each(app.findModules(this.uri + '/services/([^/]+)/?$', 1), function(serviceUri, slug) {
+        var serviceUris = Link.findModules(this.uri + '/services/([^/]+)/?$', 1);
+        for (var slug in serviceUris) {
             // Store links to the service
             this.services[slug] = {
-                messagesLink:{ uri:serviceUri, accept:'js/array' },
-                settingsLink:{ uri:serviceUri + 'settings', accept:'js/object' },
-                settingsHtmlLink:{ uri:serviceUri + 'settings', accept:'text/html', pragma:'partial' },
-                cachedInboxHtml:''
+                messagesLink:{ uri:serviceUris[slug], accept:'js/array' },
+                settingsLink:{ uri:serviceUris[slug] + 'settings', accept:'js/object' },
+                settingsHtmlLink:{ uri:serviceUris[slug] + 'settings', accept:'text/html', pragma:'partial' },
             };
             this.serviceCount++;
-        }, this);
+        }
         
         // Request the config from every service
         promise.isLiesUntil(this.serviceCount);
-        _.each(this.services, function(service, slug) {
-            app.get(service.settingsLink, function(response) {
-                if (response.code == 200) { service.settings = response.body; }
-                promise.fulfill();
-            });
-        });
-        return promise;
-    };
-    
-    // HTML layout postprocessor
-    // =========================
-    Inbox.prototype.htmlLayout = function(request, response) { // (will run last; bubble handlers are FILO)
-        if (response && !_.include(request.pragma, 'partial')) { // not a partial request...
-            // Get content
-            var content = (response.code < 300) ?
-                response.body :
-                "<div class=\"alert alert-error\">Error getting '"+request.uri+"': "+response.code+"</div>";
-            
-            // Wrap in layout
-            var layoutView = new Views.Layout(this.uri, content);
-            _.each(this.services, function(service) {
-                layoutView.addNavService(service);
-            });
-            response.body = layoutView.toString();
-            response.contenttype = 'text/html';
+        for (var slug in this.services) {
+            (function(service) {
+                app.get(service.settingsLink, function(response) {
+                    if (response.code == 200) { service.settings = response.body; }
+                    promise.fulfill();
+                });
+            })(this.services[slug]);
         }
-        return response;
+        return promise;
     };
 
     // Resource Handlers
     // =================
     Inbox.prototype.mainInbox = function() {
-        // Sync all services, then render to the DOM as each responds
-        var orgLocation = window.location, allMessages = [];
-        _.each(this.services, function(service) {
-            app.get(service.messagesLink, function(response) {
-                // Cache
-                if (response.code == 200) {
-                    service.messages = response.body;
-                    allMessages = allMessages.concat(service.messages);
-                }
-                // Render
-                if (orgLocation == window.location) {
-                    var inboxView = new Views.Inbox(this.uri());
-                    inboxView.addMessages(allMessages);
-                    document.getElementById('inbox-content').innerHTML = this.cachedInboxHtml = inboxView.toString();
-                }
-            }, this);
-        }, this);
-
-        // Respond with cached inbox now
-        return { code:200, contenttype:'text/html', body:this.cachedInboxHtml };
+        // Promise to respond after the services all sync
+        var promise = new Link.Promise();
+        promise.isLiesUntil(this.serviceCount);
+        // Get messages from all services
+        var allMessages = [];
+        for (var slug in this.services) {
+            // Capture the service in a closure
+            (function(service) {
+                app.get(service.messagesLink, function(response) {
+                    // Cache
+                    if (response.code == 200) {
+                        service.messages = response.body;
+                        allMessages = allMessages.concat(service.messages);
+                    }
+                    if (!promise.isStillLies()) {
+                        // Render response
+                        var inboxView = new Views.Inbox(this.uri());
+                        inboxView.addMessages(allMessages);
+                        promise.fulfill({
+                            code:200,
+                            body:inboxView.toString(),
+                            contenttype:'text/html'
+                        });
+                    } else {
+                        // Don't go to as much effort with the lie
+                        promise.fulfill();
+                    }
+                }, this);
+            })(this.services[slug]);
+        }
+        return promise;
     };
     Inbox.prototype.serviceInbox = function(request, response, urimatch) {
         // Get the service
@@ -99,33 +90,35 @@
         if (!service) { return { code:404 }; }
         
         // Dispatch for messages
-        var orgLocation = window.location;
+        var promise = new Link.Promise();
         app.get(service.messagesLink, function(response) {
             // Cache
             if (response.code == 200) { this.messages = response.body(); }
-            // Render
-            if (orgLocation == window.location) {
-                var inboxView = new Views.Inbox('todo'); //:TODO:
-                inboxView.addMessages(service.messages);
-                document.getElementById('inbox-content').innerHTML = service.cachedInbox = inboxView.toString();
-            }
+            // Render & respond
+            var inboxView = new Views.Inbox('todo'); //:TODO:
+            inboxView.addMessages(service.messages);
+            promise.fulfill({
+                code:200,
+                body:inboxView.toString(),
+                contenttype:'text/html'
+            });
         }, service);
-
-        // Respond now with cached html
-        return { code:200, contenttype:'text/html', body:service.cachedInbox };
+        return promise;
     };
     Inbox.prototype.settings = function(request) {
         // Set up async response
-        var promise = _.makePromise();
+        var promise = new Link.Promise();
+        promise.isLiesUntil(this.serviceCount);
         var finalResponse = { code:200, contenttype:'text/html', body:'' };
-        var respond = _.after(this.serviceCount, function() { promise.fulfill(finalResponse); });
         
         // Get the settings html from each service
-        _.each(this.services, function(service, slug) {
-            app.get(service.settingsHtmlLink, function(response) {
-                if (response.code == 200) { finalResponse.body += response.body; }
-                respond();
-            });
+        for (var slug in this.services) {
+            (function(service) {
+                app.get(service.settingsHtmlLink, function(response) {
+                    if (response.code == 200) { finalResponse.body += response.body; }
+                    promise.fulfill(finalResponse);
+                });
+            })(this.services[slug]);
         });
         return promise;
     };

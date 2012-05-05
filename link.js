@@ -7,7 +7,7 @@
     } else {
         Link = this.Link = {};
     }
-    
+
     // ModuleMediator
     // ==============
     // passes requests/responses around a uri structure of modules
@@ -68,7 +68,7 @@
     };
 
     // Searches modules for handlers for the given request
-    //  - returns an array of objects with the keys { cb, module, urimatch, match_params }
+    //  - returns an array of objects with the keys { cb, module, urimatch, route }
     //  - returns the handlers in the order of module precedence
     ModuleMediator.prototype.findHandlers = function(request) {
         var matched_handlers = [];
@@ -83,22 +83,21 @@
                     var route = module.routes[j]
                     var urimatch;
                     // Test URI first
-                    if (route.match_params.uri) {
-                        urimatch = route.match_params.uri.exec(rel_uri);
+                    if (route.uri) {
+                        urimatch = route.uri.exec(rel_uri);
                         if (!urimatch) { continue; }
                     }
                     // Test the rest
                     var no_match = false;
-                    for (var pk in route.match_params) {
-                        if (pk == 'uri') { continue; }
-                        var param = route.match_params[pk];
-                        if (param instanceof RegExp) {
-                            if (!param.test(request[pk])) {
+                    for (var k in route) {
+                        if (k == 'uri') { continue; }
+                        if (route[k] instanceof RegExp) {
+                            if (!route[k].test(request[k])) {
                                 no_match = true;
                                 break;
                             }
                         } else {
-                            if (param != request[pk]) {
+                            if (route[k] != request[pk]) {
                                 no_match = true;
                                 break;
                             }
@@ -114,7 +113,7 @@
                         cb:cb,
                         module:module,
                         urimatch:urimatch,
-                        match_params:route.match_params
+                        route:route
                     });
                 }
             }
@@ -143,7 +142,7 @@
         request.__capture_handlers = [];
         var handlers = this.findHandlers(request);
         for (var i=0; i < handlers.length; i++) {
-            if (handlers[i].match_params.bubble) {
+            if (handlers[i].route.bubble) {
                 // Bubble handlers are FILO, so we prepend
                 request.__bubble_handlers.unshift(handlers[i]);
             } else {
@@ -227,15 +226,15 @@
     var Promise = function _Promise() {
         this.is_fulfilled = false;
         this.value = null;
-        this.is_lies_until = 0;
+        this.lies_remaining = 0;
         this.then_cbs = [];
     };
 
     // Runs any `then` callbacks with the given value
     Promise.prototype.fulfill = function(value) {
         // Wait until the lies are over
-        if (this.is_lies_until > 0) {
-            this.is_lies_until--;
+        if (this.lies_remaining > 0) {
+            this.lies_remaining--;
             return;
         }
         // Store
@@ -261,7 +260,12 @@
     // Tells the promise to ignore `fulfill()` calls until the given number
     // - useful for batch async, when you want to run `then` after they all complete
     Promise.prototype.isLiesUntil = function(fulfill_count) {
-        this.is_lies_until = fulfill_count;
+        this.lies_remaining = fulfill_count;
+    };
+
+    // Are we still lying?
+    Promise.prototype.isStillLies = function() {
+        return (this.lies_remaining > 0);
     };
 
     // Helper to register a then if the given value is a promise (or call immediately if it's another value)
