@@ -56,7 +56,7 @@
     };
 
     // Searches modules for handlers for the given request
-    //  - returns an array of objects with the keys { cb, module, urimatch, route }
+    //  - returns an array of objects with the keys { cb, module, match, route }
     //  - returns the handlers in the order of module precedence
     Mediator.prototype.findHandlers = function(request) {
         var matched_handlers = [];
@@ -69,36 +69,35 @@
                 var rel_uri = request.uri.substr(module.uri.length);
                 for (var j=0; j < module.routes.length; j++) {
                     var route = module.routes[j]
-                    var urimatch;
-                    // Test URI first
-                    if (route.uri) {
-                        if (typeof(route.uri) == 'string') { route.uri = new RegExp(route.uri, 'i'); }
-                        urimatch = route.uri.exec(rel_uri);
-                        if (!urimatch) { continue; }
-                    }
-                    // Test the rest
-                    var no_match = false;
+                    var match, matches = {};
+                    // Test route params
                     for (var k in route) {
-                        if (k == 'uri' || k == 'cb' || k == 'bubble') { continue; }
+                        match = null;
+                        if (k == 'cb' || k == 'bubble') { continue; }
+                        // key exists
                         if (!(k in request)) {
-                            no_match = true;
                             break;
                         }
+                        var reqVal = (k == 'uri' ? rel_uri : request[k]);
+                        // convert strings to regexps
+                        if (typeof(route[k]) == 'string') { route[k] = new RegExp(route[k], 'i'); }
+                        // regexp test
                         if (route[k] instanceof RegExp) {
-                            if (!route[k].test(request[k])) {
-                                no_match = true;
-                                break;
-                            }
-                        } else {
-                            if (route[k] != request[k]) {
-                                no_match = true;
-                                break;
-                            }
+                            match = route[k].exec(reqVal)
+                            if (!match) { break; }
+                            matches[k] = match;
+                        }
+                        // standard equality
+                        else {
+                            if (route[k] != reqVal) { break; }
+                            matches[k] = reqVal;
+                            match = true;
                         }
                     }
-                    if (no_match) { continue; }
+                    // If match is not truthy, the break condition was a nonmatch
+                    if (!match) { continue; }
                     // A match, add to the list
-                    var cb = route.cb;
+                    var cb = module[route.cb];
                     if (typeof(cb) == 'string') {
                         cb = module[cb];
                     }
@@ -108,7 +107,7 @@
                     matched_handlers.push({
                         cb:cb,
                         context:module,
-                        urimatch:urimatch,
+                        match:matches,
                         route:route
                     });
                 }
@@ -185,7 +184,7 @@
         if (!handler) { handler = request.__bubble_handlers.shift(); }
         if (handler) {
             // Run the handler
-            var promise = handler.cb.call(handler.context, request, response, handler.urimatch);
+            var promise = handler.cb.call(handler.context, request, response, handler.match);
             Promise.when(promise, function(response) {
                 this.runHandlers(request, response);
             }, this);

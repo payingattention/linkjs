@@ -57,13 +57,13 @@
         });
         return promise;
     };    
-    RemoteFixture.prototype.messageHtmlHandler = function(request, response, urimatch) {
+    RemoteFixture.prototype.messageHtmlHandler = function(request, response, match) {
         var promise = new Link.Promise();
         // Sync messages
         this.getMessages(function(errCode) {
             if (errCode) { return promise.fulfill({ code:errCode }); }
             // Get message
-            var message = this.messages[urimatch[1]];
+            var message = this.messages[match.uri[1]];
             if (!message) { return promise.fulfill({ code:404 }); }
             // Build response
             var messageView = new Views.Message(message);

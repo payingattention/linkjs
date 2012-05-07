@@ -72,9 +72,9 @@
         }
         return promise;
     };
-    Inbox.prototype.serviceInbox = function(request, response, urimatch) {
+    Inbox.prototype.serviceInbox = function(request, response, match) {
         // Get the service
-        var service = this.services[urimatch[1]];
+        var service = this.services[match.uri[1]];
         if (!service) { return { code:404 }; }
         
         // Dispatch for messages

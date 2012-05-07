@@ -37,9 +37,9 @@
         }
         return { code:200, body:retMessages, 'content-type':'js/array' };
     };    
-    FixtureService.prototype.messageHtmlHandler = function(request, response, urimatch) {
+    FixtureService.prototype.messageHtmlHandler = function(request, response, match) {
         // Find message
-        var message = this.messages[urimatch[1]];
+        var message = this.messages[match.uri[1]];
         if (!message) { return { code:404 }; }
         // Build html
         var messageView = new Views.Message(message);
