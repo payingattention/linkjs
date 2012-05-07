@@ -2,63 +2,85 @@
 
 A Javascript mediator framework designed for composability in browser applications using the REST style.
 
-### [Click here for a live demo](#todo)
+### [Click here for a live demo (todo)](#todo)
 
 ## Usage
 
-Modules export routes for handling HTTP requests:
+Modules export routes for handling HTTP-style requests:
 
 ```javascript
-    // Declare attributes in the constructor
-    var AccountModule = new Module({
-        activeUsers:[],
-        messages:[]
-    });
-    // Add routes
-    AccountModule.get({ uri:'^/?$', accept:'text/html' },   'dashboardHandler');
-    AccountModule.route({ uri:'^/message/([0-9]+)/?$' },    'messageHandler');
-    AccountModule.post({ uri:'^/message/([0-9]+/reply?$' }, 'messageReplyHandler');
+    // typical constructor
+    var AccountModule = function() {
+        this.messages = [];
+    };
+    // `cb` is the handler, and everything else is used to match the request to the route
+    AccountModule.prototype.routes = [
+        { cb:'dashboard', uri:'^/?$', method:'get' accept:'text/html' },
+        { cb:'message', uri:'^/message/([0-9]+)/?$' },
+        { cb:'messageReply', uri:'^/message/([0-9]+/reply?$', method:'post' }
+    ];
 ```
 
 The modules are then configured into a URI structure to compose the application:
 
 ```javascript
-    ShopModule.addTo('#');
-    AccountModule.addTo('#/account');
-    CartModule.addTo('#/cart');
-    // the routes operate relative to the module's configured URI
+    var app = new Link.Mediator();
+    app.addModule('#', new StoreModule());
+    app.addModule('#/account', new AccountModule());
+    app.addModule('#/cart', new CartModule());
+    // the modules' routes operate relative to their configured URIs
+    Link.attachToWindow(app);
 ```
 
-After `app.init()`, Link intercepts `<a>` clicks and `<form>` submits. If their targets start with
-a hash (#), the modules' handlers will respond to the request, and Link will render the response.
+Link intercepts `<a>` clicks and `<form>` submits. If their targets start with a hash (#), Link routes the
+request through the configured modules, then renders the response. This allows you to build client-side apps
+as if they were remote websites, possibly without ever accessing the DOM directly.
 
-Modules can also build their own requests:
+Modules can also send their own requests:
 
 ```javascript
-    var request = new Request('get', this.users_link, { accept:'application/json' });
-    request.dispatch(function(request, response) {
-        if (response.ok()) {
-            this.users = response.body();
-        }
+    // get users
+    this.mediator.dispatch({ method:'get', uri:this.users_link, accept:'js/array' }, function(response) {
+        if (response.code == 200) { this.users = response.body; }
     }, this);
 ```
 
-Which are responded to with handlers:
+Responses are returned by handlers:
 
 ```javascript
-    UsersModule.get({ uri:'^/?$', accept:'application/json' }, function(request) {
-        request.respond(200, this.activeUsers, 'application/json');
+    // `/users`
+    UsersModule.prototype.usersHandler = function(request) {
+        return { code:200, body:this.activeUsers, 'content-type':'js/array' };
+        // it may be wise to clone activeUsers before responding with it
     });
 ```
 
-While this style may not be succinct, it exposes the internals of the application in a discoverable
-and extensible way. Developers can log request traffic to learn about the application flow. Then,
-either by configuration or convention (via `app.findModules()`) components can be written to interface
-with each other to form the application.
+If some async work must be done first, the handler can return a `Promise`, and Link will pause the handler chain until
+the promise is fulfilled:
 
-To get a better feel for this, check out the inbox application in `examples/`.
+
+```javascript
+    UsersModule.prototype.usersHandler = function(request) {
+        var promise = new Link.Promise();
+        this.someAsyncAction(function(data) {
+            promise.fulfill({ code:200, body:data, 'content-type':'js/array' })
+        });
+        return promise;
+    });
+```
+
+The vision for Link is to create applications which are easy to extend due to the constraints of the
+interfaces. For instance, an inbox application could use a single REST API for messaging services, then consume
+any number of services which employ the API, allowing direct integration from multiple different sources. This is
+exemplified in the inbox demo, which can be found in `/examples`.
+
+## The Inbox Example
+
+:TODO: a detailed explanation of how the inbox example works
 
 ## Response Composition
+
+:TODO: update this to match the current API
 
 Multiple handlers can be configured to match the same route. In that event, they are added into a
 handler chain which respects the order of declaration:
@@ -96,28 +118,6 @@ across modules.
 ```
 
 ## Remote Requests
-
-:TODO:
-
-## Advanced Usage
-
-**App.findModules**
-
-:TODO:
-
-**Immediate Response During Ajax**
-
-:TODO:
-
-**Custom Response Rendering**
-
-:TODO:
-
-**Request Factories**
-
-:TODO:
-
-**Batch Dispatches**
 
 :TODO:
 
