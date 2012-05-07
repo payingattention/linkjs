@@ -1,0 +1,11 @@
+{
+    "name":"link-js",
+    "description":"Mediator framework designed for composability in browser applications using the REST style",
+    "homepage":"http://github.com/pfraze/link-js",
+    "keywords":["mediator","modules","server","client","browser"],
+    "author":"Paul Frazee <pfrazee@gmail.com>",
+    "repository":{"type":"git","url":"git://github.com/pfraze/link-js.git"},
+    "main":"link.js",
+    "version":"0.0.1"
+}
+    
