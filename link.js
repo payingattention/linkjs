@@ -1,13 +1,12 @@
 (function() {
     // Set up our namespace
-    // (from the backbone guys)
     var Link;
     if (typeof exports != 'undefined') {
         Link = exports;
     } else {
         Link = this.Link = {};
     }
-
+    
     // Mediator
     // ========
     // passes requests/responses around a uri structure of modules
@@ -73,7 +72,7 @@
                     // Test route params
                     for (var k in route) {
                         match = null;
-                        if (k == 'cb' || k == 'bubble') { continue; }
+                        if (k == 'cb' || k == 'bubble') { match = true; continue; }
                         // key exists
                         if (!(k in request)) {
                             break;
@@ -133,8 +132,8 @@
         if (logMode('traffic')) {
             console.log(this.id ? this.id+'|request' : 'request', request.__mid, request.uri, request.accept ? '['+request.accept+']' : '', request);
         }
-        // If remote, use ajax
-        if (request.uri.charAt(0) != '#') {
+        // If in browser & no hash, use ajax
+        if (typeof window !== 'undefined' && request.uri.charAt(0) != '#') {
             sendAjaxRequest(request, opt_cb, opt_context);
             return;
         }
