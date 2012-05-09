@@ -1,4 +1,4 @@
-# Link
+# LinkJS
 
 A Javascript mediator framework designed for composability in browser applications using the REST style.
 

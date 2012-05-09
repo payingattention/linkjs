@@ -395,10 +395,11 @@
         if (!enctype) { enctype = form.enctype; }
         if (!method) { method = form.method; }
 
-        // No target uri means use the current URI
-        var base_uri = form.baseURI;
-        var hash_pos = form.baseURI.indexOf('#');
-        if (hash_pos != -1) { target_uri = base_uri.substring(hash_pos); }
+        // :TODO: actually use the enctype?
+        enctype = 'js/object';
+        
+        // Strip the base URI
+        target_uri = target_uri.substring(form.baseURI.length);
         
         // Default to the current resource
         if (!target_uri) { target_uri = window.location.hash; }
@@ -457,8 +458,11 @@
             window_mediator.renderResponse(request, response);
             // If not a 205 Reset Content, then change our hash
             if (response.code != 205) {
-                expected_hashchange = request.uri;
-                window.location.hash = request.uri;
+                var uri = request.uri;
+                if (response['content-location']) { uri = response['content-location']; }
+                if (uri.charAt(0) != '#') { uri = '#' + uri; }
+                expected_hashchange = uri;
+                window.location.hash = uri;
             }
         }, this);
     };
