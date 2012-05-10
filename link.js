@@ -6,13 +6,14 @@
     } else {
         Link = this.Link = {};
     }
-    
+
     // Mediator
     // ========
     // passes requests/responses around a uri structure of modules
     var Mediator = function _Mediator(id) {
         this.id = id;
         this.modules = [];
+        this.render_cbs = [];
     };
 
     // Configures the module into the uri structure
@@ -120,12 +121,6 @@
     //  - If the request target URI does not start with a hash, will run the remote handler
     var cur_mid = 1;
     Mediator.prototype.dispatch = function(request, opt_cb, opt_context) {
-        // Clone the request
-        var req_clone = {};
-        for (var k in request) {
-            req_clone[k] = request[k];
-        }
-        request = req_clone;
         // Assign an id, for debugging
         request.__mid = cur_mid++;
         // Log
@@ -250,7 +245,19 @@
         } else {
             elem.innerHTML = response.body;
         }
+
+        // Run cbs
+        for (var i=0; i < this.render_cbs.length; i++) {
+            var cb = this.render_cbs[i];
+            cb.func.call(cb.context, request, response);
+        }
+        this.render_cbs.length = 0; // clear out (they run once)
     };
+
+    // Adds render callbacks, which run once
+    Mediator.prototype.afterRender = function(cb, opt_context) {
+        this.render_cbs.push({ func:cb, context:opt_context });
+    }
 
     // Promise
     // =======
