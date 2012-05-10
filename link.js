@@ -212,12 +212,43 @@
         if (request) {
             elem.setAttribute('data-uri', request.uri);
         }
+
+        // Helper to print response info
+        var respToHtml = function(resp) {
+            var html = [
+                '<h2>',resp.code,(resp.reason ? ' '+resp.reason : ''),'</h2>',
+                '<h3>',resp['content-type'],'</h3>'
+            ];
+            return html.join('');
+        };
+        
+        // Helper to create html from an object
+        var objToHtml = function(obj) {
+            var html = ['<ul class="link-objhtml">'];
+            for (var k in obj) {
+                html.push('<li><strong>', k, '</strong>:');
+                if (typeof obj[k] == 'function') {
+                    html.push('[Function]');
+                } else if (typeof obj[k] == 'object') {
+                    html.push(objToHtml(obj[k]));
+                } else {
+                    html.push(obj[k]);
+                }
+                html.push('</li>');
+            }
+            html.push('</ul>');
+            return html.join('');
+        };
         
         // Render
-        if (response) {
-            if (response.code != 204 && response.code != 205) {
-                elem.innerHTML = response.body;
-            }
+        var content = response.body || response;
+        if (typeof content == 'object') {
+            elem.innerHTML = respToHtml(response) + objToHtml(content);
+        } else if (/application\/json/i.test(response['content-type'])) {
+            content = JSON.parse(content);
+            elem.innerHTML = respToHtml(response) + objToHtml(content);
+        } else {
+            elem.innerHTML = response.body;
         }
     };
 
@@ -315,6 +346,16 @@
         // Create remote request
         var xhrRequest = new XMLHttpRequest();
         xhrRequest.open(request.method, request.uri, true);
+        for (var k in request) {
+            if (k == 'method' || k == 'uri' || k == 'body') { continue; }
+            if (k.indexOf('__') == 0) { continue; }
+            var header = request[k];
+            if (header == 'object') {
+                if (header.length) { header = header.join(' '); }
+                else { header = header.toString(); }
+            }
+            xhrRequest.setRequestHeader(k, header);
+        }
         xhrRequest.onreadystatechange = function() {
             // Response received:
             if (xhrRequest.readyState == 4) {
@@ -437,7 +478,7 @@
     var windowHashchangeHandler = function() {
         // Build the request from the hash
         var uri = window.location.hash;
-        if (expected_hashchange == uri) {
+        if (expected_hashchange == uri || (expected_hashchange == '#' && uri == '')) {
             expected_hashchange = null; // do nothing if this has been handled elsewhere
             return;
         }

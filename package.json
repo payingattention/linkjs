@@ -1,5 +1,5 @@
 {
-    "name":"linkjs",
+    "name":"pfraze-linkjs",
     "description":"Mediator framework designed for composability in browser applications using the REST style",
     "homepage":"http://github.com/pfraze/linkjs",
     "keywords":["mediator","modules","server","client","browser"],
