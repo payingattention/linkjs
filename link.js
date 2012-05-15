@@ -13,7 +13,6 @@
     var Mediator = function _Mediator(id) {
         this.id = id;
         this.modules = [];
-        this.render_cbs = [];
     };
 
     // Configures the module into the uri structure
@@ -102,7 +101,7 @@
                         cb = module[cb];
                     }
                     if (!cb) {
-                        throw "Handler callback not found for route";
+                        throw "Handler callback '" + route.cb + "' not found";
                     }
                     matched_handlers.push({
                         cb:cb,
@@ -197,19 +196,12 @@
         }
     };
 
-    // Renders the response to the mediator's element, if it exists
-    Mediator.prototype.renderResponse = function(request, response) {
-        // Find target element
-        var elem = (this.id ? document.getElementById(this.id) : document.body);
-        if (!elem) { return; }
-
-        // Set the frame data
-        if (request) {
-            elem.setAttribute('data-uri', request.uri);
-        }
-
+    // Helpers
+    // =======
+    // Renders a response to HTML
+    var renderResponseToHtml = function(response) {
         // Helper to print response info
-        var respToHtml = function(resp) {
+        var headersToHtml = function(resp) {
             var html = [
                 '<h2>',resp.code,(resp.reason ? ' '+resp.reason : ''),'</h2>',
                 '<h3>',resp['content-type'],'</h3>'
@@ -238,26 +230,14 @@
         // Render
         var content = response.body || response;
         if (typeof content == 'object') {
-            elem.innerHTML = respToHtml(response) + objToHtml(content);
+            return headersToHtml(response) + objToHtml(content);
         } else if (/application\/json/i.test(response['content-type'])) {
             content = JSON.parse(content);
-            elem.innerHTML = respToHtml(response) + objToHtml(content);
+            return headersToHtml(response) + objToHtml(content);
         } else {
-            elem.innerHTML = response.body;
+            return response.body;
         }
-
-        // Run cbs
-        for (var i=0; i < this.render_cbs.length; i++) {
-            var cb = this.render_cbs[i];
-            cb.func.call(cb.context, request, response);
-        }
-        this.render_cbs.length = 0; // clear out (they run once)
     };
-
-    // Adds render callbacks, which run once
-    Mediator.prototype.afterRender = function(cb, opt_context) {
-        this.render_cbs.push({ func:cb, context:opt_context });
-    }
 
     // Promise
     // =======
@@ -321,6 +301,8 @@
     // ===============
     // Mediator listening to window events
     var window_mediator = null;
+    // Handler for window responses
+    var window_handler = { cb:null, context:null };
     // Used to avoid duplicate hash-change handling
     var expected_hashchange = null;
     // Hash of enabled logging mods
@@ -502,8 +484,10 @@
                 followRequest({ method:'get', uri:response.location, accept:'text/html' });
                 return;
             }
-            // Render
-            window_mediator.renderResponse(request, response);
+            // Pass on to handler
+            if (window_handler.cb) {
+                window_handler.cb.call(window_handler.context, request, response);
+            }
             // If not a 205 Reset Content, then change our hash
             if (response.code != 205) {
                 var uri = request.uri;
@@ -516,8 +500,9 @@
     };
     
     // Registers event listeners to the window and handles the current URI
-    var attachToWindow = function(mediator) {
+    var attachToWindow = function(mediator, opt_response_cb, opt_response_cb_context) {
         window_mediator = mediator;
+        window_handler = { cb:opt_response_cb, context:opt_response_cb_context };
         
         // Register handlers
         document.onclick = windowClickHandler;
@@ -532,9 +517,10 @@
     
     // Exports
     // =======
-    Link.Promise         = Promise;
-    Link.Mediator        = Mediator;
-    Link.logMode         = logMode;
-    Link.addStylesheet   = addStylesheet;
-    Link.attachToWindow  = attachToWindow;
+    Link.Promise              = Promise;
+    Link.Mediator             = Mediator;
+    Link.logMode              = logMode;
+    Link.addStylesheet        = addStylesheet;
+    Link.attachToWindow       = attachToWindow;
+    Link.renderResponseToHtml = renderResponseToHtml;
 }).call(this);
