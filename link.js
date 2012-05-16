@@ -128,7 +128,7 @@
         }
         // If in browser & no hash, use ajax
         if (typeof window !== 'undefined' && request.uri.charAt(0) != '#') {
-            sendAjaxRequest(request, opt_cb, opt_context);
+            __sendAjaxRequest(request, opt_cb, opt_context);
             return;
         }
         // Build the handler chain
@@ -196,49 +196,114 @@
         }
     };
 
-    // Helpers
-    // =======
-    // Renders a response to HTML
-    var renderResponseToHtml = function(response) {
-        // Helper to print response info
-        var headersToHtml = function(resp) {
-            var html = [
-                '<h2>',resp.code,(resp.reason ? ' '+resp.reason : ''),'</h2>',
-                '<h3>',resp['content-type'],'</h3>'
-            ];
-            return html.join('');
-        };
-        
-        // Helper to create html from an object
-        var objToHtml = function(obj) {
-            var html = ['<ul class="link-objhtml">'];
-            for (var k in obj) {
-                html.push('<li><strong>', k, '</strong>:');
-                if (typeof obj[k] == 'function') {
-                    html.push('[Function]');
-                } else if (typeof obj[k] == 'object') {
-                    html.push(objToHtml(obj[k]));
-                } else {
-                    html.push(obj[k]);
-                }
-                html.push('</li>');
+    // Type Interfaces
+    // ===============
+    // stores the prototypes for interfaces to mimetypes
+    var mime_iface_prototypes = {};
+
+    // Interface object builder
+    // - 'a/b-c' ensures a='a', a->b='a/b' , a->b->c='a/c-b'
+    var __ensureInterface = function(mimetype) {
+        // pull out the names
+        var re = new RegExp('([^/]+)(?:/([^-]+)(?:-(.*))?)?','i');
+        var match = re.exec(mimetype);
+        var a = match[1];
+        var ab = (match[3] ? a + '/' + match[3] : null);
+        if (!ab && match[2]) { ab = a + '/' + match[2]; }
+        var abc = mimetype;
+        // build as needed
+        var ctor = function() {};
+        if (a && !(a in mime_iface_prototypes)) {
+            mime_iface_prototypes[a] = { mimetype:a };
+        }
+        if (ab && !(ab in mime_iface_prototypes)) {
+            ctor.prototype = mime_iface_prototypes[a];
+            mime_iface_prototypes[ab] = new ctor();
+            mime_iface_prototypes[ab].mimetype = ab;
+        }
+        if (abc && !(abc in mime_iface_prototypes)) {
+            ctor.prototype = mime_iface_prototypes[ab];
+            mime_iface_prototypes[abc] = new ctor();
+            mime_iface_prototypes[abc].mimetype = abc;
+        }
+        return mime_iface_prototypes[mimetype];
+    };
+
+    // Get/create an interface
+    var getTypeInterface = function(mimetype, data) {
+        // if no mimetype is given, default it
+        var datatype = typeof data;
+        if (!mimetype) {
+            if (datatype != 'undefined') {
+                mimetype = (datatype == 'string') ? 'application/json' : 'js/object';
+            } else {
+                return null; // null in, null out
             }
-            html.push('</ul>');
-            return html.join('');
-        };
-        
-        // Render
-        var content = response.body || response;
-        if (typeof content == 'object') {
-            return headersToHtml(response) + objToHtml(content);
-        } else if (/application\/json/i.test(response['content-type'])) {
-            content = JSON.parse(content);
-            return headersToHtml(response) + objToHtml(content);
-        } else {
-            return response.body;
+        }
+        // get prototype
+        var prototype = __ensureInterface(mimetype);
+        // Instantiate a copy of the interface, to protect it from outsiders
+        var Interface = function(data) { this.data = data; }
+        Interface.prototype = prototype;
+        return new Interface(data);
+    };
+
+    // Add members to the interface
+    var addToType = function(mimetype, obj, opt_force_overwrite) {
+        // get prototype
+        var proto = __ensureInterface(mimetype);
+        // blend in new members
+        for (var k in obj) {
+            if (!opt_force_overwrite && proto.hasOwnProperty(k)) { continue; }
+            proto[k] = obj[k];
         }
     };
 
+    // Default Interfaces
+    // ==================
+    addToType('js/object', {
+        toHtml:function() { return objToHtml(this.data); },
+        toJson:function() { return JSON.stringify(this.data); },
+        toObject:function() { return this.data; },
+        toString:function() { return this.data.toString(); }
+    });
+    addToType('application/json', {
+        toHtml:function() { return '<span class="linkjs-json">'+this.data+'</span>'; }, // :TODO: prettify
+        toJson:function() { return this.data; },
+        toObject:function() { return JSON.parse(this.data); },
+        toString:function() { return this.data; }
+    });
+    addToType('text', {
+        toHtml:function() { return '<span class="linkjs-text">'+this.data+'</span>'; },
+        toJson:function() { return JSON.stringify({ text:this.data }); },
+        toObject:function() { return { text:this.data }; },
+        toString:function() { return this.data; }
+    });
+    addToType('text/html', {
+        toHtml:function() { return this.data; },
+        toJson:function() { return JSON.stringify({ html:this.data }); },
+        toObject:function() { return { html:this.data }; }
+    });
+    
+    // Helpers
+    // =======
+    var objToHtml = function(obj) {
+        var html = ['<ul class="linkjs-object">'];
+        for (var k in obj) {
+            html.push('<li><strong>', k, '</strong>:');
+            if (typeof obj[k] == 'function') {
+                html.push('[Function]');
+            } else if (typeof obj[k] == 'object') {
+                html.push(objToHtml(obj[k]));
+            } else {
+                html.push(obj[k]);
+            }
+            html.push('</li>');
+        }
+        html.push('</ul>');
+        return html.join('');
+    };
+    
     // Promise
     // =======
     // a value which can defer fulfillment; used for conditional async
@@ -331,7 +396,7 @@
     };
 
     // Helper to send ajax requests
-    var sendAjaxRequest = function(request, opt_cb, opt_context) {
+    var __sendAjaxRequest = function(request, opt_cb, opt_context) {
         // Create remote request
         var xhrRequest = new XMLHttpRequest();
         xhrRequest.open(request.method, request.uri, true);
@@ -372,7 +437,7 @@
     };
 
     // Click interceptor -- handles links with requests within the application
-    var windowClickHandler = function(e) {
+    var __windowClickHandler = function(e) {
         // Mark as recently clicked, if this (or a parent) is part of a form
         var node = e.target;
         while (node) {
@@ -400,7 +465,7 @@
     };
 
     // Submit interceptor -- handles forms with requests within the application
-    var windowSubmitHandler = function(e) {
+    var __windowSubmitHandler = function(e) {
         var form = e.target;
         var target_uri, enctype, method;
 
@@ -464,7 +529,7 @@
     };
     
     // Hashchange interceptor -- handles changes to the hash with requests within the application
-    var windowHashchangeHandler = function() {
+    var __windowHashchangeHandler = function() {
         // Build the request from the hash
         var uri = window.location.hash;
         if (expected_hashchange == uri || (expected_hashchange == '#' && uri == '')) {
@@ -505,9 +570,9 @@
         window_handler = { cb:opt_response_cb, context:opt_response_cb_context };
         
         // Register handlers
-        document.onclick = windowClickHandler;
-        document.onsubmit = windowSubmitHandler;
-        window.onhashchange = windowHashchangeHandler;
+        document.onclick = __windowClickHandler;
+        document.onsubmit = __windowSubmitHandler;
+        window.onhashchange = __windowHashchangeHandler;
     
         // Now follow the current hash's uri
         var uri = window.location.hash;
@@ -517,10 +582,11 @@
     
     // Exports
     // =======
-    Link.Promise              = Promise;
-    Link.Mediator             = Mediator;
-    Link.logMode              = logMode;
-    Link.addStylesheet        = addStylesheet;
-    Link.attachToWindow       = attachToWindow;
-    Link.renderResponseToHtml = renderResponseToHtml;
+    Link.Promise          = Promise;
+    Link.Mediator         = Mediator;
+    Link.addToType        = addToType;
+    Link.getTypeInterface = getTypeInterface;
+    Link.logMode          = logMode;
+    Link.addStylesheet    = addStylesheet;
+    Link.attachToWindow   = attachToWindow;
 }).call(this);
