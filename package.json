@@ -6,6 +6,6 @@
     "author":"Paul Frazee <pfrazee@gmail.com>",
     "repository":{"type":"git","url":"git://github.com/pfraze/linkjs.git"},
     "main":"link.js",
-    "version":"0.0.3"
+    "version":"0.0.4"
 }
     
