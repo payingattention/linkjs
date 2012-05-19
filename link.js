@@ -125,12 +125,25 @@
         request.__mid = cur_mid++;
         // Log
         if (logMode('traffic')) {
-            console.log(this.id ? this.id+'|request' : 'request', request.__mid, request.uri, request.accept ? '['+request.accept+']' : '', request);
+            console.log(this.id ? this.id+'|req' : 'request', request.__mid, request.uri, request.accept ? '['+request.accept+']' : '', request);
         }
         // If in browser & no hash, use ajax
         if (typeof window !== 'undefined' && request.uri.charAt(0) != '#') {
             __sendAjaxRequest(request, opt_cb, opt_context);
             return;
+        }
+        // Pull the query params out, if present
+        if (request.uri && request.uri.indexOf('?') != -1) {
+            request.query = [];
+            // pull uri out
+            var parts = request.uri.split('?');
+            request.uri = parts.shift();
+            // iterate the values
+            parts = parts.join('').split('&');
+            for (var i=0; i < parts.length; i++) {
+                var kv = parts[i].split('=');
+                request.query[kv[0]] = kv[1];
+            }
         }
         // Build the handler chain
         request.__bubble_handlers = [];
@@ -177,7 +190,7 @@
             if (!response) { response = { code:404 }; }
             // Log
             if (logMode('traffic')) {
-                console.log(this.id ? this.id+'|response' : 'response', request.__mid, request.uri, response['content-type'] ? '['+response['content-type']+']' : '', response);
+                console.log(this.id ? this.id+'|res' : 'response', request.__mid, request.uri, response['content-type'] ? '['+response['content-type']+']' : '', response);
             }
             // Send to dispatcher
             handler = request.__dispatcher_handler;
@@ -388,7 +401,7 @@
                 xhrResponse.reason = xhrRequest.statusText;
                 xhrResponse.body = xhrRequest.responseText;
                 if (logMode('traffic')) {
-                    console.log(this.id ? this.id+'|response' : 'response', request.__mid, request.uri, xhrResponse['content-type'] ? '['+xhrResponse['content-type']+']' : '', xhrResponse);
+                    console.log(this.id ? this.id+'|res' : 'response', request.__mid, request.uri, xhrResponse['content-type'] ? '['+xhrResponse['content-type']+']' : '', xhrResponse);
                 }
                 // Pass on
                 opt_cb.call(opt_context, xhrResponse);

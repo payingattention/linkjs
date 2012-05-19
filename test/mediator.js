@@ -158,6 +158,21 @@ describe('Mediator', function() {
             });
             mediator.dispatch({ method:'get', uri:'#uri1/uri2' });
         });
+        it('should move queries into a `query` object in the request', function(done) {
+            var mediator = new Link.Mediator();
+            mediator.addModule('#uri', {
+                routes: [
+                    { cb:'a', uri:'^/?$' },
+                ],
+                a:function(request) {
+                    request.query.should.be.ok;
+                    request.query.a.should.equal('5');
+                    request.query.b.should.equal('6');
+                    done();
+                },
+            });
+            mediator.dispatch({ uri:'#uri?a=5&b=6' });
+        });
     });
 });
 
