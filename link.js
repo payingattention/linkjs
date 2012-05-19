@@ -41,13 +41,14 @@
         var matched_modules = {};
         // Make sure we have a regexp
         if (typeof(re) == 'string') { re = new RegExp(re, 'i'); }
+        var k=0;
         for (var i=0; i < this.modules.length; i++) {
             var module = this.modules[i];
             // Does the module's uri match?
             var match = re.exec(module.uri);
             if (match) {
                 // Generate the key & store
-                var key = (opt_key_index !== undefined ? match[opt_key_index] : i);
+                var key = (opt_key_index !== undefined ? match[opt_key_index] : k++);
                 matched_modules[key] = module.uri;
             }
         }
@@ -159,16 +160,6 @@
         request.method = 'post';
         this.dispatch(request, opt_cb, opt_context);
     };
-    
-    // (ASYNC) Responds to `dest_request` with the response from `src_request`
-    Mediator.prototype.pipe = function(src_request, dest_request) {
-        this.dispatch(src_request, function(response) {
-            var handler = dest_request.__dispatcher_handler;
-            if (handler) {
-                handler.cb.call(handler.context, response);
-            }
-        });
-    };
         
     // Processes the request's handler chain
     Mediator.prototype.runHandlers = function(request, response) {
@@ -202,10 +193,11 @@
     var mime_iface_prototypes = {};
 
     // Interface object builder
-    // - 'a/b-c' ensures a='a', a->b='a/b' , a->b->c='a/c-b'
+    // - creates prototype chain of 'a'=a, 'a/b'=a->b, 'a/c+b'=a->b->c
+    //   (which stays true to how mimetypes describe parenthood)
     var __ensureInterface = function(mimetype) {
         // pull out the names
-        var re = new RegExp('([^/]+)(?:/([^-]+)(?:-(.*))?)?','i');
+        var re = new RegExp('([^/]+)(?:/([^+]+)(?:[+](.*))?)?','i');
         var match = re.exec(mimetype);
         var a = match[1];
         var ab = (match[3] ? a + '/' + match[3] : null);
@@ -235,7 +227,7 @@
         var datatype = typeof data;
         if (!mimetype) {
             if (datatype != 'undefined') {
-                mimetype = (datatype == 'string') ? 'application/json' : 'js/object';
+                mimetype = (datatype == 'string') ? 'text/plain' : 'js/object';
             } else {
                 return null; // null in, null out
             }
@@ -310,17 +302,12 @@
     var Promise = function _Promise() {
         this.is_fulfilled = false;
         this.value = null;
-        this.lies_remaining = 0;
         this.then_cbs = [];
     };
 
     // Runs any `then` callbacks with the given value
     Promise.prototype.fulfill = function(value) {
-        // Wait until the lies are over
-        if (this.lies_remaining > 0) {
-            this.lies_remaining--;
-            return;
-        }
+        if (this.is_fulfilled) { return; }
         this.is_fulfilled = true;
         // Store
         this.value = value;
@@ -340,17 +327,6 @@
             // Call now
             cb.call(opt_context, this.value);
         }
-    };
-    
-    // Tells the promise to ignore `fulfill()` calls until the given number
-    // - useful for batch async, when you want to run `then` after they all complete
-    Promise.prototype.isLiesUntil = function(fulfill_count) {
-        this.lies_remaining = fulfill_count - 1;
-    };
-
-    // Will the next `fulfill()` execute the callbacks?
-    Promise.prototype.stillLying = function() {
-        return (this.lies_remaining > 0);
     };
 
     // Helper to register a then if the given value is a promise (or call immediately if it's another value)
@@ -372,21 +348,6 @@
     var expected_hashchange = null;
     // Hash of enabled logging mods
     var activeLogModes = {};
-    
-    // Adds a style-sheet to the document
-    var addStylesheet = function(url) {
-        // :TODO: track added style sheets to avoid duplicates
-        // Attach element to head
-        if (document.createStyleSheet) {
-            document.createStyleSheet(url);
-        } else {
-            var elem = document.createElement('link');
-            elem.href = url;
-            elem.rel = "stylesheet";
-            elem.media = "screen"; // :TODO: make an option?
-            document.head.appendChild(elem);
-        }
-    };
     
     // Hash of active logging modes
     var logMode = function(k, v) {
@@ -517,8 +478,10 @@
             for (var k in data) {
                 qparams.push(k + '=' + data[k]);
             }
-            target_uri += '?' + qparams.join('&');
-            request.uri = target_uri;
+            if (qparams.length) {
+                target_uri += '?' + qparams.join('&');
+                request.uri = target_uri;
+            }
         } else {
             request.body = data;
             request['content-type'] = enctype;
@@ -587,6 +550,5 @@
     Link.addToType        = addToType;
     Link.getTypeInterface = getTypeInterface;
     Link.logMode          = logMode;
-    Link.addStylesheet    = addStylesheet;
     Link.attachToWindow   = attachToWindow;
 }).call(this);
