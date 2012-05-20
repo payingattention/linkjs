@@ -34,25 +34,34 @@
         this.modules.splice(i, 0, module);
     };
 
-    // Gives URIs to modules that match the given regex
+    // Gives URIs to resources that match the given regex
     // - if opt_key_index is given, the corresponding group in the regex will be used as they key of
     //   the returned object
-    Mediator.prototype.findModules = function(re, opt_key_index) {
-        var matched_modules = {};
+    Mediator.prototype.findResources = function(re, opt_key_index) {
+        var matched_resources = {};
         // Make sure we have a regexp
         if (typeof(re) == 'string') { re = new RegExp(re, 'i'); }
         var k=0;
+        // Iterate modules
         for (var i=0; i < this.modules.length; i++) {
             var module = this.modules[i];
-            // Does the module's uri match?
-            var match = re.exec(module.uri);
-            if (match) {
-                // Generate the key & store
-                var key = (opt_key_index !== undefined ? match[opt_key_index] : k++);
-                matched_modules[key] = module.uri;
+            if (!module.resources) { continue; }
+            // Iteriate module resources
+            for (var sub_uri in module.resources) {
+                // If module has a uri, prepend it
+                var res_uri = module.uri + sub_uri;
+                if (res_uri.indexOf('#/') == 0) { res_uri = res_uri.replace('#/','#'); } // convert #/foobar to #foobar
+                if (res_uri.charAt(res_uri.length - 1) == '/') { res_uri = res_uri.slice(0,-1); } // strip trailing slash
+                // Does the resource's uri match?
+                var match = re.exec(res_uri);
+                if (match) {
+                    // Generate the key & store
+                    var key = (opt_key_index !== undefined ? match[opt_key_index] : k++);
+                    matched_resources[key] = res_uri;
+                }
             }
         }
-        return matched_modules;
+        return matched_resources;
     };
 
     // Searches modules for handlers for the given request
@@ -76,6 +85,7 @@
                         if (k == 'cb' || k == 'bubble') { continue; }
                         // key exists
                         if (!(k in request)) {
+                            match = false;
                             break;
                         }
                         var reqVal = (k == 'uri' ? rel_uri : request[k]);
@@ -101,7 +111,8 @@
                     if (typeof(cb) == 'string') { cb = module[cb]; }
                     if (!cb) { throw "Handler callback '" + route.cb + "' not found"; }
                     // get the resource
-                    var resource = (module.resources ? module.resources['/' + rel_uri] : null);
+                    var resource_uri = (rel_uri != '' ? rel_uri : '/');
+                    var resource = (module.resources ? module.resources[resource_uri] : null);
                     // add to list
                     matched_handlers.push({
                         cb:cb,
@@ -137,7 +148,7 @@
             request.query = [];
             // pull uri out
             var parts = request.uri.split('?');
-            request.uri = parts.unshift();
+            request.uri = parts.shift();
             // iterate the values
             parts = parts.join('').split('&');
             for (var i=0; i < parts.length; i++) {

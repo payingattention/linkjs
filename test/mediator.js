@@ -29,23 +29,40 @@ describe('Mediator', function() {
             mediator.modules[5].id.should.equal(6);
         });
     });
-    describe('#findModules', function() {
+    describe('#findResources', function() {
         // set up a test mediator
         var mediator = new Link.Mediator();
-        mediator.addModule('#the/1st', new Module(1));
-        mediator.addModule('#the/2nd', new Module(2));
-        mediator.addModule('#the/3rd', new Module(3));
+        mediator.addModule('#the/1st', {
+            resources: { '/':1 }
+        });
+        mediator.addModule('#the/2nd', {
+            resources: { '/':1, '/sub1':1, '/sub2':1, '/sub/sub':1 }
+        });
+        mediator.addModule('#the/3rd',  {
+            resources: { '/':1, '/sub3':1, '/sub4':1 }
+        });
+        mediator.addModule('#', {
+            resources: { '/the/4th/sub5':1 }
+        });
 
         // run checks
-        it('should find modules by a uri regex', function() {
-            var modules = mediator.findModules('#the/(.*)d');
-            modules[0].should.equal('#the/2nd');
-            modules[1].should.equal('#the/3rd');
+        it('should find resources by a uri regex', function() {
+            var resources = mediator.findResources('#the/(.*)d$');
+            resources[0].should.equal('#the/2nd');
+            resources[1].should.equal('#the/3rd');
+
+            var resources = mediator.findResources('#the/([^/]+)/sub.*');
+            resources[0].should.equal('#the/4th/sub5'); // first because module is at a lower URI
+            resources[1].should.equal('#the/2nd/sub1');
+            resources[2].should.equal('#the/2nd/sub2');
+            resources[3].should.equal('#the/2nd/sub/sub');
+            resources[4].should.equal('#the/3rd/sub3');
+            resources[5].should.equal('#the/3rd/sub4');
         });
         it('should build keys from the regex match', function() {
-            var modules = mediator.findModules('#the/(.*)d', 1);
-            modules['2n'].should.equal('#the/2nd');
-            modules['3r'].should.equal('#the/3rd');
+            var resources = mediator.findResources('#the/(.*)d$', 1);
+            resources['2n'].should.equal('#the/2nd');
+            resources['3r'].should.equal('#the/3rd');
         });
     });
     describe('#findHandlers', function() {
@@ -88,7 +105,7 @@ describe('Mediator', function() {
             var mediator = new Link.Mediator();
             var marker = 0;
             mediator.addModule('#uri1', {
-                routes: [
+                routes:[
                     { cb:'a', uri:'^/uri2/?$' },
                     { cb:'b', uri:'^/uri2/?$', method:'get' },
                 ],
@@ -96,7 +113,7 @@ describe('Mediator', function() {
                 b:function() { marker.should.equal(1); marker++; }
             });
             mediator.addModule('#uri1/uri2', {
-                routes: [
+                routes:[
                     { cb:'c', uri:'^/?$', method:'get' }
                 ],
                 c:function() { marker.should.equal(2); done(); }
@@ -106,7 +123,7 @@ describe('Mediator', function() {
         it('should give a valid response object to the dispatcher', function(done) {
             var mediator = new Link.Mediator();
             mediator.addModule('#uri1', {
-                routes: [{ cb:'a', uri:'^/?$' }],
+                routes:[{ cb:'a', uri:'^/?$' }],
                 a:function() { return { code:200 }; }
             });
             mediator.dispatch({ uri:'#uri1' }, function(response) {
@@ -119,10 +136,38 @@ describe('Mediator', function() {
                 });
             });
         });
+        it('should run resource and method validation', function(done) {
+            var mediator = new Link.Mediator();
+            mediator.addModule('#uri', {
+                routes:[{ cb:'give200', uri:'^/a/?$' }, { cb:'give200', uri:'^/b/?$' }],
+                resources:{
+                    '/a':{ asserts:function(request) { throw { code:503, reason:'not available' }; }},
+                    '/b':{ _post:{ asserts:function(request) { throw { code:503, reason:'not available' }; }}}
+                },
+                give200:function() { return { code:200 }; }
+            });
+            // test resource validation
+            mediator.dispatch({ uri:'#uri/a' }, function(response) {
+                response.should.be.ok;
+                response.code.should.equal(503);
+                response.reason.should.equal('not available');
+                // test for unvalidated method
+                mediator.dispatch({ uri:'#uri/b', method:'get' }, function(response) {
+                    response.should.be.ok;
+                    response.code.should.equal(200);
+                    // test for validated method
+                    mediator.dispatch({ uri:'#uri/b', method:'post' }, function(response) {
+                        response.should.be.ok;
+                        response.code.should.equal(503);
+                        done();
+                    });
+                });
+            });
+        });
         it('should stall the handler chain for promises', function(done) {
             var mediator = new Link.Mediator();
             mediator.addModule('#uri1', {
-                routes: [{ cb:'a', uri:'^/?$' }, { cb:'b', uri:'^/?$' }],
+                routes:[{ cb:'a', uri:'^/?$' }, { cb:'b', uri:'^/?$' }],
                 a:function() {
                     var p = new Link.Promise();
                     setTimeout(function() { p.fulfill({ code:200 }); }, 5);
@@ -141,7 +186,7 @@ describe('Mediator', function() {
             var mediator = new Link.Mediator();
             var marker = 0;
             mediator.addModule('#uri1', {
-                routes: [
+                routes:[
                     { cb:'a', uri:'^/uri2/?$', bubble:true },
                     { cb:'b', uri:'^/uri2/?$', method:'get' },
                 ],
@@ -149,7 +194,7 @@ describe('Mediator', function() {
                 b:function() { marker.should.equal(0); marker++; }
             });
             mediator.addModule('#uri1/uri2', {
-                routes: [
+                routes:[
                     { cb:'c', uri:'^/?$', method:'get' },
                     { cb:'d', uri:'^/?$', method:'get', bubble:true }
                 ],
@@ -161,7 +206,7 @@ describe('Mediator', function() {
         it('should move queries into a `query` object in the request', function(done) {
             var mediator = new Link.Mediator();
             mediator.addModule('#uri', {
-                routes: [
+                routes:[
                     { cb:'a', uri:'^/?$' },
                 ],
                 a:function(request) {
