@@ -57,7 +57,7 @@
                 if (match) {
                     // Generate the key & store
                     var key = (opt_key_index !== undefined ? match[opt_key_index] : k++);
-                    matched_resources[key] = res_uri;
+                    matched_resources[key] = module.resources[sub_uri];
                 }
             }
         }

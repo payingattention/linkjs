@@ -33,16 +33,16 @@ describe('Mediator', function() {
         // set up a test mediator
         var mediator = new Link.Mediator();
         mediator.addModule('#the/1st', {
-            resources: { '/':1 }
+            resources: { '/':'#the/1st' }
         });
         mediator.addModule('#the/2nd', {
-            resources: { '/':1, '/sub1':1, '/sub2':1, '/sub/sub':1 }
+            resources: { '/':'#the/2nd', '/sub1':'#the/2nd/sub1', '/sub2':'#the/2nd/sub2', '/sub/sub':'#the/2nd/sub/sub' }
         });
         mediator.addModule('#the/3rd',  {
-            resources: { '/':1, '/sub3':1, '/sub4':1 }
+            resources: { '/':'#the/3rd', '/sub3':'#the/3rd/sub3', '/sub4':'#the/3rd/sub4' }
         });
         mediator.addModule('#', {
-            resources: { '/the/4th/sub5':1 }
+            resources: { '/the/4th/sub5':'#the/4th/sub5' }
         });
 
         // run checks
@@ -146,20 +146,31 @@ describe('Mediator', function() {
                 },
                 give200:function() { return { code:200 }; }
             });
+            mediator.addModule('#', {
+                routes:[{ cb:'give200', uri:'^/?$' }],
+                resources:{ '/':{ asserts:function(request) { throw { code:503, reason:'not available' }; }}},
+                give200:function() { return { code:200 }; }
+            });
             // test resource validation
             mediator.dispatch({ uri:'#uri/a' }, function(response) {
                 response.should.be.ok;
                 response.code.should.equal(503);
                 response.reason.should.equal('not available');
-                // test for unvalidated method
-                mediator.dispatch({ uri:'#uri/b', method:'get' }, function(response) {
+                // test with different module uri & resource suburi
+                mediator.dispatch({ uri:'#' }, function(response) {
                     response.should.be.ok;
-                    response.code.should.equal(200);
-                    // test for validated method
-                    mediator.dispatch({ uri:'#uri/b', method:'post' }, function(response) {
+                    response.code.should.equal(503);
+                    response.reason.should.equal('not available');
+                    // test for unvalidated method
+                    mediator.dispatch({ uri:'#uri/b', method:'get' }, function(response) {
                         response.should.be.ok;
-                        response.code.should.equal(503);
-                        done();
+                        response.code.should.equal(200);
+                        // test for validated method
+                        mediator.dispatch({ uri:'#uri/b', method:'post' }, function(response) {
+                            response.should.be.ok;
+                            response.code.should.equal(503);
+                            done();
+                        });
                     });
                 });
             });
