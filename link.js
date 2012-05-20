@@ -72,8 +72,8 @@
                     var match, matches = {};
                     // Test route params
                     for (var k in route) {
-                        match = null;
-                        if (k == 'cb' || k == 'bubble') { match = true; continue; }
+                        match = true;
+                        if (k == 'cb' || k == 'bubble') { continue; }
                         // key exists
                         if (!(k in request)) {
                             break;
@@ -89,26 +89,26 @@
                         }
                         // standard equality
                         else {
-                            if (route[k] != reqVal) { break; }
+                            if (route[k] != reqVal) { match = false; break; }
                             matches[k] = reqVal;
-                            match = true;
                         }
                     }
-                    // If match is not truthy, the break condition was a nonmatch
+                    // Ended the loop because it wasn't a match?
                     if (!match) { continue; }
-                    // A match, add to the list
+                    // A match...
+                    // get the handler
                     var cb = module[route.cb];
-                    if (typeof(cb) == 'string') {
-                        cb = module[cb];
-                    }
-                    if (!cb) {
-                        throw "Handler callback '" + route.cb + "' not found";
-                    }
+                    if (typeof(cb) == 'string') { cb = module[cb]; }
+                    if (!cb) { throw "Handler callback '" + route.cb + "' not found"; }
+                    // get the resource
+                    var resource = (module.resources ? module.resources['/' + rel_uri] : null);
+                    // add to list
                     matched_handlers.push({
                         cb:cb,
                         context:module,
                         match:matches,
-                        route:route
+                        route:route,
+                        resource:resource
                     });
                 }
             }
@@ -137,7 +137,7 @@
             request.query = [];
             // pull uri out
             var parts = request.uri.split('?');
-            request.uri = parts.shift();
+            request.uri = parts.unshift();
             // iterate the values
             parts = parts.join('').split('&');
             for (var i=0; i < parts.length; i++) {
@@ -180,8 +180,35 @@
         var handler = request.__capture_handlers.shift();
         if (!handler) { handler = request.__bubble_handlers.shift(); }
         if (handler) {
-            // Run the handler
-            var promise = handler.cb.call(handler.context, request, response, handler.match);
+            // Run resource validation
+            var assert_response = null;
+            if (handler.resource) {
+                var resource = handler.resource;
+                // resource-wide assert
+                if (resource.asserts) {
+                    try { resource.asserts(request, response, handler.match); }
+                    catch (e) {
+                        if (typeof e == 'string') { assert_response = { code:500, reason:e }; }
+                        else { assert_response = e; }
+                    }
+                }
+                // method-specific assert
+                var method = resource['_' + request.method];
+                if (!assert_response && method && method.asserts) {
+                    try { method.asserts(request, response, handler.match); }
+                    catch (e) {
+                        if (typeof e == 'string') { assert_response = { code:500, reason:e }; }
+                        else { assert_response = e; }
+                    }
+                }
+            }
+            // Run the handler, if validation passed
+            var promise;
+            if (!assert_response) {
+                promise = handler.cb.call(handler.context, request, response, handler.match);
+            } else {
+                promise = assert_response;
+            }
             Promise.when(promise, function(response) {
                 this.runHandlers(request, response);
             }, this);
