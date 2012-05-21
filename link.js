@@ -308,24 +308,28 @@
         toHtml:function() { return objToHtml(this.data); },
         toJson:function() { return JSON.stringify(this.data); },
         toObject:function() { return this.data; },
-        toString:function() { return this.data.toString(); }
+        toString:function() { return this.data.toString(); },
+        fromObject:function(object) { this.data = object; return this; }
     });
     addToType('application/json', {
         toHtml:function() { return '<span class="linkjs-json">'+this.data+'</span>'; }, // :TODO: prettify
         toJson:function() { return this.data; },
         toObject:function() { return JSON.parse(this.data); },
-        toString:function() { return this.data; }
+        toString:function() { return this.data; },
+        fromObject:function(object) { this.data = JSON.stringify(object); return this; }
     });
     addToType('text', {
         toHtml:function() { return '<span class="linkjs-text">'+this.data+'</span>'; },
         toJson:function() { return JSON.stringify({ text:this.data }); },
         toObject:function() { return { text:this.data }; },
-        toString:function() { return this.data; }
+        toString:function() { return this.data; },
+        fromObject:function(object) { this.data = object.toString(); return this; }
     });
     addToType('text/html', {
         toHtml:function() { return this.data; },
         toJson:function() { return JSON.stringify({ html:this.data }); },
-        toObject:function() { return { html:this.data }; }
+        toObject:function() { return { html:this.data }; },
+        fromObject:function(object) { this.data = object.toString(); return this; }
     });
     
     // Helpers
