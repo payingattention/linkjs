@@ -136,7 +136,7 @@
         request.__mid = cur_mid++;
         // Log
         if (logMode('traffic')) {
-            console.log(this.id ? this.id+'|req' : 'request', request.__mid, request.uri, request.accept ? '['+request.accept+']' : '', request);
+            console.log(this.id ? this.id+'|req' : 'req', request.__mid, request.uri, request.accept ? '['+request.accept+']' : '', request);
         }
         // If in browser & no hash, use ajax
         if (typeof window !== 'undefined' && request.uri.charAt(0) != '#') {
@@ -228,7 +228,7 @@
             if (!response) { response = { code:404 }; }
             // Log
             if (logMode('traffic')) {
-                console.log(this.id ? this.id+'|res' : 'response', request.__mid, request.uri, response['content-type'] ? '['+response['content-type']+']' : '', response);
+                console.log(this.id ? this.id+'|res' : 'res', request.__mid, request.uri, response['content-type'] ? '['+response['content-type']+']' : '', response);
             }
             // Send to dispatcher
             handler = request.__dispatcher_handler;
@@ -256,8 +256,10 @@
         var abc = mimetype;
         // build as needed
         var ctor = function() {};
-        if (a && !(a in mime_iface_prototypes)) {
-            mime_iface_prototypes[a] = { mimetype:a };
+        if (a && !(a in mime_iface_prototypes)) {            
+            ctor.prototype = mime_iface_prototypes['*'];
+            mime_iface_prototypes[a] = new ctor();
+            mime_iface_prototypes[a].mimetype = a;
         }
         if (ab && !(ab in mime_iface_prototypes)) {
             ctor.prototype = mime_iface_prototypes[a];
@@ -286,7 +288,7 @@
         // get prototype
         var prototype = __ensureInterface(mimetype);
         // Instantiate a copy of the interface, to protect it from outsiders
-        var Interface = function(data) { this.data = data; }
+        var Interface = function(data) { this.setData(data); }
         Interface.prototype = prototype;
         return new Interface(data);
     };
@@ -304,32 +306,75 @@
 
     // Default Interfaces
     // ==================
+    addToType('*', {
+        setData:function(data) { this.data = data; return this; },
+        getData:function(data) { return this.data; }
+    });
     addToType('js/object', {
+        setData:function(data) {
+            this.data = (typeof data != 'object') ? { data:data } : data; // that makes sense...right?
+            return this;
+        },
         toHtml:function() { return objToHtml(this.data); },
         toJson:function() { return JSON.stringify(this.data); },
         toObject:function() { return this.data; },
-        toString:function() { return this.data.toString(); },
-        fromObject:function(object) { this.data = object; return this; }
+        toString:function() { return this.data.toString(); }
     });
     addToType('application/json', {
+        setData:function(data) {
+            this.data = (typeof data != 'string') ? JSON.stringify(data) : data;
+            return this;
+        },
         toHtml:function() { return '<span class="linkjs-json">'+this.data+'</span>'; }, // :TODO: prettify
         toJson:function() { return this.data; },
         toObject:function() { return JSON.parse(this.data); },
-        toString:function() { return this.data; },
-        fromObject:function(object) { this.data = JSON.stringify(object); return this; }
+        toString:function() { return this.data; }
     });
     addToType('text', {
+        setData:function(data) {
+            this.data = (typeof data != 'string') ? data.toString() : data;
+            return this;
+        },
         toHtml:function() { return '<span class="linkjs-text">'+this.data+'</span>'; },
         toJson:function() { return JSON.stringify({ text:this.data }); },
         toObject:function() { return { text:this.data }; },
-        toString:function() { return this.data; },
-        fromObject:function(object) { this.data = object.toString(); return this; }
+        toString:function() { return this.data; }
     });
     addToType('text/html', {
+        setData:function(data) {
+            this.data = (typeof data != 'string') ? data.toString() : data;
+            return this;
+        },
         toHtml:function() { return this.data; },
         toJson:function() { return JSON.stringify({ html:this.data }); },
-        toObject:function() { return { html:this.data }; },
-        fromObject:function(object) { this.data = object.toString(); return this; }
+        toObject:function() { return { html:this.data }; }
+    });
+    addToType('application/x-www-form-urlencoded', {
+        setData:function(data) {
+            if (typeof data == 'object') {
+                var parts = [];
+                for (var k in data) {
+                    parts.push(encodeURIComponent(k) + '=' + encodeURIComponent(data[k]));
+                }
+                this.data = parts.join('&');
+            }
+            else {
+                this.data = '' + data;
+            }
+            return this;
+        },
+        toHtml:function() { return '<span class="linkjs-x-www-form-urlencoded">'+this.data+'</span>'; },
+        toJson:function() { return JSON.stringify(this.toObject()); },
+        toObject:function() {
+            var obj = {};
+            var parts = this.data.split('&');
+            for (var i=0; i < parts.length; i++) {
+                var kv = parts[i].split('=');
+                obj[decodeURIComponent(kv[0])] = decodeURIComponent(kv[1]);
+            }
+            return obj;
+        },
+        toString:function() { return this.data; }
     });
     
     // Helpers
@@ -443,7 +488,7 @@
                 xhrResponse.reason = xhrRequest.statusText;
                 xhrResponse.body = xhrRequest.responseText;
                 if (logMode('traffic')) {
-                    console.log(this.id ? this.id+'|res' : 'response', request.__mid, request.uri, xhrResponse['content-type'] ? '['+xhrResponse['content-type']+']' : '', xhrResponse);
+                    console.log(this.id ? this.id+'|res' : 'res', request.__mid, request.uri, xhrResponse['content-type'] ? '['+xhrResponse['content-type']+']' : '', xhrResponse);
                 }
                 // Pass on
                 opt_cb.call(opt_context, xhrResponse);
@@ -485,19 +530,29 @@
         var form = e.target;
         var target_uri, enctype, method;
 
+        // :NOTE: a lot of default browser behaviour has to (?) be emulated here
+
         // Serialize the data
         var data = {};
         for (var i=0; i < form.length; i++) {
             var elem = form[i];
+            // Pull value if it has one
+            if (elem.value) {
+                // don't pull from buttons unless recently clicked
+                if (elem.tagName == 'button' || (elem.tagName == 'input' && (elem.type == 'button' || elem.type == 'submit')) ){
+                    if (elem.getAttribute('clicked')) {
+                        data[elem.name] = elem.value;
+                    }
+                } else {
+                    data[elem.name] = elem.value;
+                }
+            }
             // If was recently clicked, pull its request attributes-- it's our submitter
             if (elem.getAttribute('clicked') == '1') {
                 target_uri = elem.getAttribute('formaction');
                 enctype = elem.getAttribute('formenctype');
                 method = elem.getAttribute('formmethod');
                 elem.setAttribute('clicked', '0');
-            }
-            if (elem.value) {
-                data[elem.name] = elem.value;
             }
         }
 
@@ -506,8 +561,9 @@
         if (!enctype) { enctype = form.enctype; }
         if (!method) { method = form.method; }
 
-        // :TODO: actually use the enctype?
-        enctype = 'js/object';
+        // Convert the data to the given enctype
+        if (!enctype) { enctype = 'js/object'; }
+        data = getTypeInterface(enctype, data).getData();
         
         // Strip the base URI
         target_uri = target_uri.substring(form.baseURI.length);
