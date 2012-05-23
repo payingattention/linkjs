@@ -111,7 +111,7 @@
                     // Ended the loop because it wasn't a match?
                     if (!match) { continue; }
                     // A match, get the cb
-                    cb = module[route.cb];
+                    var cb = module[route.cb];
                     if (typeof(cb) == 'string') { cb = module[cb]; }
                     if (!cb) { throw "Handler callback '" + route.cb + "' not found"; }
                     cb_found = true;
@@ -218,7 +218,7 @@
                 }
                 // method-specific assert
                 var method = resource['_' + request.method];
-                if (!assert_response && method && method.asserts) {
+                if (!validation_response && method && method.asserts) {
                     try { method.asserts(request, response, handler.match); }
                     catch (e) {
                         if (typeof e == 'string') { validation_response = { code:500, reason:e }; }
