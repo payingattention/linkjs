@@ -313,7 +313,16 @@
     addToType('*', {
         setData:function(data) { this.data = data; return this; },
         getData:function(data) { return this.data; },
-        toString:function() { return this.getData().toString(); }
+        toString:function() { return this.getData().toString(); },
+        convertToType:function(type) {
+            // this is very imprecise...just a helper
+            if (!type || type == this.mimetype || type == '*/*') { return this.getData(); }
+            if (type.indexOf('html') != -1) { return this.toHtml ? this.toHtml() : this.toString(); }
+            if (type.indexOf('json') != -1) { return this.toJson ? this.toJson() : this.toString(); }
+            if (type.indexOf('js') != -1 && type.indexOf('object') != -1) { return this.toObject ? this.toObject() : this.getData(); }
+            if (type.indexOf('text') != -1) { return this.toString(); }
+            return null;
+        }
     });
     addToType('js/object', {
         setData:function(data) {
