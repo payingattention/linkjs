@@ -308,7 +308,8 @@
     // ==================
     addToType('*', {
         setData:function(data) { this.data = data; return this; },
-        getData:function(data) { return this.data; }
+        getData:function(data) { return this.data; },
+        toString:function() { return this.getData().toString(); }
     });
     addToType('js/object', {
         setData:function(data) {
@@ -566,7 +567,9 @@
         data = getTypeInterface(enctype, data).getData();
         
         // Strip the base URI
-        target_uri = target_uri.substring(form.baseURI.length);
+        if (target_uri.indexOf(form.baseURI) != -1) {
+            target_uri = target_uri.substring(form.baseURI.length);
+        }
         
         // Default to the current resource
         if (!target_uri) { target_uri = window.location.hash; }
