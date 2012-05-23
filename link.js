@@ -216,7 +216,11 @@
             // Run the handler, if validation passed
             var promise;
             if (!assert_response) {
-                promise = handler.cb.call(handler.context, request, response, handler.match);
+                try { promise = handler.cb.call(handler.context, request, response, handler.match); }
+                catch (e) {
+                    if (e && e.code) { promise = e; }
+                    else { promise = { code:500, reason:e.toString() }; }
+                }
             } else {
                 promise = assert_response;
             }
