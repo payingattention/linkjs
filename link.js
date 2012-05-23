@@ -76,6 +76,11 @@
             if (rel_uri_index != -1) {
                 // It does-- pull out the remaining URI and use that to match the request
                 var rel_uri = request.uri.substr(module.uri.length);
+                // Get the resource
+                var resource_uri = (rel_uri != '' ? rel_uri : '/');
+                var resource = (module.resources ? module.resources[resource_uri] : null);
+                // Look for any handler callbacks
+                var cb_found = false;
                 for (var j=0; j < module.routes.length; j++) {
                     var route = module.routes[j]
                     var match, matches = {};
@@ -105,15 +110,12 @@
                     }
                     // Ended the loop because it wasn't a match?
                     if (!match) { continue; }
-                    // A match...
-                    // get the handler
-                    var cb = module[route.cb];
+                    // A match, get the cb
+                    cb = module[route.cb];
                     if (typeof(cb) == 'string') { cb = module[cb]; }
                     if (!cb) { throw "Handler callback '" + route.cb + "' not found"; }
-                    // get the resource
-                    var resource_uri = (rel_uri != '' ? rel_uri : '/');
-                    var resource = (module.resources ? module.resources[resource_uri] : null);
-                    // add to list
+                    cb_found = true;
+                    // Add to list
                     matched_handlers.push({
                         cb:cb,
                         context:module,
@@ -122,6 +124,17 @@
                         resource:resource
                     });
                 }
+                // If it's a resource out on its own, add it as a handler-less entry
+                // (allows the resource to do error-handling when no handlers match)
+                if (resource && !cb_found) {
+                    matched_handlers.push({
+                        cb:null,
+                        context:module,
+                        match:[],
+                        route:{},
+                        resource:resource
+                    });
+                }                    
             }
         }
         return matched_handlers;
@@ -192,15 +205,15 @@
         if (!handler) { handler = request.__bubble_handlers.shift(); }
         if (handler) {
             // Run resource validation
-            var assert_response = null;
+            var validation_response = null;
             if (handler.resource) {
                 var resource = handler.resource;
                 // resource-wide assert
                 if (resource.asserts) {
                     try { resource.asserts(request, response, handler.match); }
                     catch (e) {
-                        if (typeof e == 'string') { assert_response = { code:500, reason:e }; }
-                        else { assert_response = e; }
+                        if (typeof e == 'string') { validation_response = { code:500, reason:e }; }
+                        else { validation_response = e; }
                     }
                 }
                 // method-specific assert
@@ -208,22 +221,23 @@
                 if (!assert_response && method && method.asserts) {
                     try { method.asserts(request, response, handler.match); }
                     catch (e) {
-                        if (typeof e == 'string') { assert_response = { code:500, reason:e }; }
-                        else { assert_response = e; }
+                        if (typeof e == 'string') { validation_response = { code:500, reason:e }; }
+                        else { validation_response = e; }
                     }
                 }
             }
-            // Run the handler, if validation passed
+            // Run the cb if its given (and validation passed)
             var promise;
-            if (!assert_response) {
+            if (validation_response) { promise = validation_response; }
+            else if (handler.cb) {
+                // run in a catch block, so we can output errors
                 try { promise = handler.cb.call(handler.context, request, response, handler.match); }
                 catch (e) {
                     if (e && e.code) { promise = e; }
                     else { promise = { code:500, reason:e.toString() }; }
                 }
-            } else {
-                promise = assert_response;
-            }
+            } else { promise = response; } // just pass on the last response
+            // When the promise is fulfilled, continue the chain
             Promise.when(promise, function(response) {
                 this.runHandlers(request, response);
             }, this);
