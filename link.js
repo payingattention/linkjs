@@ -76,9 +76,6 @@
             if (rel_uri_index != -1) {
                 // It does-- pull out the remaining URI and use that to match the request
                 var rel_uri = request.uri.substr(module.uri.length);
-                // Get the resource
-                var resource_uri = (rel_uri != '' ? rel_uri : '/');
-                var resource = (module.resources ? module.resources[resource_uri] : null);
                 // Look for any handler callbacks
                 var cb_found = false;
                 for (var j=0; j < module.routes.length; j++) {
@@ -114,27 +111,14 @@
                     var cb = module[route.cb];
                     if (typeof(cb) == 'string') { cb = module[cb]; }
                     if (!cb) { throw "Handler callback '" + route.cb + "' not found"; }
-                    cb_found = true;
                     // Add to list
                     matched_handlers.push({
                         cb:cb,
                         context:module,
                         match:matches,
                         route:route,
-                        resource:resource
                     });
                 }
-                // If it's a resource out on its own, add it as a handler-less entry
-                // (allows the resource to do error-handling when no handlers match)
-                if (resource && !cb_found) {
-                    matched_handlers.push({
-                        cb:null,
-                        context:module,
-                        match:[],
-                        route:{},
-                        resource:resource
-                    });
-                }                    
             }
         }
         return matched_handlers;
@@ -169,6 +153,32 @@
                 request.query[kv[0]] = kv[1];
             }
         }
+        // Find the resource(s) and run validation
+        var errors = null;
+        var resources = this.findResources('^'+request.uri+'$');
+        for (var k in resources) {
+            var resource = resources[k];
+            // resource-wide validation
+            if (resource.validate) {
+                try { resource.validate(request); }
+                catch (e) {
+                    if (typeof e == 'string') { errors = { code:500, reason:e }; }
+                    else { errors = e; }
+                }
+            }
+            // method-specific assert
+            var method = resource['_' + request.method];
+            if (!errors && method && method.validate) {
+                try { method.validate(request); }
+                catch (e) {
+                    if (typeof e == 'string') { errors = { code:500, reason:e }; }
+                    else { errors = e; }
+                }
+            }
+            if (errors) { break; }
+        }
+        // Response immediately if there were errors
+        if (errors) { if (opt_cb) { opt_cb.call(opt_context, errors); return; } }
         // Build the handler chain
         request.__bubble_handlers = [];
         request.__capture_handlers = [];
@@ -204,39 +214,14 @@
         var handler = request.__capture_handlers.shift();
         if (!handler) { handler = request.__bubble_handlers.shift(); }
         if (handler) {
-            // Run resource validation
-            var validation_response = null;
-            if (handler.resource) {
-                var resource = handler.resource;
-                // resource-wide assert
-                if (resource.asserts) {
-                    try { resource.asserts(request, response, handler.match); }
-                    catch (e) {
-                        if (typeof e == 'string') { validation_response = { code:500, reason:e }; }
-                        else { validation_response = e; }
-                    }
-                }
-                // method-specific assert
-                var method = resource['_' + request.method];
-                if (!validation_response && method && method.asserts) {
-                    try { method.asserts(request, response, handler.match); }
-                    catch (e) {
-                        if (typeof e == 'string') { validation_response = { code:500, reason:e }; }
-                        else { validation_response = e; }
-                    }
-                }
-            }
-            // Run the cb if its given (and validation passed)
+            // Run the cb
             var promise;
-            if (validation_response) { promise = validation_response; }
-            else if (handler.cb) {
-                // run in a catch block, so we can output errors
-                try { promise = handler.cb.call(handler.context, request, response, handler.match); }
-                catch (e) {
-                    if (e && e.code) { promise = e; }
-                    else { promise = { code:500, reason:e.toString() }; }
-                }
-            } else { promise = response; } // just pass on the last response
+            // run in a catch block, so we can output errors
+            try { promise = handler.cb.call(handler.context, request, response, handler.match); }
+            catch (e) {
+                if (e && e.code) { promise = e; }
+                else { promise = { code:500, reason:e.toString() }; }
+            }
             // When the promise is fulfilled, continue the chain
             Promise.when(promise, function(response) {
                 this.runHandlers(request, response);
@@ -329,7 +314,7 @@
         getData:function(data) { return this.data; },
         toString:function() { return this.getData().toString(); },
         convertToType:function(type) {
-            // this is very imprecise...just a helper
+            // this is very imprecise; override with your type's needs
             if (!type || type == this.mimetype || type == '*/*') { return this.getData(); }
             if (type.indexOf('html') != -1) { return this.toHtml ? this.toHtml() : this.toString(); }
             if (type.indexOf('json') != -1) { return this.toJson ? this.toJson() : this.toString(); }
@@ -339,8 +324,8 @@
         }
     });
     addToType('js/object', {
-        setData:function(data) {
-            this.data = (typeof data != 'object') ? { data:data } : data; // that makes sense...right?
+        setData:function(new_data) {
+            this.data = (typeof new_data != 'object') ? { value:new_data } : new_data;
             return this;
         },
         toHtml:function() { return objToHtml(this.data); },
@@ -353,7 +338,7 @@
             this.data = (typeof data != 'string') ? JSON.stringify(data) : data;
             return this;
         },
-        toHtml:function() { return '<span class="linkjs-json">'+this.data+'</span>'; }, // :TODO: prettify
+        toHtml:function() { return '<span class="linkjs-json">'+this.data+'</span>'; }, // :TODO: prettify?
         toJson:function() { return this.data; },
         toObject:function() { return JSON.parse(this.data); },
         toString:function() { return this.data; }
