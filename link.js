@@ -288,6 +288,9 @@
                 return null; // null in, null out
             }
         }
+        // strip off any extraneous data in the type
+        var index = mimetype.indexOf(';');
+        if (index != -1) { mimetype = mimetype.substring(0, index); }
         // get prototype
         var prototype = __ensureInterface(mimetype);
         // Instantiate a copy of the interface, to protect it from outsiders
@@ -311,7 +314,8 @@
     // ==================
     addToType('*', {
         setData:function(data) { this.data = data; return this; },
-        getData:function(data) { return this.data; },
+        getData:function() { return this.data; },
+        toObject:function() { return this.getData(); },
         toString:function() { return this.getData().toString(); },
         convertToType:function(type) {
             // this is very imprecise; override with your type's needs
@@ -460,12 +464,24 @@
     // Used to avoid duplicate hash-change handling
     var expected_hashchange = null;
     // Hash of enabled logging mods
-    var activeLogModes = {};
+    var active_log_modes = {};
+    // Configures remote requests in the browser (proxy)
+    var ajax_config = {
+        proxy:null,
+        proxy_header:'x-proxy-dest',
+    };
     
     // Hash of active logging modes
     var logMode = function(k, v) {
-        if (v === undefined) { return activeLogModes[k]; }
-        activeLogModes[k] = v;
+        if (v === undefined) { return active_log_modes[k]; }
+        active_log_modes[k] = v;
+        return v;
+    };
+
+    // Ajax config accessor
+    var ajaxConfig = function(k, v) {
+        if (v == undefined) { return ajax_config[k]; }
+        ajax_config[k] = v;
         return v;
     };
 
@@ -473,7 +489,13 @@
     var __sendAjaxRequest = function(request, opt_cb, opt_context) {
         // Create remote request
         var xhrRequest = new XMLHttpRequest();
-        xhrRequest.open(request.method, request.uri, true);
+        var target_uri = request.uri;
+        // Use the proxy, if enabled
+        if (ajax_config.proxy) {
+            request[ajax_config.proxy_header] = request.uri;
+            target_uri = ajax_config.proxy;
+        }
+        xhrRequest.open(request.method, target_uri, true);
         for (var k in request) {
             if (k == 'method' || k == 'uri' || k == 'body') { continue; }
             if (k.indexOf('__') == 0) { continue; }
@@ -490,6 +512,8 @@
                 // Parse headers
                 var headers = {};
                 var headers_parts = xhrRequest.getAllResponseHeaders().split("\n");
+                // :NOTE: a bug in firefox causes getAllResponseHeaders to return an empty string on CORS
+                // we either need to bug them, or iterate the headers we care about with getResponseHeader
                 for (var i=0; i < headers_parts.length; i++) {
                     if (!headers_parts[i]) { continue; }
                     var header_parts = headers_parts[i].toLowerCase().split(': ');
@@ -510,7 +534,7 @@
         xhrRequest.send(request.body);
     };
 
-    // Click interceptor -- handles links with requests within the application
+    // Click interceptor -- helps with form submissions
     var __windowClickHandler = function(e) {
         // Mark as recently clicked, if this (or a parent) is part of a form
         var node = e.target;
@@ -524,18 +548,6 @@
             }
             node = node.parentNode;
         }
-        
-        // Don't handle if a remote link
-        var target_uri = e.target.href;
-        if (!target_uri || target_uri.charAt(0) != '#') { return; }
-        e.preventDefault();
-        if (e.stopPropagation) { e.stopPropagation(); }
-
-        // Build request
-        var request = new Request('get', target_uri, { accept:'text/html' });
-        
-        // Handle
-        followRequest(request);
     };
 
     // Submit interceptor -- handles forms with requests within the application
@@ -579,15 +591,16 @@
         data = getTypeInterface(enctype, data).getData();
         
         // Strip the base URI
-        if (target_uri.indexOf(form.baseURI) != -1) {
-            target_uri = target_uri.substring(form.baseURI.length);
+        var base_uri = window.location.href.split('#')[0];
+        if (target_uri.indexOf(base_uri) != -1) {
+            target_uri = target_uri.substring(base_uri.length);
         }
         
         // Default to the current resource
         if (!target_uri) { target_uri = window.location.hash; }
         
         // Don't handle if a remote link
-        if (target_uri.charAt(0) != '#') { return; }
+        //if (target_uri.charAt(0) != '#') { return; }
         e.preventDefault();
         if (e.stopPropagation) { e.stopPropagation(); }
 
@@ -676,5 +689,6 @@
     Link.addToType        = addToType;
     Link.getTypeInterface = getTypeInterface;
     Link.logMode          = logMode;
+    Link.ajaxConfig       = ajaxConfig;
     Link.attachToWindow   = attachToWindow;
 }).call(this);
