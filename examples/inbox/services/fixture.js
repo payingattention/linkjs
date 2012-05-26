@@ -11,13 +11,25 @@
             { date:new Date('April 25 2012 15:12'), author:'asmitherson', recp:['bsmith', 'asmitherson'], subject:'RE: About the meeting', body:'Other stuff about business or whatever.', re:2 }
         ];
     };
+
+    // Resource Metadata
+    // =================
+    FixtureService.prototype.resources = {
+        '/':{
+            desc:'Fake message source.',
+            _get:'Provides messages from static data.',
+            validate:function(request) {
+                if (request.method != 'get') { throw { code:405, reason:'bad method' }; }
+                if (request.accept && request.accept.indexOf('object') == -1) { throw { code:406, reason:'not acceptable' }; }
+            }
+        }
+    };
     
     // Handler Routes
     // ==============
     FixtureService.prototype.routes = [
-        { cb:'messagesHandler', uri:'^/?$', accept:'js/array' },
-        { cb:'messageHtmlHandler', uri:'^/([0-9]+)/?$', accept:'text/html' },
-        { cb:'settingsHandler', uri:'^/settings/?$', accept:'text/html' }
+        { cb:'messagesHandler', uri:'^/?$', accept:'js/object' },
+        { cb:'messageHtmlHandler', uri:'^/([0-9]+)/?$', accept:'text/html' }
     ];
     
     // Handlers
@@ -35,7 +47,7 @@
                 view_link:this.uri + '/' + i
             });
         }
-        return { code:200, body:retMessages, 'content-type':'js/array' };
+        return { code:200, body:retMessages, 'content-type':'js/object' };
     };    
     FixtureService.prototype.messageHtmlHandler = function(request, response, match) {
         // Find message
@@ -44,10 +56,6 @@
         // Build html
         var messageView = new Views.Message(message);
         return { code:200, body:messageView.toString(), 'content-type':'text/html' };
-    };
-    FixtureService.prototype.settingsHandler = function(request) {
-        // :TODO:
-        return { code:200, body:'Fixture Settings', 'content-type':'text/html' };
     };
 
     // Export

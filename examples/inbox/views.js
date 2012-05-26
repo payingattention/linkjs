@@ -5,7 +5,6 @@
     var Nav = Tint.compile(navTmplElem.innerHTML, function() {
         this.item().header('Inbox');
         this.item().link('Messages', 'inbox', '#');
-        this.item().link('Settings', 'cog', '#/settings');
         this.item().header('Services');
     });
     Nav.prototype.addService = function(service) {

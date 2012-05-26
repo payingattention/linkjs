@@ -7,13 +7,25 @@
         this.messages = {};
         this.remoteLink = { uri:'/inbox/remote_fixture.json', accept:'application/json' };
     };
+
+    // Resource Metadata
+    // =================
+    RemoteFixture.prototype.resources = {
+        '/':{
+            desc:'Remote message source.',
+            _get:'Provides messages from static remote data.',
+            validate:function(request) {
+                if (request.method != 'get') { throw { code:405, reason:'bad method' }; }
+                if (request.accept && request.accept.indexOf('object') == -1) { throw { code:406, reason:'not acceptable' }; }
+            }
+        }
+    };
     
     // Handler Routes
     // ==============
     RemoteFixture.prototype.routes = [
-        { cb:'messagesHandler', uri:'^/?$', accept:'js/array' },
-        { cb:'messageHtmlHandler', uri:'^/([0-9]+)/?$', accept:'text/html' },
-        { cb:'settingsHandler', uri:'^/settings/?$', accept:'text/html' }
+        { cb:'messagesHandler', uri:'^/?$', accept:'js/object' },
+        { cb:'messageHtmlHandler', uri:'^/([0-9]+)/?$', accept:'text/html' }
     ];
 
     // Helpers
@@ -53,7 +65,7 @@
                     view_link:this.uri + '/' + mid
                 });
             }
-            promise.fulfill({ code:200, body:retMessages, 'content-type':'js/array' });
+            promise.fulfill({ code:200, body:retMessages, 'content-type':'js/object' });
         });
         return promise;
     };    
@@ -70,10 +82,6 @@
             promise.fulfill({ code:200, body:messageView.toString(), 'content-type':'text/html' });
         });
         return promise;
-    };
-    RemoteFixture.prototype.settingsHandler = function(request) {
-        // :TODO:
-        return { code:200, body:'Remote Fixture Settings', 'content-type':'text/html' };
     };
 
     // Export

@@ -5,6 +5,7 @@
         <meta author="pfraze">
         <title>Link - Inbox Example</title>
         <link rel="stylesheet" type="text/css" href="bootstrap/css/bootstrap.css" />
+        <link rel="stylesheet" type="text/css" href="inbox/style.css" />
         <script src="link.js"></script>
         <script src="tint.js"></script>
     </head>
@@ -16,22 +17,17 @@
 
         <script id="nav-template" type="text/html">
             <ul class="nav nav-list">
-                $item() {
+            $item() {
                 $header(label) {<li class="nav-header">$label;</li>}header;
                 $link(label, icon, uri) {<li><a href="$uri;"><i class="icon-$icon;"></i> $label;</a></li>}link;
-                }item;
+            }item;
             </ul>
         </script>
 
         <script id="inbox-template" type="text/html">
-            <div class="toolbar">
-                <form method="get">
-                    <button class="btn" formaction="$inbox_uri;" title="Check for new messages"><i class="icon-refresh"></i></button>
-                </form>
-            </div>
             <table class="table table-condensed">
                 $message(service, uri, title, date){
-                <tr><td><span class="label">$service;</span></td><td><a href="$uri;">$title;</a></td><td>$date;</td></tr>
+                    <tr><td><span class="label">$service;</span></td><td><a href="$uri;">$title;</a></td><td>$date;</td></tr>
                 }message;
             </table>
         </script>
@@ -43,8 +39,8 @@
                     Sent on <span class="label">$date; @$time;</span>
                     by <span class="label">$author;</span>
                     to $recp(){
-                    $add(name){<span class="label">$name;,</span>}add;
-                    $last(name){<span class="label">$name;</span>}last;
+                        $add(name){<span class="label">$name;,</span>}add;
+                        $last(name){<span class="label">$name;</span>}last;
                     }recp;
                 </small>
             </p>
@@ -57,9 +53,7 @@
             var Views = {};
         </script>
         <script src="inbox/views.js"></script>
-        <script src="inbox/layout.js"></script>
         <script src="inbox/inbox.js"></script>
-        <script src="inbox/nav.js"></script>
         <script src="inbox/services/fixture.js"></script>
         <script src="inbox/services/remotefixture.js"></script>
         <script>
@@ -70,24 +64,33 @@
                     remote:{ module:Modules.RemoteFixtureService, name:'Remote' }
                 };                    
             
-                // Create mediators
+                // Setup the app
                 var app = new Link.Mediator();
-                var nav = new Link.Mediator('nav');
-                var content = new Link.Mediator('content');
-            
-                // Configure modules
-                app.addModule('#', new Modules.Layout(nav, content));
-                nav.addModule('#', new Modules.Nav(services));
-                content.addModule('#', new Modules.Inbox());
+                var navView = new Views.Nav();
+                app.addModule('#', new Modules.Inbox());
                 for (var uri in services) {
-                    var mod = services[uri].module;
-                    var inst = new mod(services[uri].name);
-                    content.addModule('#/services/' + uri, inst);
+                    var Module = services[uri].module;
+                    var inst = new Module(services[uri].name);
+                    app.addModule('#services/' + uri, inst);
+                    navView.item().link(services[uri].name, 'folder-open', '#/services/'+uri);
                 }
+                document.getElementById('nav').innerHTML = navView.toString();
                 
                 // Start application
                 Link.logMode('traffic', true);
-                Link.attachToWindow(app);
+                var elem = document.getElementById('content');
+                Link.attachToWindow(app, function(request, response) {
+                    var html;
+                    if (response && response.body) {
+                        // Convert the response to HTML
+                        var iface = Link.getTypeInterface(response['content-type'], response.body);
+                        html = (iface.toHtml ? iface.toHtml() : iface.toString());
+                    } else {
+                        html = response.code + ' ' + response.reason;
+                    }
+                    // Write to DOM
+                    elem.innerHTML = html;
+                });
             };
         </script>
     </body>

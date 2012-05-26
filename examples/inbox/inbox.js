@@ -7,13 +7,33 @@
         this.serviceCount = 0;
     };
 
+    // Resource Metadata
+    // =================
+    Inbox.prototype.resources = {
+        '/':{
+            desc:'Inbox UI. Pulls from all resources configured to #services/*',
+            _get:'All services',
+            validate:function(request) {
+                if (request.method != 'get') { throw { code:405, reason:'bad method' }; }
+                if (request.accept && request.accept.indexOf('html') == -1) { throw { code:406, reason:'not acceptable' }; }
+            }
+        }
+    };
+    var serviceResource = {
+        desc:'Inbox UI for a specific service',
+        _get:'Specific service',
+        validate:function(request) {
+            if (request.method != 'get') { throw { code:405, reason:'bad method' }; }
+            if (request.accept && request.accept.indexOf('html') == -1) { throw { code:406, reason:'not acceptable' }; }
+        }
+    };
+
     // Handler Routes
     // ==============
     Inbox.prototype.routes = [
         { cb:'prehandler', uri:'.*', accept:'text/html' },
         { cb:'mainInbox', uri:'^/?$', method:'get', accept:'text/html' },
-        { cb:'serviceInbox', uri:'^/services/([^/]+)/?$', method:'get', accept:'text/html' },
-        { cb:'settings', uri:'^/settings/?$', method:'get', accept:'text/html' }
+        { cb:'serviceInbox', uri:'^/services/([^/]+)/?$', method:'get', accept:'text/html' }
     ];
     
     // Pre-handler
@@ -22,17 +42,15 @@
     Inbox.prototype.prehandler = function(request) {  
         if (this.serviceCount > 0) { return; }
         
-        // Load stylesheet
-        Link.addStylesheet('inbox/style.css');
-        
         // Find all services configged to ./services/*/
-        var serviceUris = this.mediator.findModules(this.uri + '/services/([^/]+)/?$', 1);
+        var serviceUris = this.mediator.findResources('#services/([^/]+)/?$', 1);
         for (var slug in serviceUris) {
             // Store links to the service
             this.services[slug] = {
-                messagesLink:{ uri:serviceUris[slug], accept:'js/array' },
-                settingsLink:{ uri:serviceUris[slug] + '/settings', accept:'text/html', pragma:'partial' },
+                messagesLink:{ uri:'#services/'+slug, accept:'js/object' }
             };
+            // Add resource
+            this.resources['/' + slug] = serviceResource;
             this.serviceCount++;
         }
     };
@@ -42,7 +60,7 @@
     Inbox.prototype.mainInbox = function() {
         // Promise to respond after the services all sync
         var promise = new Link.Promise();
-        promise.isLiesUntil(this.serviceCount);
+        var responsesLeft = this.serviceCount;
         // Get messages from all services
         var allMessages = [];
         for (var slug in this.services) {
@@ -54,7 +72,7 @@
                         service.messages = response.body;
                         allMessages = allMessages.concat(service.messages);
                     }
-                    if (!promise.stillLying()) {
+                    if (--responsesLeft == 0) {
                         // Render response
                         var inboxView = new Views.Inbox(this.uri);
                         inboxView.addMessages(allMessages);
@@ -63,9 +81,6 @@
                             body:inboxView.toString(),
                             'content-type':'text/html'
                         });
-                    } else {
-                        // Don't go to as much effort with the lie
-                        promise.fulfill();
                     }
                 }, self);
             })(this, this.services[slug]);
@@ -91,23 +106,6 @@
                 'content-type':'text/html'
             });
         }, service);
-        return promise;
-    };
-    Inbox.prototype.settings = function(request) {
-        // Set up async response
-        var promise = new Link.Promise();
-        promise.isLiesUntil(this.serviceCount);
-        var finalResponse = { code:200, 'content-type':'text/html', body:'' };
-        
-        // Get the settings html from each service
-        for (var slug in this.services) {
-            (function(mediator, service) {
-                mediator.get(service.settingsLink, function(response) {
-                    if (response.code == 200) { finalResponse.body += response.body; }
-                    promise.fulfill(finalResponse);
-                });
-            })(this.mediator, this.services[slug]);
-        }
         return promise;
     };
 

@@ -178,7 +178,15 @@
             if (errors) { break; }
         }
         // Response immediately if there were errors
-        if (errors) { if (opt_cb) { opt_cb.call(opt_context, errors); return; } }
+        if (errors) {
+            // Log
+            if (logMode('traffic')) {
+                console.log(this.id ? this.id+'|res' : 'res', request.__mid, request.uri, errors);
+            }
+            // Respond
+            if (opt_cb) { opt_cb.call(opt_context, errors); }
+            return;
+        }
         // Build the handler chain
         request.__bubble_handlers = [];
         request.__capture_handlers = [];
@@ -607,7 +615,8 @@
         // Build the request
         var request = {
             method:method,
-            uri:target_uri
+            uri:target_uri,
+            accept:'text/html'
         };
         if (form.acceptCharset) { request.accept = form.acceptCharset; }
 
