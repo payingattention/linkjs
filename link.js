@@ -130,7 +130,7 @@
     var cur_mid = 1;
     Mediator.prototype.dispatch = function(request, opt_cb, opt_context) {
         // Assign an id, for debugging
-        request.__mid = cur_mid++;
+        Object.defineProperty(request, '__mid', { value:cur_mid++, writable:true });
         // Log
         if (logMode('traffic')) {
             console.log(this.id ? this.id+'|req' : 'req', request.__mid, request.uri, request.accept ? '['+request.accept+']' : '', request);
@@ -188,8 +188,8 @@
             return;
         }
         // Build the handler chain
-        request.__bubble_handlers = [];
-        request.__capture_handlers = [];
+        Object.defineProperty(request, '__bubble_handlers', { value:[], writable:true });
+        Object.defineProperty(request, '__capture_handlers', { value:[], writable:true });
         var handlers = this.findHandlers(request);
         for (var i=0; i < handlers.length; i++) {
             if (handlers[i].route.bubble) {
@@ -200,7 +200,7 @@
             }
         }
         // Store the dispatcher handler
-        request.__dispatcher_handler = { cb:opt_cb, context:opt_context };
+        Object.defineProperty(request, '__dispatcher_handler', { value:{ cb:opt_cb, context:opt_context }, writable:true });
         // Begin handling next tick
         var self = this;
         setTimeout(function() { self.runHandlers(request); }, 0);
