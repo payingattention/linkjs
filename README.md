@@ -2,8 +2,6 @@
 
 A Javascript mediator framework designed for composability in browser applications using the REST style.
 
-### [Click here for a live demo (todo)](#todo)
-
 ## Usage
 
 Modules export routes for handling HTTP-style requests:
@@ -15,10 +13,28 @@ Modules export routes for handling HTTP-style requests:
     };
     // `cb` is the handler, and everything else is used to match the request to the route
     AccountModule.prototype.routes = [
-        { cb:'dashboard', uri:'^/?$', method:'get' accept:'text/html' },
+        { cb:'dashboard', uri:'^/?$', method:'get', accept:'text/html' },
         { cb:'message', uri:'^/message/([0-9]+)/?$' },
         { cb:'messageReply', uri:'^/message/([0-9]+/reply?$', method:'post' }
     ];
+```
+
+They can also (optionally) export resources which run request validation and document the available URIs.
+
+```javascript
+    AccountModule.prototype.resources = {
+        '/': {
+            desc:'The account dashboard.'
+            validate:function(request) { if (request.method != 'get') { throw { code:405, reason:'bad method' }; } },
+            _get:{
+                desc:'Provides HTML overview of account settings.',
+                validate:function(request) { /* etc */ }
+            }   
+        }
+    };
+    // ...
+    // to add resources dynamically:
+    this.resources['/the_uri'] = { desc:'The description' /* ... */ };
 ```
 
 The modules are then configured into a URI structure to compose the application:
@@ -29,20 +45,25 @@ The modules are then configured into a URI structure to compose the application:
     app.addModule('#/account', new AccountModule());
     app.addModule('#/cart', new CartModule());
     // the modules' routes operate relative to their configured URIs
-    Link.attachToWindow(app);
+    Link.attachToWindow(app, function(request, response) {
+        // handle response (eg, render to DOM)
+        document.getElementById('content-area').innerHTML = response.body.toString();
+    });
 ```
 
-Link intercepts `<a>` clicks and `<form>` submits. If their targets start with a hash (#), Link routes the
-request through the configured modules, then renders the response. This allows you to build client-side apps
-as if they were remote websites, possibly without ever accessing the DOM directly.
+After `attachToWindow()`, Link intercepts `<a>` clicks and `<form>` submits. If their targets start with a
+hash (#), Link routes the request through the configured modules, then runs the attachToWindow callback.
 
 Modules can also send their own requests:
 
 ```javascript
-    // get users
-    this.mediator.dispatch({ method:'get', uri:this.users_link, accept:'js/array' }, function(response) {
-        if (response.code == 200) { this.users = response.body; }
-    }, this);
+    AccountModule.prototype.someFunc = function() {
+        // get users
+        this.mediator.dispatch({ method:'get', uri:this.users_link, accept:'js/object' }, function(response) {
+            if (response.code == 200) { this.users = response.body; }
+        }, this);
+        // ...
+    };
 ```
 
 Responses are returned by handlers:
@@ -50,80 +71,74 @@ Responses are returned by handlers:
 ```javascript
     // `/users`
     UsersModule.prototype.usersHandler = function(request) {
-        return { code:200, body:this.activeUsers, 'content-type':'js/array' };
-        // it may be wise to clone activeUsers before responding with it
+        return { code:200, body:this.activeUsers, 'content-type':'js/object' };
     });
 ```
 
 If some async work must be done first, the handler can return a `Promise`, and Link will pause the handler chain until
 the promise is fulfilled:
 
-
 ```javascript
     UsersModule.prototype.usersHandler = function(request) {
         var promise = new Link.Promise();
         this.someAsyncAction(function(data) {
-            promise.fulfill({ code:200, body:data, 'content-type':'js/array' })
+            promise.fulfill({ code:200, body:data, 'content-type':'js/object' })
         });
         return promise;
     });
 ```
 
-The vision for Link is to create applications which are easy to extend due to the constraints of the
-interfaces. For instance, an inbox application could use a single REST API for messaging services, then consume
-any number of services which employ the API, allowing direct integration from multiple different sources. This is
-exemplified in the inbox demo, which can be found in `/examples`.
+The vision for Link is to create applications which are easy to extend due to the constraints of the REST
+interfaces. For instance, an inbox application could issue requests to all resources under the #services/ URI,
+then combine the results, allowing direct integration from multiple different sources. This is exemplified in
+the inbox demo, which can be found in `/examples`.
 
 ## The Inbox Example
 
-:TODO: a detailed explanation of how the inbox example works
+The inbox app uses 3 different modules: a main inbox interface and 2 service resources. The inbox is configured
+to '#'; the services are underneath '#services/'.
 
-## Response Composition
+The inbox interface looks for the service resources when it gets its first request:
 
-:TODO: update this to match the current API
+`var serviceUris = this.mediator.findResources('#services/([^/]+)/?$', 1);`
 
-Multiple handlers can be configured to match the same route. In that event, they are added into a
-handler chain which respects the order of declaration:
+When its root resource receives a GET request for html, the inbox issues GET requests to the service resources.
+They respond with arrays of messages, which the inbox then orders and renders into HTML for the final response.
+
+The main inbox also handles GET requests to the individual service URIs (eg '#services/fixture') which means there
+are multiple modules handling the same URI. However, the inbox handles requests for HTML, while the services only
+provide 'js/object' responses.
+
+If a service wanted to handle the HTML GET request, it could; because its module is further down the URI structure
+than the inbox module ('#' versus '#services/___') it will respond second, and thus can discard the original inbox's
+response.
+
+## Type Interfaces
+
+One other tool in LinkJS is the "type interface" registry, which is a application-wide set of wrapper objects to help
+mimetypes interoperate. This feature is still in development, but can be accessed with `Link.getTypeInterface` and
+`Link.addToType`. A brief example:
 
 ```javascript
-    UsersModule.get({ uri:'^/feed/?$', accept:'text/html' }, function(request) {
-        request.respond(200, this.buildFeedHtml(this.feed), 'text/html');
-    });
-    UsersModule.get({ uri:'.*', accept:'text/html' }, function(request, response) {
-        // `response` is provided from the last handler
-        response.body(this.buildHtmlLayout(response.body())); // Wrap the response body with our layout
-        request.respond(response);
+    Link.addToType('js/mymodule+object', {
+        toHtml:function() { return '<div>'+this.data.toString()+'</div>'; }
     });
 ```
 
-If handlers from multiple modules match a request, then precedence is enforced by the depth of the module
-URIs. That is, the handlers for a module at '#/a' would be called before the handlers for a module at
-'#/a/b'.
-
-Like DOM events, you can also choose to handle the bubble phase of the request if you want
-the callback to run at the end of the chain. This allows code like the previous example to work
-across modules.
+This allows code elsewhere to easily convert to the type it needs:
 
 ```javascript
-    // Configured to '#'
-    MainModule.get({ uri:'.*', accept:'text/html', bubble:true }, function(request, response) {
-        // Bubble handlers are FILO; this is guaranteed to run after all sub-module handlers
-        response.body(this.buildHtmlLayout(response.body()));
-        request.respond(response);
-    });
-    // Configured to '#/users'
-    UsersModule.get({ uri:'^/feed/?$', accept:'text/html' }, function(request) {
-        request.respond(200, this.buildFeedHtml(this.feed), 'text/html');
-    });
+    var iface = Link.getTypeInterface(response['content-type'], response.body);
+    var asHtml = iface.toHtml();
 ```
 
-## Remote Requests
-
-:TODO:
+Each interface inherits from its parent type, which follows the mimetype format. For instance, methods in the 'text' interface
+are available to 'text/html', and 'text/subformat+html' inherits from 'text/html'. LinkJS includes interfaces for some basic types
+(html, json, javascript objects) along with converting functions (toHtml, toJson, toObject).
 
 ## API
 
-:TODO:
+Full API documentation is in the works.
 
 # License
 
