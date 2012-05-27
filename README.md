@@ -15,8 +15,8 @@ with HTML and avoid interacting with the DOM. (Good for server/client reuse.)
 
 `npm install pfraze-linkjs`
 
-See the [LinkShUI CLI](https://github.com/pfraze/linkshui) for an environment to
-debug and run LinkJS modules. It's also a good example reference (in addition to the
+[See the LinkShUI CLI for an environment to
+debug and run LinkJS modules](https://github.com/pfraze/linkshui). It's also a good example reference (in addition to the
 inbox example in this repo).
 
 ## Usage
