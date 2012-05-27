@@ -1,10 +1,26 @@
 # LinkJS
 
-A Javascript mediator framework designed for composability in browser applications using the REST style.
+Communicate between modules using HTTP-style requests.
+
+````
+    CartModule ------"GET #inventory/sku/4003/price"------> InventoryModule
+````
+
+No direct calls makes it simple to swap out or configure in new code. Plus, LinkJS
+intercepts form submits and link clicks to hash URLs, allowing modules to respond
+with HTML and avoid interacting with the DOM. (Good for server/client reuse.)
+
+
+## Getting Started
+
+`npm install pfraze-linkjs`
+
+See the [LinkShUI CLI](https://github.com/pfraze/linkshui) for an environment to
+debug and run LinkJS modules.
 
 ## Usage
 
-Modules export routes for handling HTTP-style requests:
+Modules export routes for handling requests:
 
 ```javascript
     // typical constructor
