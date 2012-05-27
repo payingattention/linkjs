@@ -16,7 +16,8 @@ with HTML and avoid interacting with the DOM. (Good for server/client reuse.)
 `npm install pfraze-linkjs`
 
 See the [LinkShUI CLI](https://github.com/pfraze/linkshui) for an environment to
-debug and run LinkJS modules.
+debug and run LinkJS modules. It's also a good example reference (in addition to the
+inbox example in this repo).
 
 ## Usage
 
@@ -41,16 +42,15 @@ They can also (optionally) export resources which run request validation and doc
     AccountModule.prototype.resources = {
         '/': {
             desc:'The account dashboard.'
-            validate:function(request) { if (request.method != 'get') { throw { code:405, reason:'bad method' }; } },
+            validate:function(request) { 
+                if (request.method != 'get') { throw { code:405, reason:'bad method' }; } 
+            },
             _get:{
                 desc:'Provides HTML overview of account settings.',
                 validate:function(request) { /* etc */ }
             }   
         }
     };
-    // ...
-    // to add resources dynamically:
-    this.resources['/the_uri'] = { desc:'The description' /* ... */ };
 ```
 
 The modules are then configured into a URI structure to compose the application:
@@ -58,35 +58,29 @@ The modules are then configured into a URI structure to compose the application:
 ```javascript
     var app = new Link.Mediator();
     app.addModule('#', new StoreModule());
-    app.addModule('#/account', new AccountModule());
-    app.addModule('#/cart', new CartModule());
-    // the modules' routes operate relative to their configured URIs
-    Link.attachToWindow(app, function(request, response) {
-        // handle response (eg, render to DOM)
-        document.getElementById('content-area').innerHTML = response.body.toString();
-    });
+    app.addModule('#account', new AccountModule());
+    app.addModule('#cart', new CartModule());
 ```
 
-After `attachToWindow()`, Link intercepts `<a>` clicks and `<form>` submits. If their targets start with a
-hash (#), Link routes the request through the configured modules, then runs the attachToWindow callback.
+After `Link.attachToWindow()`, form submits and link clicks to fragment uris ('#whatever') will
+be handled by the application.
 
-Modules can also send their own requests:
+### Requests/Responses
+
+To issue a request in a module:
 
 ```javascript
-    AccountModule.prototype.someFunc = function() {
-        // get users
-        this.mediator.dispatch({ method:'get', uri:this.users_link, accept:'js/object' }, function(response) {
-            if (response.code == 200) { this.users = response.body; }
-        }, this);
-        // ...
-    };
+    // get users
+    this.mediator.dispatch({ method:'get', uri:'#users', accept:'js/object' }, function(response) {
+        if (response.code == 200) { this.users = response.body; }
+    }, this);
 ```
 
 Responses are returned by handlers:
 
 ```javascript
-    // `/users`
-    UsersModule.prototype.usersHandler = function(request) {
+    // `#users`
+    UsersModule.prototype.getHandler = function(request) {
         return { code:200, body:this.activeUsers, 'content-type':'js/object' };
     });
 ```
