@@ -67,13 +67,16 @@
                 // Setup the app
                 var app = new Link.Mediator();
                 var navView = new Views.Nav();
-                app.addModule('#', new Modules.Inbox());
+                app.addModule('#', new Modules.Inbox(services));
                 for (var uri in services) {
-                    var Module = services[uri].module;
-                    var inst = new Module(services[uri].name);
+                    // instantiate the module
+                    var inst = new (services[uri].module)(services[uri].name);
+                    // add to structure
                     app.addModule('#services/' + uri, inst);
+                    // add to nav view
                     navView.item().link(services[uri].name, 'folder-open', '#/services/'+uri);
                 }
+                // put nav view into the DOM
                 document.getElementById('nav').innerHTML = navView.toString();
                 
                 // Start application

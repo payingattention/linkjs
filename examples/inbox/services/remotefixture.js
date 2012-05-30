@@ -7,19 +7,6 @@
         this.messages = {};
         this.remoteLink = { uri:'/inbox/remote_fixture.json', accept:'application/json' };
     };
-
-    // Resource Metadata
-    // =================
-    RemoteFixture.prototype.resources = {
-        '/':{
-            desc:'Remote message source.',
-            _get:'Provides messages from static remote data.',
-            validate:function(request) {
-                if (request.method != 'get') { throw { code:405, reason:'bad method' }; }
-                if (request.accept && request.accept.indexOf('object') == -1) { throw { code:406, reason:'not acceptable' }; }
-            }
-        }
-    };
     
     // Handler Routes
     // ==============
@@ -27,9 +14,6 @@
         { cb:'messagesHandler', uri:'^/?$', accept:'js/object' },
         { cb:'messageHtmlHandler', uri:'^/([0-9]+)/?$', accept:'text/html' }
     ];
-
-    // Helpers
-    // =======
     RemoteFixture.prototype.getMessages = function(cb) {
         // Get messages
         // (you'd want some kind of caching in real life)

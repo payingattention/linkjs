@@ -2,68 +2,40 @@
     // Inbox Module
     // ============
     // pulls messages from multiple services and renders them in an inbox GUI
-    var Inbox = function() {
-        this.services = {};
-        this.serviceCount = 0;
-    };
-
-    // Resource Metadata
-    // =================
-    Inbox.prototype.resources = {
-        '/':{
-            desc:'Inbox UI. Pulls from all resources configured to #services/*',
-            _get:'All services',
-            validate:function(request) {
-                if (request.method != 'get') { throw { code:405, reason:'bad method' }; }
-                if (request.accept && request.accept.indexOf('html') == -1) { throw { code:406, reason:'not acceptable' }; }
-            }
-        }
-    };
-    var serviceResource = {
-        desc:'Inbox UI for a specific service',
-        _get:'Specific service',
-        validate:function(request) {
-            if (request.method != 'get') { throw { code:405, reason:'bad method' }; }
-            if (request.accept && request.accept.indexOf('html') == -1) { throw { code:406, reason:'not acceptable' }; }
+    var Inbox = function(services) {
+        this.services = services;
+        // Prep the structure
+        for (var slug in this.services) {
+            this.serviceCount++;
+            this.services[slug].messagesLink = { uri:'#services/'+slug, accept:'js/object' };
         }
     };
 
     // Handler Routes
     // ==============
     Inbox.prototype.routes = [
-        { cb:'prehandler', uri:'.*', accept:'text/html' },
+        { uri:'^/?$', cb:function(request) { // validation
+            if (request.method != 'get') { throw { code:405, reason:'bad method' }; }
+            if (request.accept && request.accept.indexOf('html') == -1) { throw { code:406, reason:'not acceptable' }; }
+        }},
         { cb:'mainInbox', uri:'^/?$', method:'get', accept:'text/html' },
-        { cb:'serviceInbox', uri:'^/services/([^/]+)/?$', method:'get', accept:'text/html' }
+        { uri:'^/services/([^/]+)/?$', cb:function(request) { // validation
+            if (request.method != 'get') { throw { code:405, reason:'bad method' }; }
+            if (request.accept && request.accept.indexOf('html') == -1) { throw { code:406, reason:'not acceptable' }; }
+        }},
+        { cb:'serviceInbox', uri:'^/services/([^/]+)/?$', method:'get', accept:'text/html' },
     ];
-    
-    // Pre-handler
-    // ===========
-    // one-time init
-    Inbox.prototype.prehandler = function(request) {  
-        if (this.serviceCount > 0) { return; }
-        
-        // Find all services configged to ./services/*/
-        var serviceUris = this.mediator.findResources('#services/([^/]+)/?$', 1);
-        for (var slug in serviceUris) {
-            // Store links to the service
-            this.services[slug] = {
-                messagesLink:{ uri:'#services/'+slug, accept:'js/object' }
-            };
-            // Add resource
-            this.resources['/' + slug] = serviceResource;
-            this.serviceCount++;
-        }
-    };
 
     // Resource Handlers
     // =================
     Inbox.prototype.mainInbox = function() {
         // Promise to respond after the services all sync
         var promise = new Link.Promise();
-        var responsesLeft = this.serviceCount;
+        var responsesLeft = 0;
         // Get messages from all services
         var allMessages = [];
         for (var slug in this.services) {
+            responsesLeft++;
             // Capture the service in a closure
             (function(self, service) {
                 self.mediator.get(service.messagesLink, function(response) {

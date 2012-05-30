@@ -11,19 +11,6 @@
             { date:new Date('April 25 2012 15:12'), author:'asmitherson', recp:['bsmith', 'asmitherson'], subject:'RE: About the meeting', body:'Other stuff about business or whatever.', re:2 }
         ];
     };
-
-    // Resource Metadata
-    // =================
-    FixtureService.prototype.resources = {
-        '/':{
-            desc:'Fake message source.',
-            _get:'Provides messages from static data.',
-            validate:function(request) {
-                if (request.method != 'get') { throw { code:405, reason:'bad method' }; }
-                if (request.accept && request.accept.indexOf('object') == -1) { throw { code:406, reason:'not acceptable' }; }
-            }
-        }
-    };
     
     // Handler Routes
     // ==============
@@ -31,9 +18,6 @@
         { cb:'messagesHandler', uri:'^/?$', accept:'js/object' },
         { cb:'messageHtmlHandler', uri:'^/([0-9]+)/?$', accept:'text/html' }
     ];
-    
-    // Handlers
-    // ========
     FixtureService.prototype.messagesHandler = function(request) {
         // Collect messages
         var retMessages = [];

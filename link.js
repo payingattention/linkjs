@@ -108,7 +108,7 @@
                     // Ended the loop because it wasn't a match?
                     if (!match) { continue; }
                     // A match, get the cb
-                    var cb = module[route.cb];
+                    var cb = route.cb;
                     if (typeof(cb) == 'string') { cb = module[cb]; }
                     if (!cb) { throw "Handler callback '" + route.cb + "' not found"; }
                     // Add to list
