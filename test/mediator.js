@@ -29,42 +29,6 @@ describe('Mediator', function() {
             mediator.modules[5].id.should.equal(6);
         });
     });
-    describe('#findResources', function() {
-        // set up a test mediator
-        var mediator = new Link.Mediator();
-        mediator.addModule('#the/1st', {
-            resources: { '/':'#the/1st' }
-        });
-        mediator.addModule('#the/2nd', {
-            resources: { '/':'#the/2nd', '/sub1':'#the/2nd/sub1', '/sub2':'#the/2nd/sub2', '/sub/sub':'#the/2nd/sub/sub' }
-        });
-        mediator.addModule('#the/3rd',  {
-            resources: { '/':'#the/3rd', '/sub3':'#the/3rd/sub3', '/sub4':'#the/3rd/sub4' }
-        });
-        mediator.addModule('#', {
-            resources: { '/the/4th/sub5':'#the/4th/sub5' }
-        });
-
-        // run checks
-        it('should find resources by a uri regex', function() {
-            var resources = mediator.findResources('#the/(.*)d$');
-            resources[0].should.equal('#the/2nd');
-            resources[1].should.equal('#the/3rd');
-
-            var resources = mediator.findResources('#the/([^/]+)/sub.*');
-            resources[0].should.equal('#the/4th/sub5'); // first because module is at a lower URI
-            resources[1].should.equal('#the/2nd/sub1');
-            resources[2].should.equal('#the/2nd/sub2');
-            resources[3].should.equal('#the/2nd/sub/sub');
-            resources[4].should.equal('#the/3rd/sub3');
-            resources[5].should.equal('#the/3rd/sub4');
-        });
-        it('should build keys from the regex match', function() {
-            var resources = mediator.findResources('#the/(.*)d$', 1);
-            resources['2n'].should.equal('#the/2nd');
-            resources['3r'].should.equal('#the/3rd');
-        });
-    });
     describe('#findHandlers', function() {
         // set up a test mediator
         var mediator = new Link.Mediator();
@@ -133,45 +97,6 @@ describe('Mediator', function() {
                     response.should.be.ok;
                     response.code.should.equal(404);
                     done();
-                });
-            });
-        });
-        it('should run resource and method validation', function(done) {
-            var mediator = new Link.Mediator();
-            mediator.addModule('#uri', {
-                routes:[{ cb:'give200', uri:'^/a/?$' }, { cb:'give200', uri:'^/b/?$' }],
-                resources:{
-                    '/a':{ asserts:function(request) { throw { code:503, reason:'not available' }; }},
-                    '/b':{ _post:{ asserts:function(request) { throw { code:503, reason:'not available' }; }}}
-                },
-                give200:function() { return { code:200 }; }
-            });
-            mediator.addModule('#', {
-                routes:[{ cb:'give200', uri:'^/?$' }],
-                resources:{ '/':{ asserts:function(request) { throw { code:503, reason:'not available' }; }}},
-                give200:function() { return { code:200 }; }
-            });
-            // test resource validation
-            mediator.dispatch({ uri:'#uri/a' }, function(response) {
-                response.should.be.ok;
-                response.code.should.equal(503);
-                response.reason.should.equal('not available');
-                // test with different module uri & resource suburi
-                mediator.dispatch({ uri:'#' }, function(response) {
-                    response.should.be.ok;
-                    response.code.should.equal(503);
-                    response.reason.should.equal('not available');
-                    // test for unvalidated method
-                    mediator.dispatch({ uri:'#uri/b', method:'get' }, function(response) {
-                        response.should.be.ok;
-                        response.code.should.equal(200);
-                        // test for validated method
-                        mediator.dispatch({ uri:'#uri/b', method:'post' }, function(response) {
-                            response.should.be.ok;
-                            response.code.should.equal(503);
-                            done();
-                        });
-                    });
                 });
             });
         });

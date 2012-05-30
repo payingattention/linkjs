@@ -123,16 +123,6 @@
                 request.query[kv[0]] = kv[1];
             }
         }
-        // Response immediately if there were errors
-        if (errors) {
-            // Log
-            if (logMode('traffic')) {
-                console.log(this.id ? this.id+'|res' : 'res', request.__mid, request.uri, errors);
-            }
-            // Respond
-            if (opt_cb) { opt_cb.call(opt_context, errors); }
-            return;
-        }
         // Build the handler chain
         Object.defineProperty(request, '__bubble_handlers', { value:[], writable:true });
         Object.defineProperty(request, '__capture_handlers', { value:[], writable:true });
