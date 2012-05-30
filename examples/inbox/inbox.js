@@ -38,7 +38,7 @@
             responsesLeft++;
             // Capture the service in a closure
             (function(self, service) {
-                self.mediator.get(service.messagesLink, function(response) {
+                self.mediator.get(service.messagesLink).then(function(response) {
                     // Cache
                     if (response.code == 200) {
                         service.messages = response.body;
@@ -66,7 +66,7 @@
         
         // Dispatch for messages
         var promise = new Link.Promise();
-        this.mediator.get(service.messagesLink, function(response) {
+        this.mediator.get(service.messagesLink).then(function(response) {
             // Cache
             if (response.code == 200) { this.messages = response.body; }
             // Render & respond

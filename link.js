@@ -200,20 +200,23 @@
             }
         }
         // Store the dispatcher handler
-        Object.defineProperty(request, '__dispatcher_handler', { value:{ cb:opt_cb, context:opt_context }, writable:true });
+        var disp_promise = new Promise();
+        opt_cb && disp_promise.then(opt_cb, opt_context);
+        Object.defineProperty(request, '__dispatcher_promise', { value:disp_promise, writable:true });
         // Begin handling next tick
         var self = this;
         setTimeout(function() { self.runHandlers(request); }, 0);
+        return disp_promise;
     };
 
     // Dispatch sugars
     Mediator.prototype.get = function(request, opt_cb, opt_context) {
         request.method = 'get';
-        this.dispatch(request, opt_cb, opt_context);
+        return this.dispatch(request, opt_cb, opt_context);
     };
     Mediator.prototype.post = function(request, opt_cb, opt_context) {
         request.method = 'post';
-        this.dispatch(request, opt_cb, opt_context);
+        return this.dispatch(request, opt_cb, opt_context);
     };
         
     // Processes the request's handler chain
@@ -241,11 +244,8 @@
             if (logMode('traffic')) {
                 console.log(this.id ? this.id+'|res' : 'res', request.__mid, request.uri, response['content-type'] ? '['+response['content-type']+']' : '', response);
             }
-            // Send to dispatcher
-            handler = request.__dispatcher_handler;
-            if (handler && handler.cb) {
-                handler.cb.call(handler.context, response);
-            }
+            // Fulfill dispatcher promise
+            request.__dispatcher_promise.fulfill(response);
         }
     };
 
