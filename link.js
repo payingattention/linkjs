@@ -34,36 +34,6 @@
         this.modules.splice(i, 0, module);
     };
 
-    // Gives URIs to resources that match the given regex
-    // - if opt_key_index is given, the corresponding group in the regex will be used as they key of
-    //   the returned object
-    Mediator.prototype.findResources = function(re, opt_key_index) {
-        var matched_resources = {};
-        // Make sure we have a regexp
-        if (typeof(re) == 'string') { re = new RegExp(re, 'i'); }
-        var k=0;
-        // Iterate modules
-        for (var i=0; i < this.modules.length; i++) {
-            var module = this.modules[i];
-            if (!module.resources) { continue; }
-            // Iteriate module resources
-            for (var sub_uri in module.resources) {
-                // If module has a uri, prepend it
-                var res_uri = module.uri + sub_uri;
-                if (res_uri.indexOf('#/') == 0) { res_uri = res_uri.replace('#/','#'); } // convert #/foobar to #foobar
-                if (res_uri.charAt(res_uri.length - 1) == '/') { res_uri = res_uri.slice(0,-1); } // strip trailing slash
-                // Does the resource's uri match?
-                var match = re.exec(res_uri);
-                if (match) {
-                    // Generate the key & store
-                    var key = (opt_key_index !== undefined ? match[opt_key_index] : k++);
-                    matched_resources[key] = module.resources[sub_uri];
-                }
-            }
-        }
-        return matched_resources;
-    };
-
     // Searches modules for handlers for the given request
     //  - returns an array of objects with the keys { cb, module, match, route }
     //  - returns the handlers in the order of module precedence
@@ -152,30 +122,6 @@
                 var kv = parts[i].split('=');
                 request.query[kv[0]] = kv[1];
             }
-        }
-        // Find the resource(s) and run validation
-        var errors = null;
-        var resources = this.findResources('^'+request.uri+'$');
-        for (var k in resources) {
-            var resource = resources[k];
-            // resource-wide validation
-            if (resource.validate) {
-                try { resource.validate(request); }
-                catch (e) {
-                    if (typeof e == 'string') { errors = { code:500, reason:e }; }
-                    else { errors = e; }
-                }
-            }
-            // method-specific assert
-            var method = resource['_' + request.method];
-            if (!errors && method && method.validate) {
-                try { method.validate(request); }
-                catch (e) {
-                    if (typeof e == 'string') { errors = { code:500, reason:e }; }
-                    else { errors = e; }
-                }
-            }
-            if (errors) { break; }
         }
         // Response immediately if there were errors
         if (errors) {
