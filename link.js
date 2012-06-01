@@ -46,6 +46,7 @@
             if (rel_uri_index != -1) {
                 // It does-- pull out the remaining URI and use that to match the request
                 var rel_uri = request.uri.substr(module.uri.length);
+                if (rel_uri.charAt(0) != '/') { rel_uri = '/' + rel_uri; } // prepend the leading slash, for consistency
                 // Look for any handler callbacks
                 var cb_found = false;
                 for (var j=0; j < module.routes.length; j++) {
