@@ -7,69 +7,6 @@
         Link = this.Link = {};
     }
 
-    // Structure
-    // =========
-    // maps requests to object functions using URI paths and methods
-    var Structure = function _Structure() {
-        this.modules = [];
-    };
-
-    Structure.prototype.addModule = function(newUri, module) {
-        this.modules.push({ uri:newUri, resource:module });
-    };
-
-    Structure.prototype.route = function(request, opt_cb, opt_context) {
-        var errorCode = 404;
-        var resPromise = new Promise();
-        for (var i=0; i < this.modules.length; i++) {
-            var module = this.modules[i];
-            // See if the module's configured URI fits inside the request URI
-            var relUriIndex = request.uri.indexOf(module.uri);
-            if (relUriIndex != -1) {
-                // It does-- pull out the remaining URI and use that to match the request
-                var relUri = request.uri.substr(module.uri.length);
-                var relUriParts = relUri.split('/');
-                var resource = module.resource;
-                for (var j=0; j < relUriParts.length; j++) {
-                    var part = relUriParts[j];
-                    if (part == '') { continue; }
-                    resource = resource[part];
-                    if (!resource) { break; }
-                }
-                if (!resource) { continue; }
-                // Find the method
-                var method = resource['$'+request.method];
-                if (!method) {
-                    errorCode = 405; // if nothing is ever found, this request is a bad method
-                    continue;
-                }
-                // Store the response promise
-                opt_cb && resPromise.then(opt_cb, opt_context);
-                Object.defineProperty(request, '__response_promise', { value:resPromise, writable:true });
-                // Run next tick to guarantee async
-                setTimeout(function() { __runMethod(resource, method, request); }, 0);
-                return resPromise;
-            }
-        }
-        // Send the error response
-        setTimeout(function() { resPromise.fulfill({ code:errorCode, reason:(errorCode == 404 ? 'not found' : 'bad method') }); }, 0);
-        return resPromise;
-    };
-
-    var __runMethod = function(resourceContext, methodHandler, request) {
-        var promise;
-        // run in a catch block, so we can capture exceptions as responses
-        try { promise = methodHandler.call(resourceContext, request); }
-        catch (e) {
-            if (e && e.code) { promise = e; }
-            else { promise = { code:500, reason:e.toString() }; }
-        }
-        // When the promise is fulfilled, pass the result to the original promise
-        Promise.when(promise, function(response) {
-            request.__response_promise.fulfill(response);
-        }, this);
-    };
-
     // Mediator
     // ========
     // passes requests/responses around a uri structure of modules
