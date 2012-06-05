@@ -7,10 +7,10 @@
         Link = this.Link = {};
     }
 
-    // Mediator
-    // ========
+    // Structure
+    // =========
     // passes requests/responses around a uri structure of modules
-    var Mediator = function _Mediator(id) {
+    var Structure = function _Structure(id) {
         this.id = id;
         this.modules = [];
     };
@@ -19,9 +19,7 @@
     //  - maintains precedence in ordering according to the URI
     //    '#/a' is before '#/a/b' is before '#/a/b/c'
     //  - a duplicate URI is inserted after existing modules
-    Mediator.prototype.addModule = function(new_uri, module) {
-        module.uri = new_uri;
-        module.mediator = this;
+    Structure.prototype.addModule = function(new_uri, module) {
         // Find the last URI that fits inside or matches the new one
         var new_uri_len = new_uri.length;
         for (var i=0; i < this.modules.length; i++) {
@@ -31,14 +29,13 @@
                 break;
             }
         }
-        this.modules.splice(i, 0, module);
+        this.modules.splice(i, 0, { uri:new_uri, inst:module });
     };
 
     // Searches modules for handlers for the given request
     //  - returns an array of objects with the keys { cb, module, match, route }
     //  - returns the handlers in the order of module precedence
-    Mediator.prototype.findHandlers = function(request) {
-        var matched_handlers = [];
+    Structure.prototype.findHandler = function(request) {
         for (var i=0; i < this.modules.length; i++) {
             var module = this.modules[i];
             // See if the module's configured URI fits inside the request URI
@@ -47,15 +44,13 @@
                 // It does-- pull out the remaining URI and use that to match the request
                 var rel_uri = request.uri.substr(module.uri.length);
                 if (rel_uri.charAt(0) != '/') { rel_uri = '/' + rel_uri; } // prepend the leading slash, for consistency
-                // Look for any handler callbacks
-                var cb_found = false;
-                for (var j=0; j < module.routes.length; j++) {
-                    var route = module.routes[j]
+                // Look for the handler
+                for (var handlerName in module.inst.routes) {
+                    var route = module.inst.routes[handlerName]
                     var match, matches = {};
                     // Test route params
                     for (var k in route) {
                         match = true;
-                        if (k == 'cb' || k == 'bubble') { continue; }
                         // key exists
                         if (!(k in request)) {
                             match = false;
@@ -79,27 +74,24 @@
                     // Ended the loop because it wasn't a match?
                     if (!match) { continue; }
                     // A match, get the cb
-                    var cb = route.cb;
-                    if (typeof(cb) == 'string') { cb = module[cb]; }
-                    if (!cb) { throw "Handler callback '" + route.cb + "' not found"; }
-                    // Add to list
-                    matched_handlers.push({
+                    var cb = module.inst[handlerName];
+                    if (!cb) { throw "Handler callback '" + handlerName + "' not found in object"; }
+                    return {
                         cb:cb,
-                        context:module,
-                        match:matches,
-                        route:route,
-                    });
+                        context:module.inst,
+                        match:matches
+                    };
                 }
             }
         }
-        return matched_handlers;
+        return null;
     };
 
-    // (ASYNC) Builds the handler chain from the request, then runs
+    // (ASYNC) Finds a handler from the request, then runs
     //  - When finished, calls the given cb with the response
     //  - If the request target URI does not start with a hash, will run the remote handler
     var cur_mid = 1;
-    Mediator.prototype.dispatch = function(request, opt_cb, opt_context) {
+    Structure.prototype.dispatch = function(request, opt_cb, opt_context) {
         // Assign an id, for debugging
         Object.defineProperty(request, '__mid', { value:cur_mid++, writable:true });
         // Log
@@ -112,6 +104,43 @@
             return;
         }
         // Pull the query params out, if present
+        __processQueryParams(request);
+        // Find the handler
+        var handler = this.findHandler(request);
+        // Store the dispatcher handler
+        var dispatchPromise = new Promise();
+        opt_cb && dispatchPromise.then(opt_cb, opt_context);
+        // Handle next tick, to guarantee async
+        var self = this;
+        setTimeout(function() {
+            // Run the cb
+            var response;
+            if (handler) { response = handler.cb.call(handler.context, request, handler.match); }
+            else { response = { code:404, reason:'not found' }; }
+            // Log
+            if (logMode('traffic')) {
+                console.log(this.id ? this.id+'|res' : 'res', request.__mid, request.uri, response['content-type'] ? '['+response['content-type']+']' : '', response);
+            }            
+            // When the promise is fulfilled, pass on to the dispatcher promise
+            Promise.when(response, function(response) {
+                dispatchPromise.fulfill(response);
+            }, this);
+        }, 0);
+        return dispatchPromise;
+    };
+
+    // Dispatch sugars
+    Structure.prototype.get = function(request, opt_cb, opt_context) {
+        request.method = 'get';
+        return this.dispatch(request, opt_cb, opt_context);
+    };
+    Structure.prototype.post = function(request, opt_cb, opt_context) {
+        request.method = 'post';
+        return this.dispatch(request, opt_cb, opt_context);
+    };
+
+    // Pulls the query params into the request.query object
+    var __processQueryParams = function(request) {
         if (request.uri && request.uri.indexOf('?') != -1) {
             request.query = [];
             // pull uri out
@@ -124,67 +153,7 @@
                 request.query[kv[0]] = kv[1];
             }
         }
-        // Build the handler chain
-        Object.defineProperty(request, '__bubble_handlers', { value:[], writable:true });
-        Object.defineProperty(request, '__capture_handlers', { value:[], writable:true });
-        var handlers = this.findHandlers(request);
-        for (var i=0; i < handlers.length; i++) {
-            if (handlers[i].route.bubble) {
-                // Bubble handlers are FILO, so we prepend
-                request.__bubble_handlers.unshift(handlers[i]);
-            } else {
-                request.__capture_handlers.push(handlers[i]);
-            }
-        }
-        // Store the dispatcher handler
-        var disp_promise = new Promise();
-        opt_cb && disp_promise.then(opt_cb, opt_context);
-        Object.defineProperty(request, '__dispatcher_promise', { value:disp_promise, writable:true });
-        // Begin handling next tick
-        var self = this;
-        setTimeout(function() { self.runHandlers(request); }, 0);
-        return disp_promise;
-    };
-
-    // Dispatch sugars
-    Mediator.prototype.get = function(request, opt_cb, opt_context) {
-        request.method = 'get';
-        return this.dispatch(request, opt_cb, opt_context);
-    };
-    Mediator.prototype.post = function(request, opt_cb, opt_context) {
-        request.method = 'post';
-        return this.dispatch(request, opt_cb, opt_context);
-    };
-        
-    // Processes the request's handler chain
-    Mediator.prototype.runHandlers = function(request, response) {
-        // Find next handler
-        var handler = request.__capture_handlers.shift();
-        if (!handler) { handler = request.__bubble_handlers.shift(); }
-        if (handler) {
-            // Run the cb
-            var promise;
-            // run in a catch block, so we can output errors
-            try { promise = handler.cb.call(handler.context, request, response, handler.match); }
-            catch (e) {
-                if (e && e.code) { promise = e; }
-                else { promise = { code:500, reason:e.toString() }; }
-            }
-            // When the promise is fulfilled, continue the chain
-            Promise.when(promise, function(response) {
-                this.runHandlers(request, response);
-            }, this);
-        } else {
-            // Last callback-- create a response if we dont have one
-            if (!response) { response = { code:404 }; }
-            // Log
-            if (logMode('traffic')) {
-                console.log(this.id ? this.id+'|res' : 'res', request.__mid, request.uri, response['content-type'] ? '['+response['content-type']+']' : '', response);
-            }
-            // Fulfill dispatcher promise
-            request.__dispatcher_promise.fulfill(response);
-        }
-    };
+    }
 
     // Type Interfaces
     // ===============
@@ -402,8 +371,8 @@
 
     // Window Behavior
     // ===============
-    // Mediator listening to window events
-    var window_mediator = null;
+    // Structure listening to window events
+    var window_structure = null;
     // Handler for window responses
     var window_handler = { cb:null, context:null };
     // Used to avoid duplicate hash-change handling
@@ -591,7 +560,7 @@
 
     // Dispatches a request, then renders it to the window on return
     var followRequest = function(request) {
-        window_mediator.dispatch(request, function(response) {
+        window_structure.dispatch(request, function(response) {
             // If a redirect, do that now
             if (response.code >= 300 && response.code < 400) {
                 followRequest({ method:'get', uri:response.location, accept:'text/html' });
@@ -613,8 +582,8 @@
     };
     
     // Registers event listeners to the window and handles the current URI
-    var attachToWindow = function(mediator, opt_response_cb, opt_response_cb_context) {
-        window_mediator = mediator;
+    var attachToWindow = function(structure, opt_response_cb, opt_response_cb_context) {
+        window_structure = structure;
         window_handler = { cb:opt_response_cb, context:opt_response_cb_context };
         
         // Register handlers
@@ -631,7 +600,6 @@
     // Exports
     // =======
     Link.Promise          = Promise;
-    Link.Mediator         = Mediator;
     Link.Structure        = Structure;
     Link.addToType        = addToType;
     Link.getTypeInterface = getTypeInterface;
