@@ -9,8 +9,8 @@ CartModule.someFunc() ==>[GET #inventory/sku/4003/price]==> InventoryModule.pric
 LinkJS configures modules into a URI structure, then provides path-based routing and request/response messaging
 between them. In the browser, Link will intercept link clicks and form submits to hashed URIs, then route it as
 a message through the structure to compose a response which can be inserted into the DOM. Also, URIs which point
-to remote locations (any available http service) will automatically run as Ajax calls, allowing code to make calls
-to remote, local, or in-process functionality without knowing the difference.
+to remote locations will automatically run as Ajax calls, allowing code to make calls to remote or in-process
+functionality without knowing the difference.
 
 See the [LinkShUI CLI](https://github.com/pfraze/linkshui) for an example application. Currently,
 [LinkMachine](https://github.com/pfraze/linkmachine) is the primary focus of development.
