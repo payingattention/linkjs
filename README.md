@@ -1,6 +1,6 @@
 # LinkJS
 
-Dependency injection using the REST style.
+Dependency injection and messaging using the REST style.
 
 ````
 CartModule.someFunc() ==>[GET #inventory/sku/4003/price]==> InventoryModule.priceHandler()
