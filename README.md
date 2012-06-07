@@ -30,8 +30,9 @@ Modules export routes for handling requests:
     };
     AccountModule.prototype.routes = {
         dashboard:{ uri:'^/?$', method:'get', accept:'text/html' },
-        message:{ uri:'^/message/([0-9]+)/?$' },
-        messageReply:{ uri:'^/message/([0-9]+/reply?$', method:'post' }
+        messages:{ uri:'^/messages/?$', method:'get', accept:'js/object' },
+        message:{ uri:'^/messages/([0-9]+)/?$' },
+        messageReply:{ uri:'^/messages/([0-9]+/reply?$', method:'post' }
     };
 ```
 
@@ -49,25 +50,24 @@ They're then configured into a URI structure to compose the application:
 To issue a request in a module:
 
 ```javascript
-    // get users
-    app.dispatch({ method:'get', uri:'#users', accept:'js/object' }, function(response) {
-        if (response.code == 200) { this.users = response.body; }
+    // get messages
+    app.dispatch({ method:'get', uri:'#account/messages', accept:'js/object' }, function(response) {
+        if (response.code == 200) { this.messages = response.body; }
     }, this);
 ```
 
 Responses are formed by handlers:
 
 ```javascript
-    // `#users`
-    UsersModule.prototype.getHandler = function(request) {
-        return { code:200, body:this.activeUsers, 'content-type':'js/object' };
+    AccountModule.prototype.messages = function(request) {
+        return { code:200, body:this.messages, 'content-type':'js/object' };
     });
 ```
 
 If some async work must be done first, the handler can return a `Promise`.
 
 ```javascript
-    UsersModule.prototype.usersHandler = function(request) {
+    AccountModule.prototype.messages = function(request) {
         var promise = new Link.Promise();
         this.someAsyncAction(function(data) {
             promise.fulfill({ code:200, body:data, 'content-type':'js/object' })
