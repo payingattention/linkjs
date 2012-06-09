@@ -53,6 +53,7 @@
                         match = true;
                         // key exists
                         if (!(k in request)) {
+                            //console.log(k,'not in',request,' -- ',module.uri);
                             match = false;
                             break;
                         }
@@ -72,8 +73,12 @@
                         }
                     }
                     // Ended the loop because it wasn't a match?
-                    if (!match) { continue; }
+                    if (!match) {
+                        //console.log(reqVal,'not match',route[k],' -- ',module.uri);
+                        continue;
+                    }
                     // A match, get the cb
+                    //console.log(request.uri,'match',module.uri);
                     var cb = module.inst[handlerName];
                     if (!cb) { throw "Handler callback '" + handlerName + "' not found in object"; }
                     return {
@@ -358,6 +363,7 @@
             // Call now
             cb.call(opt_context, this.value);
         }
+        return this;
     };
 
     // Helper to register a then if the given value is a promise (or call immediately if it's another value)
@@ -367,7 +373,23 @@
         } else {
             cb.call(opt_context, value);
         }
-    };    
+    };
+
+    // Helper to handle multiple promises in one when statement
+    Promise.whenAll = function(values, cb, opt_context) {
+        var total = values.length, fulfilled = 0;
+        // if no length, presume an empty array and call back immediately
+        if (!total) { return cb.call(opt_context, []); }
+        // wait for all to finish
+        for (var i=0; i < total; i++) {
+            Link.Promise.when(values[i], function(v) {
+                values[this.i] = v; // replace with result
+                if (++fulfilled == total) {
+                    cb.call(opt_context, values);
+                }
+            }, { i:i });
+        }
+    };
 
     // Window Behavior
     // ===============
