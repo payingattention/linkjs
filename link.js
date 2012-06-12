@@ -95,8 +95,9 @@
     // (ASYNC) Finds a handler from the request, then runs
     //  - When finished, calls the given cb with the response
     //  - If the request target URI does not start with a hash, will run the remote handler
+    //  - If `opt_middleware` is given, will pass it the handler (and the request) for decoration
     var cur_mid = 1;
-    Structure.prototype.dispatch = function(request, opt_cb, opt_context) {
+    Structure.prototype.dispatch = function(request, opt_cb, opt_context, opt_middleware) {
         // Assign an id, for debugging
         Object.defineProperty(request, '__mid', { value:cur_mid++, writable:true });
         // Log
@@ -112,6 +113,14 @@
         __processQueryParams(request);
         // Find the handler
         var handler = this.findHandler(request);
+        var runHandler = function(givenReq, givenMatch) {
+            // this wrapper simplifies things for the middleware -- dont have to give params or context
+            givenReq = givenReq || request;
+            givenMatch = givenMatch || handler.match;
+            return handler.cb.call(handler.context, givenReq, givenMatch);
+        };
+        // Run middleware
+        runHandler = (opt_middleware) ? opt_middleware(runHandler) : runHandler;
         // Store the dispatcher handler
         var dispatchPromise = new Promise();
         opt_cb && dispatchPromise.then(opt_cb, opt_context);
@@ -120,7 +129,7 @@
         setTimeout(function() {
             // Run the cb
             var response;
-            if (handler) { response = handler.cb.call(handler.context, request, handler.match); }
+            if (handler) { response = runHandler(request, handler.match); }
             else { response = { code:404, reason:'not found' }; }
             // Log
             if (logMode('traffic')) {

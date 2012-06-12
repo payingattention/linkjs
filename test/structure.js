@@ -106,6 +106,54 @@ describe('Structure', function() {
             });
             structure.dispatch({ uri:'#uri?a=5&b=6' });
         });
+        it('should run middleware, if provided', function(done) {
+            var structure = new Link.Structure();
+            structure.addModule('#', {
+                routes:{ a:{ uri:'^/(.*)' }},
+                a:function(request) {
+                    request.foo.should.equal('bar');
+                    return { code: 200 };
+                },
+            });
+            structure.dispatch({ uri:'#test' }, function(response) {
+                response.code.should.equal(200);
+                response.reason.should.equal('foobar');
+                done();
+            }, null, function(handler) {
+                return function(request, match) {
+                    request.uri.should.equal('#test');
+                    match.uri[1].should.equal('test');
+                    request.foo = 'bar';
+                    var response = handler(request, match);
+                    response.reason = 'foobar';
+                    return response;
+                };
+            });
+        });
+        it('should run middleware with async', function(done) {
+            var structure = new Link.Structure();
+            structure.addModule('#', {
+                routes:{ a:{ uri:'^/?$' }},
+                a:function(request) {
+                    var p = new Link.Promise();
+                    setTimeout(function() { p.fulfill({ code:200 }); }, 0);
+                    return p;
+                },
+            });
+            structure.dispatch({ uri:'#' }, function(response) {
+                response.code.should.equal(200);
+                response.reason.should.equal('foobar');
+                done();
+            }, null, function(handler) {
+                return function(request, match) {
+                    var ret = handler();
+                    Link.Promise.when(ret, function(response) {
+                        response.reason = 'foobar';
+                    });
+                    return ret;
+                };
+            });
+        });
     });
 });
 
