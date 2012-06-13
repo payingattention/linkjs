@@ -111,48 +111,54 @@ describe('Structure', function() {
             structure.addModule('#', {
                 routes:{ a:{ uri:'^/(.*)' }},
                 a:function(request) {
+                    this.routes.a.should.be;
                     request.foo.should.equal('bar');
                     return { code: 200 };
                 },
             });
+            var decorator = function(handler, request, match, structure) {
+                // tests
+                this.routes.a.should.be;
+                structure.modules.length.should.equal(1);
+                request.uri.should.equal('#test');
+                match.uri[1].should.equal('test');
+
+                // update the request, call the handler, update the response
+                request.foo = 'bar';
+                var response = handler.call(this, request, match, structure);
+                response.reason = 'foobar';
+                return response;
+            };
             structure.dispatch({ uri:'#test' }, function(response) {
                 response.code.should.equal(200);
                 response.reason.should.equal('foobar');
                 done();
-            }, null, function(handler) {
-                return function(request, match) {
-                    request.uri.should.equal('#test');
-                    match.uri[1].should.equal('test');
-                    request.foo = 'bar';
-                    var response = handler(request, match);
-                    response.reason = 'foobar';
-                    return response;
-                };
-            });
+            }, null, decorator);
         });
         it('should run middleware with async', function(done) {
             var structure = new Link.Structure();
             structure.addModule('#', {
                 routes:{ a:{ uri:'^/?$' }},
                 a:function(request) {
+                    this.routes.a.should.be;
+                    request.foo.should.equal('bar');
+
                     var p = new Link.Promise();
                     setTimeout(function() { p.fulfill({ code:200 }); }, 0);
                     return p;
                 },
             });
-            structure.dispatch({ uri:'#' }, function(response) {
-                response.code.should.equal(200);
-                response.reason.should.equal('foobar');
+            var decorator = function(handler, request, match, structure) {
+                var ret = handler();
+                Link.Promise.when(ret, function(response) {
+                    response.code++;
+                });
+                return ret;
+            };
+            structure.dispatch({ uri:'#', foo:'bar' }, function(response) {
+                response.code.should.equal(203);
                 done();
-            }, null, function(handler) {
-                return function(request, match) {
-                    var ret = handler();
-                    Link.Promise.when(ret, function(response) {
-                        response.reason = 'foobar';
-                    });
-                    return ret;
-                };
-            });
+            }, null, [decorator, decorator, decorator]);
         });
     });
 });

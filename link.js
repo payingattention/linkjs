@@ -95,7 +95,7 @@
     // (ASYNC) Finds a handler from the request, then runs
     //  - When finished, calls the given cb with the response
     //  - If the request target URI does not start with a hash, will run the remote handler
-    //  - If `opt_middleware` is given, will pass it the handler (and the request) for decoration
+    //  - `opt_middleware` is a series of functions to wrap the handler; they are called with (handler, request, match, structure)
     var cur_mid = 1;
     Structure.prototype.dispatch = function(request, opt_cb, opt_context, opt_middleware) {
         // Assign an id, for debugging
@@ -113,14 +113,8 @@
         __processQueryParams(request);
         // Find the handler
         var handler = this.findHandler(request);
-        var runHandler = function(givenReq, givenMatch) {
-            // this wrapper simplifies things for the middleware -- dont have to give params or context
-            givenReq = givenReq || request;
-            givenMatch = givenMatch || handler.match;
-            return handler.cb.call(handler.context, givenReq, givenMatch);
-        };
         // Run middleware
-        runHandler = (opt_middleware) ? opt_middleware(runHandler) : runHandler;
+        handler.cb = (opt_middleware) ? decorate(opt_middleware, handler.cb) : handler.cb;
         // Store the dispatcher handler
         var dispatchPromise = new Promise();
         opt_cb && dispatchPromise.then(opt_cb, opt_context);
@@ -129,7 +123,7 @@
         setTimeout(function() {
             // Run the cb
             var response;
-            if (handler) { response = runHandler(request, handler.match); }
+            if (handler) { response = handler.cb.call(handler.context, request, handler.match, self); }
             else { response = { code:404, reason:'not found' }; }
             // Log
             if (logMode('traffic')) {
@@ -342,18 +336,29 @@
         return html.join('');
     };
 
-    // wraps `target` in the given decorator function(s)
-    var decorate = function(decorators, target) {
+    // wraps `f` in the given decorator function(s)
+    var decorate = function(decorators, f) {
         if (!Array.isArray(decorators)) {
             decorators = [decorators]; // make sure we have an array
         }
-        // apply each decorator to the target
+        // apply each decorator to the handler
         for (var i=0; i < decorators.length; i++) {
-            var dec = decorators[i];
-            target = dec(target);
+            f = __decF(f, decorators[i]);
         }
-        return target;
+        return f;
     };
+    var __decF = function(f, dec) {
+        // thanks to the underscorejs guys
+        return function() {
+            // simplify the handler call by wrapping it in the correct application
+            var self = this;
+            var args = Array.prototype.slice.call(arguments);
+            var fWrap = function() { return f.apply(self, args); }
+            // now call the decorator
+            return dec.apply(this, [fWrap].concat(args));
+        };
+    }
+        
     
     // Promise
     // =======
