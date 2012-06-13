@@ -324,6 +324,7 @@
     
     // Helpers
     // =======
+    // a toString with layout and content
     var objToHtml = function(obj) {
         var html = ['<ul class="linkjs-object">'];
         for (var k in obj) {
@@ -339,6 +340,19 @@
         }
         html.push('</ul>');
         return html.join('');
+    };
+
+    // wraps `target` in the given decorator function(s)
+    var decorate = function(decorators, target) {
+        if (!Array.isArray(decorators)) {
+            decorators = [decorators]; // make sure we have an array
+        }
+        // apply each decorator to the target
+        for (var i=0; i < decorators.length; i++) {
+            var dec = decorators[i];
+            target = dec(target);
+        }
+        return target;
     };
     
     // Promise
@@ -632,6 +646,7 @@
     // =======
     Link.Promise          = Promise;
     Link.Structure        = Structure;
+    Link.decorate         = decorate;
     Link.addToType        = addToType;
     Link.getTypeInterface = getTypeInterface;
     Link.logMode          = logMode;
