@@ -114,7 +114,9 @@
         // Find the handler
         var handler = this.findHandler(request);
         // Run middleware
-        handler.cb = (opt_middleware) ? decorate(opt_middleware, handler.cb) : handler.cb;
+        if (handler) {
+            handler.cb = (opt_middleware) ? decorate(opt_middleware, handler.cb) : handler.cb;
+        }
         // Store the dispatcher handler
         var dispatchPromise = new Promise();
         opt_cb && dispatchPromise.then(opt_cb, opt_context);
