@@ -13,7 +13,7 @@ to remote locations will automatically run as Ajax calls, allowing code to make 
 functionality without knowing the difference.
 
 See the [LinkShUI CLI](https://github.com/pfraze/linkshui) for an example application. Currently,
-[LinkMachine](https://github.com/pfraze/linkmachine) is the primary focus of development.
+[Engine](https://github.com/pfraze/engine) is the primary focus of development.
 
 ## Getting Started
 
