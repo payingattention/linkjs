@@ -92,6 +92,20 @@ describe('Structure', function() {
                 done();
             });
         });
+        it('should auto-create a promise if the handler returns nothing', function(done) {
+            var structure = new Link.Structure();
+            structure.addModule('#uri1', {
+                routes:{ a:{ uri:'^/?$' }},
+                a:function(request) {
+                    setTimeout(function() { Link.respond(request, { code:200 }); }, 5);
+                }
+            });
+            structure.dispatch({ uri:'#uri1' }, function(response) {
+                response.should.be.ok;
+                response.code.should.equal(200);
+                done();
+            });
+        });
         it('should run remote requests if the uri does not start with a hash');
         it('should move queries into a `query` object in the request', function(done) {
             var structure = new Link.Structure();

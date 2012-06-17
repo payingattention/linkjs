@@ -21,11 +21,11 @@
     //  - a duplicate URI is inserted after existing modules
     Structure.prototype.addModule = function(new_uri, module) {
         // Find the last URI that fits inside or matches the new one
-        var new_uri_len = new_uri.length;
+        var new_uri_slashes = new_uri.split('/').length;
         for (var i=0; i < this.modules.length; i++) {
             // Lower URI? done
             var existing_uri = this.modules[i].uri;
-            if ((existing_uri.indexOf(new_uri) == 0) && (new_uri_len < existing_uri.length)) {
+            if ((existing_uri.indexOf(new_uri) == 0) && (new_uri_slashes < existing_uri.split('/').length)) {
                 break;
             }
         }
@@ -80,7 +80,10 @@
                     // A match, get the cb
                     //console.log(request.uri,'match',module.uri);
                     var cb = module.inst[handlerName];
-                    if (!cb) { throw "Handler callback '" + handlerName + "' not found in object"; }
+                    if (!cb) {
+                        console.log("Handler callback '" + handlerName + "' not found in object");
+                        return null;
+                    }
                     return {
                         cb:cb,
                         context:module.inst,
@@ -127,16 +130,32 @@
             var response;
             if (handler) { response = handler.cb.call(handler.context, request, handler.match, self); }
             else { response = { code:404, reason:'not found' }; }
-            // Log
-            if (logMode('traffic')) {
-                console.log(this.id ? this.id+'|res' : 'res', request.__mid, request.uri, response['content-type'] ? '['+response['content-type']+']' : '', response);
-            }            
-            // When the promise is fulfilled, pass on to the dispatcher promise
+            // Create a promise, if no return value was given
+            if (!response) {
+                if (request.__resPromise) { response = request.__resPromisse; }
+                else {
+                    response = new Promise();
+                    Object.defineProperty(request, '__resPromise', { value:response, writable:true });
+                }
+            }
             Promise.when(response, function(response) {
+                // Log
+                if (logMode('traffic')) {
+                    console.log(this.id ? this.id+'|res' : 'res', request.__mid, request.uri, response['content-type'] ? '['+response['content-type']+']' : '', response);
+                }
+                // Pass on to the dispatcher
                 dispatchPromise.fulfill(response);
-            }, this);
+            }, self);
         }, 0);
         return dispatchPromise;
+    };
+
+    // Fulfills the promise automatically generated if a handler returns nothing
+    var respond = function _respond(request, response) {
+        if (!request.__resPromise) {
+            Object.defineProperty(request, '__resPromise', { value:(new Promise()), writable:true });
+        }
+        request.__resPromise.fulfill(response);
     };
 
     // Dispatch sugars
@@ -654,6 +673,7 @@
     Link.Promise          = Promise;
     Link.Structure        = Structure;
     Link.decorate         = decorate;
+    Link.respond          = respond;
     Link.addToType        = addToType;
     Link.getTypeInterface = getTypeInterface;
     Link.logMode          = logMode;
