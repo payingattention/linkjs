@@ -1,6 +1,6 @@
 # LinkJS
 
-Dependency injection and messaging using the REST style.
+Modular messaging architecture using the REST style.
 
 ````
 CartModule.someFunc() ==>[GET #inventory/sku/4003/price]==> InventoryModule.priceHandler()
@@ -11,9 +11,6 @@ between them. In the browser, Link will intercept link clicks and form submits t
 a message through the structure to compose a response which can be inserted into the DOM. Also, URIs which point
 to remote locations will automatically run as Ajax calls, allowing code to make calls to remote or in-process
 functionality without knowing the difference.
-
-See the [LinkShUI CLI](https://github.com/pfraze/linkshui) for an example application. Currently,
-[Engine](https://github.com/pfraze/engine) is the primary focus of development.
 
 ## Getting Started
 

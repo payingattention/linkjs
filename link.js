@@ -105,7 +105,7 @@
         Object.defineProperty(request, '__mid', { value:cur_mid++, writable:true });
         // Log
         if (logMode('traffic')) {
-            console.log(this.id ? this.id+'|req' : 'req', request.__mid, request.uri, request.accept ? '['+request.accept+']' : '', request);
+            console.log(this.id ? this.id+'|req' : '|> ', request.__mid, request.uri, request.accept ? '['+request.accept+']' : '', request);
         }
         // If in browser & no hash, use ajax
         if (typeof window !== 'undefined' && request.uri.charAt(0) != '#') {
@@ -130,32 +130,16 @@
             var response;
             if (handler) { response = handler.cb.call(handler.context, request, handler.match, self); }
             else { response = { code:404, reason:'not found' }; }
-            // Create a promise, if no return value was given
-            if (!response) {
-                if (request.__resPromise) { response = request.__resPromisse; }
-                else {
-                    response = new Promise();
-                    Object.defineProperty(request, '__resPromise', { value:response, writable:true });
-                }
-            }
             Promise.when(response, function(response) {
                 // Log
                 if (logMode('traffic')) {
-                    console.log(this.id ? this.id+'|res' : 'res', request.__mid, request.uri, response['content-type'] ? '['+response['content-type']+']' : '', response);
+                    console.log(this.id ? this.id+'|res' : ' >|', request.__mid, request.uri, response['content-type'] ? '['+response['content-type']+']' : '', response);
                 }
                 // Pass on to the dispatcher
                 dispatchPromise.fulfill(response);
             }, self);
         }, 0);
         return dispatchPromise;
-    };
-
-    // Fulfills the promise automatically generated if a handler returns nothing
-    var respond = function _respond(request, response) {
-        if (!request.__resPromise) {
-            Object.defineProperty(request, '__resPromise', { value:(new Promise()), writable:true });
-        }
-        request.__resPromise.fulfill(response);
     };
 
     // Dispatch sugars
@@ -182,204 +166,7 @@
                 request.query[kv[0]] = kv[1];
             }
         }
-    }
-
-    // Type Interfaces
-    // ===============
-    // stores the prototypes for interfaces to mimetypes
-    var mime_iface_prototypes = {};
-
-    // Interface object builder
-    // - creates prototype chain of 'a'=a, 'a/b'=a->b, 'a/c+b'=a->b->c
-    //   (which stays true to how mimetypes describe parenthood)
-    var __ensureInterface = function(mimetype) {
-        // pull out the names
-        var re = new RegExp('([^/]+)(?:/([^+]+)(?:[+](.*))?)?','i');
-        var match = re.exec(mimetype);
-        var a = match[1];
-        var ab = (match[3] ? a + '/' + match[3] : null);
-        if (!ab && match[2]) { ab = a + '/' + match[2]; }
-        var abc = mimetype;
-        // build as needed
-        var ctor = function() {};
-        if (a && !(a in mime_iface_prototypes)) {            
-            ctor.prototype = mime_iface_prototypes['*'];
-            mime_iface_prototypes[a] = new ctor();
-            mime_iface_prototypes[a].mimetype = a;
-        }
-        if (ab && !(ab in mime_iface_prototypes)) {
-            ctor.prototype = mime_iface_prototypes[a];
-            mime_iface_prototypes[ab] = new ctor();
-            mime_iface_prototypes[ab].mimetype = ab;
-        }
-        if (abc && !(abc in mime_iface_prototypes)) {
-            ctor.prototype = mime_iface_prototypes[ab];
-            mime_iface_prototypes[abc] = new ctor();
-            mime_iface_prototypes[abc].mimetype = abc;
-        }
-        return mime_iface_prototypes[mimetype];
     };
-
-    // Get/create an interface
-    var getTypeInterface = function(mimetype, data) {
-        // if no mimetype is given, default it
-        var datatype = typeof data;
-        if (!mimetype) {
-            if (datatype != 'undefined') {
-                mimetype = (datatype == 'string') ? 'text/plain' : 'js/object';
-            } else {
-                return null; // null in, null out
-            }
-        }
-        // strip off any extraneous data in the type
-        var index = mimetype.indexOf(';');
-        if (index != -1) { mimetype = mimetype.substring(0, index); }
-        // get prototype
-        var prototype = __ensureInterface(mimetype);
-        // Instantiate a copy of the interface, to protect it from outsiders
-        var Interface = function(data) { this.setData(data); }
-        Interface.prototype = prototype;
-        return new Interface(data);
-    };
-
-    // Add members to the interface
-    var addToType = function(mimetype, obj, opt_force_overwrite) {
-        // get prototype
-        var proto = __ensureInterface(mimetype);
-        // blend in new members
-        for (var k in obj) {
-            if (!opt_force_overwrite && proto.hasOwnProperty(k)) { continue; }
-            proto[k] = obj[k];
-        }
-    };
-
-    // Default Interfaces
-    // ==================
-    addToType('*', {
-        setData:function(data) { this.data = data; return this; },
-        getData:function() { return this.data; },
-        toObject:function() { return this.getData(); },
-        toString:function() { return this.getData().toString(); },
-        convertToType:function(type) {
-            // this is very imprecise; override with your type's needs
-            if (!type || type == this.mimetype || type == '*/*') { return this.getData(); }
-            if (type.indexOf('html') != -1) { return this.toHtml ? this.toHtml() : this.toString(); }
-            if (type.indexOf('json') != -1) { return this.toJson ? this.toJson() : this.toString(); }
-            if (type.indexOf('js') != -1 && type.indexOf('object') != -1) { return this.toObject ? this.toObject() : this.getData(); }
-            if (type.indexOf('text') != -1) { return this.toString(); }
-            return null;
-        }
-    });
-    addToType('js/object', {
-        setData:function(new_data) {
-            this.data = (typeof new_data != 'object') ? { value:new_data } : new_data;
-            return this;
-        },
-        toHtml:function() { return objToHtml(this.data); },
-        toJson:function() { return JSON.stringify(this.data); },
-        toObject:function() { return this.data; },
-        toString:function() { return this.data.toString(); }
-    });
-    addToType('application/json', {
-        setData:function(data) {
-            this.data = (typeof data != 'string') ? JSON.stringify(data) : data;
-            return this;
-        },
-        toHtml:function() { return '<span class="linkjs-json">'+this.data+'</span>'; }, // :TODO: prettify?
-        toJson:function() { return this.data; },
-        toObject:function() { return JSON.parse(this.data); },
-        toString:function() { return this.data; }
-    });
-    addToType('text', {
-        setData:function(data) {
-            this.data = (typeof data != 'string') ? data.toString() : data;
-            return this;
-        },
-        toHtml:function() { return '<span class="linkjs-text">'+this.data+'</span>'; },
-        toJson:function() { return JSON.stringify({ text:this.data }); },
-        toObject:function() { return { text:this.data }; },
-        toString:function() { return this.data; }
-    });
-    addToType('text/html', {
-        setData:function(data) {
-            this.data = (typeof data != 'string') ? data.toString() : data;
-            return this;
-        },
-        toHtml:function() { return this.data; },
-        toJson:function() { return JSON.stringify({ html:this.data }); },
-        toObject:function() { return { html:this.data }; }
-    });
-    addToType('application/x-www-form-urlencoded', {
-        setData:function(data) {
-            if (typeof data == 'object') {
-                var parts = [];
-                for (var k in data) {
-                    parts.push(encodeURIComponent(k) + '=' + encodeURIComponent(data[k]));
-                }
-                this.data = parts.join('&');
-            }
-            else {
-                this.data = '' + data;
-            }
-            return this;
-        },
-        toHtml:function() { return '<span class="linkjs-x-www-form-urlencoded">'+this.data+'</span>'; },
-        toJson:function() { return JSON.stringify(this.toObject()); },
-        toObject:function() {
-            var obj = {};
-            var parts = this.data.split('&');
-            for (var i=0; i < parts.length; i++) {
-                var kv = parts[i].split('=');
-                obj[decodeURIComponent(kv[0])] = decodeURIComponent(kv[1]);
-            }
-            return obj;
-        },
-        toString:function() { return this.data; }
-    });
-    
-    // Helpers
-    // =======
-    // a toString with layout and content
-    var objToHtml = function(obj) {
-        var html = ['<ul class="linkjs-object">'];
-        for (var k in obj) {
-            html.push('<li><strong>', k, '</strong>:');
-            if (typeof obj[k] == 'function') {
-                html.push('[Function]');
-            } else if (typeof obj[k] == 'object') {
-                html.push(objToHtml(obj[k]));
-            } else {
-                html.push(obj[k]);
-            }
-            html.push('</li>');
-        }
-        html.push('</ul>');
-        return html.join('');
-    };
-
-    // wraps `f` in the given decorator function(s)
-    var decorate = function(decorators, f) {
-        if (!Array.isArray(decorators)) {
-            decorators = [decorators]; // make sure we have an array
-        }
-        // apply each decorator to the handler
-        for (var i=0; i < decorators.length; i++) {
-            f = __decF(f, decorators[i]);
-        }
-        return f;
-    };
-    var __decF = function(f, dec) {
-        // thanks to the underscorejs guys
-        return function() {
-            // simplify the handler call by wrapping it in the correct application
-            var self = this;
-            var args = Array.prototype.slice.call(arguments);
-            var fWrap = function() { return f.apply(self, args); }
-            // now call the decorator
-            return dec.apply(this, [fWrap].concat(args));
-        };
-    }
-        
     
     // Promise
     // =======
@@ -510,7 +297,7 @@
                 xhrResponse.reason = xhrRequest.statusText;
                 xhrResponse.body = xhrRequest.responseText;
                 if (logMode('traffic')) {
-                    console.log(this.id ? this.id+'|res' : 'res', request.__mid, request.uri, xhrResponse['content-type'] ? '['+xhrResponse['content-type']+']' : '', xhrResponse);
+                    console.log(this.id ? this.id+'|res' : ' >|', request.__mid, request.uri, xhrResponse['content-type'] ? '['+xhrResponse['content-type']+']' : '', xhrResponse);
                 }
                 // Pass on
                 opt_cb.call(opt_context, xhrResponse);
@@ -672,10 +459,6 @@
     // =======
     Link.Promise          = Promise;
     Link.Structure        = Structure;
-    Link.decorate         = decorate;
-    Link.respond          = respond;
-    Link.addToType        = addToType;
-    Link.getTypeInterface = getTypeInterface;
     Link.logMode          = logMode;
     Link.ajaxConfig       = ajaxConfig;
     Link.attachToWindow   = attachToWindow;

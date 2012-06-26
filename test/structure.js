@@ -92,20 +92,6 @@ describe('Structure', function() {
                 done();
             });
         });
-        it('should auto-create a promise if the handler returns nothing', function(done) {
-            var structure = new Link.Structure();
-            structure.addModule('#uri1', {
-                routes:{ a:{ uri:'^/?$' }},
-                a:function(request) {
-                    setTimeout(function() { Link.respond(request, { code:200 }); }, 5);
-                }
-            });
-            structure.dispatch({ uri:'#uri1' }, function(response) {
-                response.should.be.ok;
-                response.code.should.equal(200);
-                done();
-            });
-        });
         it('should run remote requests if the uri does not start with a hash');
         it('should move queries into a `query` object in the request', function(done) {
             var structure = new Link.Structure();
@@ -119,60 +105,6 @@ describe('Structure', function() {
                 },
             });
             structure.dispatch({ uri:'#uri?a=5&b=6' });
-        });
-        it('should run middleware, if provided', function(done) {
-            var structure = new Link.Structure();
-            structure.addModule('#', {
-                routes:{ a:{ uri:'^/(.*)' }},
-                a:function(request) {
-                    this.routes.a.should.be;
-                    request.foo.should.equal('bar');
-                    return { code: 200 };
-                },
-            });
-            var decorator = function(handler, request, match, structure) {
-                // tests
-                this.routes.a.should.be;
-                structure.modules.length.should.equal(1);
-                request.uri.should.equal('#test');
-                match.uri[1].should.equal('test');
-
-                // update the request, call the handler, update the response
-                request.foo = 'bar';
-                var response = handler.call(this, request, match, structure);
-                response.reason = 'foobar';
-                return response;
-            };
-            structure.dispatch({ uri:'#test' }, function(response) {
-                response.code.should.equal(200);
-                response.reason.should.equal('foobar');
-                done();
-            }, null, decorator);
-        });
-        it('should run middleware with async', function(done) {
-            var structure = new Link.Structure();
-            structure.addModule('#', {
-                routes:{ a:{ uri:'^/?$' }},
-                a:function(request) {
-                    this.routes.a.should.be;
-                    request.foo.should.equal('bar');
-
-                    var p = new Link.Promise();
-                    setTimeout(function() { p.fulfill({ code:200 }); }, 0);
-                    return p;
-                },
-            });
-            var decorator = function(handler, request, match, structure) {
-                var ret = handler();
-                Link.Promise.when(ret, function(response) {
-                    response.code++;
-                });
-                return ret;
-            };
-            structure.dispatch({ uri:'#', foo:'bar' }, function(response) {
-                response.code.should.equal(203);
-                done();
-            }, null, [decorator, decorator, decorator]);
         });
     });
 });
