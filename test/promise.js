@@ -47,11 +47,11 @@ describe('Promise', function() {
         it('should defer to #then if operating on a Promise', function(done) {
             var p = new Link.Promise();
             p.then = function() { done(); }
-            Link.Promise.when(p);
+            Link.when(p);
         });
         it('should call the listener immediately if operating on a non-Promise', function(done) {
             var v = 100;
-            Link.Promise.when(v, function(v) {
+            Link.when(v, function(v) {
                 v.should.equal(100);
                 done();
             });

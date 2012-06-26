@@ -35,7 +35,8 @@
     // Searches modules for handlers for the given request
     //  - returns an array of objects with the keys { cb, module, match, route }
     //  - returns the handlers in the order of module precedence
-    Structure.prototype.findHandler = function(request) {
+    Structure.prototype.findHandlers = function(request) {
+        var matched_handlers = [];
         for (var i=0; i < this.modules.length; i++) {
             var module = this.modules[i];
             // See if the module's configured URI fits inside the request URI
@@ -45,11 +46,11 @@
                 var rel_uri = request.uri.substr(module.uri.length);
                 if (rel_uri.charAt(0) != '/') { rel_uri = '/' + rel_uri; } // prepend the leading slash, for consistency
                 // Look for the handler
-                for (var handlerName in module.inst.routes) {
-                    var route = module.inst.routes[handlerName]
+                for (var j=0; j < module.inst.routes.length; j++) {
+                    var route = module.inst.routes[j];
                     var match, matches = {};
                     // Test route params
-                    for (var k in route) {
+                    for (var k in route.match) {
                         match = true;
                         // key exists
                         if (!(k in request)) {
@@ -59,48 +60,48 @@
                         }
                         var reqVal = (k == 'uri' ? rel_uri : request[k]);
                         // convert strings to regexps
-                        if (typeof(route[k]) == 'string') { route[k] = new RegExp(route[k], 'i'); }
+                        if (typeof(route.match[k]) == 'string') { route.match[k] = new RegExp(route.match[k], 'i'); }
                         // regexp test
-                        if (route[k] instanceof RegExp) {
-                            match = route[k].exec(reqVal)
+                        if (route.match[k] instanceof RegExp) {
+                            match = route.match[k].exec(reqVal)
                             if (!match) { break; }
                             matches[k] = match;
                         }
                         // standard equality
                         else {
-                            if (route[k] != reqVal) { match = false; break; }
+                            if (route.match[k] != reqVal) { match = false; break; }
                             matches[k] = reqVal;
                         }
                     }
                     // Ended the loop because it wasn't a match?
                     if (!match) {
-                        //console.log(reqVal,'not match',route[k],' -- ',module.uri);
+                        //console.log(reqVal,'not match',route.match[k],' -- ',module.uri);
                         continue;
                     }
                     // A match, get the cb
                     //console.log(request.uri,'match',module.uri);
-                    var cb = module.inst[handlerName];
+                    var cb = module.inst[route.cb];
                     if (!cb) {
-                        console.log("Handler callback '" + handlerName + "' not found in object");
+                        console.log("Handler callback '" + route.cb + "' not found in object");
                         return null;
                     }
-                    return {
+                    matched_handlers.push({
                         cb:cb,
                         context:module.inst,
-                        match:matches
-                    };
+                        match:matches,
+                        bubble:route.bubble
+                    });
                 }
             }
         }
-        return null;
+        return matched_handlers;
     };
 
-    // (ASYNC) Finds a handler from the request, then runs
+    // (ASYNC) Builds the handler chain from the request, then runs
     //  - When finished, calls the given cb with the response
     //  - If the request target URI does not start with a hash, will run the remote handler
-    //  - `opt_middleware` is a series of functions to wrap the handler; they are called with (handler, request, match, structure)
     var cur_mid = 1;
-    Structure.prototype.dispatch = function(request, opt_cb, opt_context, opt_middleware) {
+    Structure.prototype.dispatch = function(request, opt_cb, opt_context) {
         // Assign an id, for debugging
         Object.defineProperty(request, '__mid', { value:cur_mid++, writable:true });
         // Log
@@ -114,32 +115,49 @@
         }
         // Pull the query params out, if present
         __processQueryParams(request);
-        // Find the handler
-        var handler = this.findHandler(request);
-        // Run middleware
-        if (handler) {
-            handler.cb = (opt_middleware) ? decorate(opt_middleware, handler.cb) : handler.cb;
+        // Build the handler chain
+        var handlers = this.findHandlers(request);        
+        Object.defineProperty(request, '__bubble_handlers', { value:[], writable:true });
+        Object.defineProperty(request, '__capture_handlers', { value:[], writable:true });
+        for (var i=0; i < handlers.length; i++) {
+            if (handlers[i].bubble) {
+                // Bubble handlers are FILO, so we prepend
+                request.__bubble_handlers.unshift(handlers[i]);
+            } else {
+                request.__capture_handlers.push(handlers[i]);
+            }
         }
         // Store the dispatcher handler
         var dispatchPromise = new Promise();
         opt_cb && dispatchPromise.then(opt_cb, opt_context);
-        // Handle next tick, to guarantee async
+        Object.defineProperty(request, '__dispatch_promise', { value:dispatchPromise });
+        // Begin handling next tick
         var self = this;
-        setTimeout(function() {
-            // Run the cb
-            var response;
-            if (handler) { response = handler.cb.call(handler.context, request, handler.match, self); }
-            else { response = { code:404, reason:'not found' }; }
-            Promise.when(response, function(response) {
-                // Log
-                if (logMode('traffic')) {
-                    console.log(this.id ? this.id+'|res' : ' >|', request.__mid, request.uri, response['content-type'] ? '['+response['content-type']+']' : '', response);
-                }
-                // Pass on to the dispatcher
-                dispatchPromise.fulfill(response);
-            }, self);
-        }, 0);
+        setTimeout(function() { self.runHandlers(request); }, 0);
         return dispatchPromise;
+    };
+
+    // Processes the request's handler chain
+    Structure.prototype.runHandlers = function _runHandlers(request, response) {
+        // Find next handler
+        var handler = request.__capture_handlers.shift();
+        if (!handler) { handler = request.__bubble_handlers.shift(); }
+        if (handler) {
+            // Run the cb
+            var promise = handler.cb.call(handler.context, request, handler.match, response);
+            when(promise, function(response) {
+                this.runHandlers(request, response);
+            }, this);
+        } else {
+            // Out of callbacks -- create a response if we dont have one
+            if (!response) { response = mkresponse(404); }
+            // Log
+            if (logMode('traffic')) {
+                console.log(this.id ? this.id+'|res' : ' >|', request.__mid, request.uri, response['content-type'] ? '['+response['content-type']+']' : '', response);
+            }
+            // Send to original promise
+            request.__dispatch_promise.fulfill(response);
+        }
     };
 
     // Dispatch sugars
@@ -167,6 +185,21 @@
             }
         }
     };
+
+    // Builds a route object
+    var mkroute = function _route(cb, match, bubble) {
+        return { cb:cb, match:match, bubble:bubble };
+    };
+
+    // Builds a response object
+    var mkresponse = function _response(code, body, contenttype, headers) {
+        var response = headers || {};
+        response.code = code;
+        response.body = body || '';
+        response['content-type'] = contenttype || '';
+        return response;
+    };
+    
     
     // Promise
     // =======
@@ -203,7 +236,7 @@
     };
 
     // Helper to register a then if the given value is a promise (or call immediately if it's another value)
-    Promise.when = function(value, cb, opt_context) {
+    var when = function _when(value, cb, opt_context) {
         if (value instanceof Promise) {
             value.then(cb, opt_context);
         } else {
@@ -212,7 +245,7 @@
     };
 
     // Helper to handle multiple promises in one when statement
-    Promise.whenAll = function(values, cb, opt_context) {
+    var whenAll = function _whenAll(values, cb, opt_context) {
         var total = values.length, fulfilled = 0;
         // if no length, presume an empty array and call back immediately
         if (!total) { return cb.call(opt_context, []); }
@@ -458,7 +491,11 @@
     // Exports
     // =======
     Link.Promise          = Promise;
+    Link.when             = when;
+    Link.whenAll          = whenAll;
     Link.Structure        = Structure;
+    Link.route            = mkroute;
+    Link.response         = mkresponse;
     Link.logMode          = logMode;
     Link.ajaxConfig       = ajaxConfig;
     Link.attachToWindow   = attachToWindow;
