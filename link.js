@@ -133,7 +133,7 @@
         Object.defineProperty(request, '__dispatch_promise', { value:dispatchPromise });
         // Begin handling next tick
         var self = this;
-        setTimeout(function() { self.runHandlers(request); }, 0);
+        setTimeout(function() { self.runHandlers(request, mkresponse(404)); }, 0);
         return dispatchPromise;
     };
 
@@ -392,8 +392,8 @@
         if (!method) { method = form.method; }
 
         // Convert the data to the given enctype
-        if (!enctype) { enctype = 'js/object'; }
-        data = getTypeInterface(enctype, data).getData();
+        if (!enctype) { enctype = 'js'; }
+        // :TODO: ?
         
         // Strip the base URI
         var base_uri = window.location.href.split('#')[0];
