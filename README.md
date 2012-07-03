@@ -13,13 +13,13 @@ with HTML and avoid interacting with the DOM. (Good for server/client reuse.)
 
 ## Getting Started
 
-`npm install pfraze-linkjs`
+Currently in between deployments, so this is all out of date-- plus the tests and examples are broken. Yeah, I'm a scrub. Will fix soon.
 
-[See the LinkShUI CLI for an environment to
-debug and run LinkJS modules](https://github.com/pfraze/linkshui). It's also a good example reference (in addition to the
-inbox example in this repo).
+[The LinkShUI CLI is the focus of development, so look at that for now](https://github.com/pfraze/linkshui).
 
 ## Usage
+
+**All just a bit out of date; will fix soon**
 
 Modules export routes for handling requests:
 
