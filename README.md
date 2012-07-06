@@ -57,7 +57,7 @@ Responses are formed by handlers:
 
 ```javascript
     AccountModule.prototype.messages = function(request) {
-        return Link.response(200, this.messages, 'obj/message-array' };
+        return Link.response(200, this.messages, 'obj/message-array');
     });
 ```
 
@@ -67,7 +67,7 @@ If some async work must be done first, the handler can return a `Promise`.
     AccountModule.prototype.messages = function(request) {
         var promise = new Link.Promise();
         this.someAsyncAction(function(data) {
-            promise.fulfill(Link.response(200, data, 'obj/some-type' })
+            promise.fulfill(Link.response(200, data, 'obj/some-type'));
         });
         return promise;
     });
