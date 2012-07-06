@@ -1,12 +1,4 @@
-(function() {
-    // Set up namespace
-    var Tint;
-    if (typeof exports != 'undefined') {
-        Tint = exports;
-    } else {
-        Tint = this.Tint = {};
-    }
-
+define(function() {
     // Creates a string-builder prototype using the interface described in the template
     // - `tmpl` must be a string
     var compile = function(tmpl, opt_constructor) {
@@ -208,6 +200,5 @@
         return str;
     };
 
-    // Exports
-    Tint.compile = compile;
-}).call(this);
+    return { compile:compile };
+});

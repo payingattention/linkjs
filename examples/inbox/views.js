@@ -1,4 +1,4 @@
-(function(Views) {
+define(['tint'], function(Tint) {
     // Nav
     // ======
     var navTmplElem = document.getElementById('nav-template');
@@ -49,7 +49,9 @@
     });
 
     // Export
-    Views.Nav = Nav;
-    Views.Inbox = Inbox;
-    Views.Message = Message;
-})(Views);
+    return {
+        Nav:Nav,
+        Inbox:Inbox,
+        Message:Message
+    };
+});

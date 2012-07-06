@@ -95,6 +95,9 @@ define(function() {
     //  - If the request target URI does not start with a hash, will run the remote handler
     var cur_mid = 1;
     Structure.prototype.dispatch = function(request, opt_cb, opt_context) {
+        // Duplicate the request object
+        // :TODO: probably shouldn't use this hack for performance reasons
+        request = JSON.parse(JSON.stringify(request));
         // Assign an id, for debugging
         Object.defineProperty(request, '__mid', { value:cur_mid++, writable:true });
         // Log

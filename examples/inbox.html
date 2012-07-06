@@ -6,10 +6,8 @@
         <title>Link - Inbox Example</title>
         <link rel="stylesheet" type="text/css" href="bootstrap/css/bootstrap.css" />
         <link rel="stylesheet" type="text/css" href="inbox/style.css" />
-        <script src="link.js"></script>
-        <script src="tint.js"></script>
     </head>
-    <body onload="app_init()">
+    <body>
         <div id="layout">
             <div id="nav" class="well"></div>
             <div id="content">Loading...</div>
@@ -47,54 +45,7 @@
             <hr />
             <p>$body;</p>
         </script>
-        
-        <script>
-            var Modules = {};
-            var Views = {};
-        </script>
-        <script src="inbox/views.js"></script>
-        <script src="inbox/inbox.js"></script>
-        <script src="inbox/services/fixture.js"></script>
-        <script src="inbox/services/remotefixture.js"></script>
-        <script>
-            function app_init() {
-                // Service configuration
-                var services = {
-                    local:{ module:Modules.FixtureService, name:'Fixture' },
-                    remote:{ module:Modules.RemoteFixtureService, name:'Remote' }
-                };                    
-            
-                // Setup the app
-                var app = new Link.Mediator();
-                var navView = new Views.Nav();
-                app.addModule('#', new Modules.Inbox(services));
-                for (var uri in services) {
-                    // instantiate the module
-                    var inst = new (services[uri].module)(services[uri].name);
-                    // add to structure
-                    app.addModule('#services/' + uri, inst);
-                    // add to nav view
-                    navView.item().link(services[uri].name, 'folder-open', '#/services/'+uri);
-                }
-                // put nav view into the DOM
-                document.getElementById('nav').innerHTML = navView.toString();
-                
-                // Start application
-                Link.logMode('traffic', true);
-                var elem = document.getElementById('content');
-                Link.attachToWindow(app, function(request, response) {
-                    var html;
-                    if (response && response.body) {
-                        // Convert the response to HTML
-                        var iface = Link.getTypeInterface(response['content-type'], response.body);
-                        html = (iface.toHtml ? iface.toHtml() : iface.toString());
-                    } else {
-                        html = response.code + ' ' + response.reason;
-                    }
-                    // Write to DOM
-                    elem.innerHTML = html;
-                });
-            };
-        </script>
+
+        <script data-main="inbox/main" src="require.js"></script>
     </body>
 </html>
