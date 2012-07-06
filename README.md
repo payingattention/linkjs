@@ -14,9 +14,7 @@ functionality without knowing the difference.
 
 ## Getting Started
 
-`npm install pfraze-linkjs`
-
-(There may need to be a name change; `pfraze-` won't be permanent.)
+Download `link.js` and load it into the document using [RequireJS](http://requirejs.org).
 
 Modules export routes for handling requests:
 
@@ -25,12 +23,14 @@ Modules export routes for handling requests:
     var AccountModule = function() {
         this.messages = [];
     };
-    AccountModule.prototype.routes = {
-        dashboard:{ uri:'^/?$', method:'get', accept:'text/html' },
-        messages:{ uri:'^/messages/?$', method:'get', accept:'js/object' },
-        message:{ uri:'^/messages/([0-9]+)/?$' },
-        messageReply:{ uri:'^/messages/([0-9]+/reply?$', method:'post' }
-    };
+    AccountModule.prototype.routes = [
+        Link.route('dashboard', { uri:'^/?$', method:'get', accept:'text/html' }),
+        Link.route('messages', { uri:'^/messages/?$', method:'get', accept:'obj' }),
+        Link.route('message', { uri:'^/messages/([0-9]+)/?$' }),
+        Link.route('messageReply', { uri:'^/messages/([0-9]+/reply?$', method:'post' })
+    ];
+    // The second parameter of `route()` is a match object
+    // all of its string values are converted to regexps
 ```
 
 They're then configured into a URI structure to compose the application:
@@ -48,7 +48,7 @@ To issue a request in a module:
 
 ```javascript
     // get messages
-    app.dispatch({ method:'get', uri:'#account/messages', accept:'js/object' }, function(response) {
+    app.dispatch({ method:'get', uri:'#account/messages', accept:'obj/*' }, function(response) {
         if (response.code == 200) { this.messages = response.body; }
     }, this);
 ```
@@ -57,7 +57,7 @@ Responses are formed by handlers:
 
 ```javascript
     AccountModule.prototype.messages = function(request) {
-        return { code:200, body:this.messages, 'content-type':'js/object' };
+        return Link.response(200, this.messages, 'obj/message-array' };
     });
 ```
 
@@ -67,7 +67,7 @@ If some async work must be done first, the handler can return a `Promise`.
     AccountModule.prototype.messages = function(request) {
         var promise = new Link.Promise();
         this.someAsyncAction(function(data) {
-            promise.fulfill({ code:200, body:data, 'content-type':'js/object' })
+            promise.fulfill(Link.response(200, data, 'obj/some-type' })
         });
         return promise;
     });
