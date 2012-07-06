@@ -1,12 +1,5 @@
-(function() {
-    // Set up our namespace
-    var Link;
-    if (typeof exports != 'undefined') {
-        Link = exports;
-    } else {
-        Link = this.Link = {};
-    }
-
+if (typeof define !== 'function') { var define = require('amdefine')(module) }
+define(function() {
     // Structure
     // =========
     // passes requests/responses around a uri structure of modules
@@ -133,7 +126,7 @@
         Object.defineProperty(request, '__dispatch_promise', { value:dispatchPromise });
         // Begin handling next tick
         var self = this;
-        setTimeout(function() { self.runHandlers(request, mkresponse(404)); }, 0);
+        setTimeout(function() { self.runHandlers(request, mkresponse(0)); }, 0);
         return dispatchPromise;
     };
 
@@ -151,6 +144,7 @@
         } else {
             // Out of callbacks -- create a response if we dont have one
             if (!response) { response = mkresponse(404); }
+            else if (response.code == 0) { response.code = 404; response.reason = 'not found'; }
             // Log
             if (logMode('traffic')) {
                 console.log(this.id ? this.id+'|res' : ' >|', request.__mid, request.uri, response['content-type'] ? '['+response['content-type']+']' : '', response);
@@ -490,13 +484,15 @@
     
     // Exports
     // =======
-    Link.Promise          = Promise;
-    Link.when             = when;
-    Link.whenAll          = whenAll;
-    Link.Structure        = Structure;
-    Link.route            = mkroute;
-    Link.response         = mkresponse;
-    Link.logMode          = logMode;
-    Link.ajaxConfig       = ajaxConfig;
-    Link.attachToWindow   = attachToWindow;
-}).call(this);
+    return {
+        Promise        : Promise,
+        when           : when,
+        whenAll        : whenAll,
+        Structure      : Structure,
+        route          : mkroute,
+        response       : mkresponse,
+        logMode        : logMode,
+        ajaxConfig     : ajaxConfig,
+        attachToWindow : attachToWindow,
+    };
+});
