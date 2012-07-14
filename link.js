@@ -47,7 +47,9 @@ define(function() {
                         match = true;
                         // key exists
                         if (!(k in request)) {
-                            //console.log(k,'not in',request,' -- ',module.uri);
+                            if (logMode('routing')) {
+                                console.log(' > ',module.inst,route.cb,'MISS ('+k+')');
+                            }
                             match = false;
                             break;
                         }
@@ -57,22 +59,33 @@ define(function() {
                         // regexp test
                         if (route.match[k] instanceof RegExp) {
                             match = route.match[k].exec(reqVal)
-                            if (!match) { break; }
+                            if (!match) { 
+                                if (logMode('routing')) {
+                                    console.log(' > ',module.inst,route.cb,'MISS ('+k+' "'+reqVal+'")');
+                                }
+                                break; 
+                            }
                             matches[k] = match;
                         }
                         // standard equality
                         else {
-                            if (route.match[k] != reqVal) { match = false; break; }
+                            if (route.match[k] != reqVal) { 
+                                if (logMode('routing')) {
+                                    console.log(' > ',module.inst,route.cb,'MISS ('+k+' "'+reqVal+'")');
+                                }
+                                match = false; break; 
+                            }
                             matches[k] = reqVal;
                         }
                     }
                     // Ended the loop because it wasn't a match?
                     if (!match) {
-                        //console.log(reqVal,'not match',route.match[k],' -- ',module.uri);
-                        continue;
+                                                continue;
                     }
                     // A match, get the cb
-                    //console.log(request.uri,'match',module.uri);
+                    if (logMode('routing')) {
+                        console.log(' > ',module.inst,route.cb,'MATCH');
+                    }
                     var cb = module.inst[route.cb];
                     if (!cb) {
                         console.log("Handler callback '" + route.cb + "' not found in object");
