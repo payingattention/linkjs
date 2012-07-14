@@ -164,7 +164,7 @@ define(function() {
                 console.log(this.id ? this.id+'|res' : ' >|', request.__mid, request.uri, response['content-type'] ? '['+response['content-type']+']' : '', response);
             }
             // Decode to object form
-            response.body = decodeType(response,body, response['content-type']);
+            response.body = decodeType(response.body, response['content-type']);
             // Send to original promise
             request.__dispatch_promise.fulfill(response);
         }
@@ -266,14 +266,10 @@ define(function() {
     };
     // Default en/decoders
     setTypeEncoder('application/json', function(obj) {
-        var str = JSON.stringify(obj);
-        Object.defineProperty(str, 'toObject', { value:function() { JSON.parse(this); }})
-        return str;
+        return JSON.stringify(obj);
     });
     setTypeDecoder('application/json', function(str) {
-        var obj = JSON.parse(str);
-        Object.defineProperty(obj, 'toString', { value:function() { JSON.stringify(this); }}); 
-        return obj;
+        return JSON.parse(str);
     });
     
     // Promise
