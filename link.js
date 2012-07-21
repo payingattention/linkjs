@@ -2,7 +2,6 @@ if (typeof define !== 'function') { var define = require('amdefine')(module) }
 define(function() {
     // deep copy helper
     // http://keithdevens.com/weblog/archive/2007/Jun/07/javascript.clone
-    // :TODO: not sure this is needed
     var deepCopy = function _clone(obj) {
         if (!obj || typeof obj != 'object') { return obj; }
         var c = new obj.constructor();
@@ -118,7 +117,7 @@ define(function() {
     Structure.prototype.dispatch = function(request, opt_cb, opt_context) {
         // Duplicate the request object
         // :TODO: not sure if I want this (complicates obj ref sharing within the browser)
-        //request = clone(request);
+        request = deepCopy(request);
         // Assign an id, for debugging
         Object.defineProperty(request, '__mid', { value:cur_mid++, writable:true });
         // Log
@@ -418,6 +417,8 @@ define(function() {
                 if (logMode('traffic')) {
                     console.log(this.id ? this.id+'|res' : ' >|', request.__mid, request.uri, xhrResponse['content-type'] ? '['+xhrResponse['content-type']+']' : '', xhrResponse);
                 }
+                // Decode into an object (if possible)
+                xhrResponse.body = decodeType(xhrResponse.body, xhrResponse['content-type']);
                 // Pass on
                 opt_cb.call(opt_context, xhrResponse);
             }
