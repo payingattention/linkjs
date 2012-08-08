@@ -292,6 +292,56 @@ define(function() {
     setTypeDecoder('application/json', function(str) {
         return JSON.parse(str);
     });
+    setTypeEncoder('application/x-www-form-urlencoded', function(obj) {
+        var enc = encodeURIComponent;
+        var str = [];
+        for (var k in obj) {
+            if (obj[k] === null) {
+                str.push(k+'=');
+            } else if (Array.isArray(obj[k])) {
+                for (var i=0; i < obj[k].length; i++) {
+                    str.push(k+'[]='+enc(obj[k][i]));
+                }
+            } else if (typeof obj[k] == 'object') {
+                for (var k2 in obj[k]) {
+                    str.push(k+'['+k2+']='+enc(obj[k][k2]));
+                }
+            } else {
+                str.push(k+'='+enc(obj[k]));
+            }
+        }
+        return str.join('&');
+    });
+    setTypeDecoder('application/x-www-form-urlencoded', function(params) {
+        // thanks to Brian Donovan
+        // http://stackoverflow.com/a/4672120
+        var pairs = params.split('&'),
+        result = {};
+
+        for (var i = 0; i < pairs.length; i++) {
+            var pair = pairs[i].split('='),
+            key = decodeURIComponent(pair[0]),
+            value = decodeURIComponent(pair[1]),
+            isArray = /\[\]$/.test(key),
+            dictMatch = key.match(/^(.+)\[([^\]]+)\]$/);
+
+            if (dictMatch) {
+                key = dictMatch[1];
+                var subkey = dictMatch[2];
+
+                result[key] = result[key] || {};
+                result[key][subkey] = value;
+            } else if (isArray) {
+                key = key.substring(0, key.length-2);
+                result[key] = result[key] || [];
+                result[key].push(value);
+            } else {
+                result[key] = value;
+            }
+        }
+
+        return result;
+    });
     
     // Promise
     // =======
