@@ -54,7 +54,7 @@ define(function() {
             var module = this.modules[i];
             // See if the module's configured URI fits inside the request URI
             var rel_uri_index = request.uri.indexOf(module.uri);
-            if (rel_uri_index != -1) {
+            if (rel_uri_index == 0) {
                 // It does-- pull out the remaining URI and use that to match the request
                 var rel_uri = request.uri.substr(module.uri.length);
                 if (rel_uri.charAt(0) != '/') { rel_uri = '/' + rel_uri; } // prepend the leading slash, for consistency
@@ -264,15 +264,18 @@ define(function() {
     };
     // Takes a mimetype (text/asdf+html), puts out the applicable types ([text/asdf+html, text/html,text])
     function __mkTypesList(type) {
-        var parts = type.split('/');
+        // for now, dump the encoding
+        var parts = type.split(';');
+        var t = parts[0];
+        parts = t.split('/');
         if (parts[1]) {
             var parts2 = parts[1].split('+');
             if (parts2[1]) { 
-                return [type, parts[0] + '/' + parts2[1], parts[0]];
+                return [t, parts[0] + '/' + parts2[1], parts[0]];
             }
-            return [type, parts[0]];
+            return [t, parts[0]];
         }
-        return [type];
+        return [t];
     };
     // Takes a registry and type, finds the best matching en/decoder
     function __findCoder(registry, type) {
