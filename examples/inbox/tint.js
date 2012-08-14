@@ -1,4 +1,12 @@
 define(function() {
+    // Set up namespace
+    var Tint;
+    if (typeof exports != 'undefined') {
+        Tint = exports;
+    } else {
+        Tint = this.Tint = {};
+    }
+
     // Creates a string-builder prototype using the interface described in the template
     // - `tmpl` must be a string
     var compile = function(tmpl, opt_constructor) {
@@ -200,5 +208,7 @@ define(function() {
         return str;
     };
 
-    return { compile:compile };
+    // Exports
+    Tint.compile = compile;
+    return Tint;
 });

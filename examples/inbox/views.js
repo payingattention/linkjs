@@ -4,7 +4,7 @@ define(['tint'], function(Tint) {
     var navTmplElem = document.getElementById('nav-template');
     var Nav = Tint.compile(navTmplElem.innerHTML, function() {
         this.item().header('Inbox');
-        this.item().link('Messages', 'inbox', '#');
+        this.item().link('Messages', 'inbox', '/');
         this.item().header('Services');
     });
     Nav.prototype.addService = function(service) {

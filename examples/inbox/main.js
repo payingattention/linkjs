@@ -1,16 +1,11 @@
-require.config({
-    paths:{
-        link:'../link',
-        tint:'../tint'
-    }
-});
 require([
     'link',
+    'request-events',
     'views',
     'inbox',
     'services/fixture',
     'services/remotefixture'
-], function(Link, AppViews, InboxModule, FixtureServiceModule, RemoteFixtureServiceModule) {
+], function(Link, RequestEvents, AppViews, InboxModule, FixtureServiceModule, RemoteFixtureServiceModule) {
 
     // Service configuration
     var services = {
@@ -21,11 +16,11 @@ require([
     // Setup the app
     var app = new Link.Structure();
     var navView = new AppViews.Nav();
-    app.addModule('#', new InboxModule(app, { uri:'#', services:services }));
+    app.addModule('', new InboxModule(app, { uri:'', services:services }));
     for (var slug in services) {
         // pull out config
         var cfg = services[slug];
-        cfg.uri = '#services/' + slug; 
+        cfg.uri = '/services/' + slug; 
         // instantiate the module
         var Module = cfg.module;
         var inst = new Module(app, cfg);
@@ -37,10 +32,9 @@ require([
     // put nav view into the DOM
     document.getElementById('nav').innerHTML = navView.toString();
 
-    // Start application
-    Link.logMode('traffic', true);
+    // Begin listening to the DOM for request events
     var content_elem = document.getElementById('content');
-    Link.attachToWindow(app, function(request, response) {
+    function handleResponse(response) {
         var html;
         if (response && response.body) {
             html = response.body.toString();
@@ -49,5 +43,14 @@ require([
         }
         // Write to DOM
         content_elem.innerHTML = html;
+    }
+    RequestEvents.observe(document.body);
+    RequestEvents.addListener('request', function(request) {
+        request['accept'] = 'text/html';
+        app.dispatch(request).then(handleResponse);
     });
+
+    // Start application
+    Link.logMode('traffic', true);
+    app.get({ uri:'/', accept:'text/html' }).then(handleResponse);
 });

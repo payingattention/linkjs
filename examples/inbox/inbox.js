@@ -9,7 +9,7 @@ define(['link','views'], function(Link, Views) {
         // Prep the structure
         for (var slug in this.services) {
             this.serviceCount++;
-            this.services[slug].messagesLink = { uri:'#services/'+slug, accept:'obj/*' };
+            this.services[slug].messagesLink = { uri:'/services/'+slug, accept:'obj/*' };
         }
     };
 
