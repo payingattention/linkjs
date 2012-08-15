@@ -6,11 +6,8 @@ Modular messaging architecture using the REST style.
 CartModule.someFunc() ==>[GET #inventory/sku/4003/price]==> InventoryModule.priceHandler()
 ````
 
-LinkJS configures modules into a URI structure, then provides path-based routing and request/response messaging
-between them. In the browser, Link will intercept link clicks and form submits to hashed URIs, then route it as
-a message through the structure to compose a response which can be inserted into the DOM. Also, URIs which point
-to remote locations will automatically run as Ajax calls, allowing code to make calls to remote or in-process
-functionality without knowing the difference.
+LinkJS configures server modules into a URI structure, then provides path-based routing and request/response messaging
+between them and remote services.
 
 ## Getting Started
 
@@ -25,7 +22,7 @@ Modules export routes for handling requests:
     };
     AccountModule.prototype.routes = [
         Link.route('dashboard', { uri:'^/?$', method:'get', accept:'text/html' }),
-        Link.route('messages', { uri:'^/messages/?$', method:'get', accept:'obj' }),
+        Link.route('messages', { uri:'^/messages/?$', method:'get', accept:'application/json' }),
         Link.route('message', { uri:'^/messages/([0-9]+)/?$' }),
         Link.route('messageReply', { uri:'^/messages/([0-9]+/reply?$', method:'post' })
     ];
@@ -37,9 +34,9 @@ They're then configured into a URI structure to compose the application:
 
 ```javascript
     var app = new Link.Structure();
-    app.addModule('#', new StoreModule());
-    app.addModule('#account', new AccountModule());
-    app.addModule('#cart', new CartModule());
+    app.addModule('/', new StoreModule());
+    app.addModule('/account', new AccountModule());
+    app.addModule('/cart', new CartModule());
 ```
 
 ### Requests/Responses
@@ -48,7 +45,7 @@ To issue a request in a module:
 
 ```javascript
     // get messages
-    app.dispatch({ method:'get', uri:'#account/messages', accept:'obj/*' }, function(response) {
+    app.dispatch({ method:'get', uri:'/account/messages', accept:'application/json' }, function(response) {
         if (response.code == 200) { this.messages = response.body; }
     }, this);
 ```
@@ -57,7 +54,7 @@ Responses are formed by handlers:
 
 ```javascript
     AccountModule.prototype.messages = function(request) {
-        return Link.response(200, this.messages, 'obj/message-array');
+        return Link.response(200, this.messages, 'application/json');
     });
 ```
 
@@ -67,14 +64,14 @@ If some async work must be done first, the handler can return a `Promise`.
     AccountModule.prototype.messages = function(request) {
         var promise = new Link.Promise();
         this.someAsyncAction(function(data) {
-            promise.fulfill(Link.response(200, data, 'obj/some-type'));
+            promise.fulfill(Link.response(200, data, 'application/json'));
         });
         return promise;
     });
 ```
 
 The vision for Link is to create applications which are easy to extend due to the constraints of the REST
-interfaces. For instance, an inbox application could issue requests to all resources under the #services/ URI,
+interfaces. For instance, an inbox application could issue requests to all resources under the /services URI,
 then combine the results, allowing direct integration from multiple different sources. This is exemplified in
 the inbox demo, which can be found in `/examples`.
 
