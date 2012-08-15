@@ -1,4 +1,4 @@
-(function() {
+define(function() {
     // Set up namespace
     var Tint;
     if (typeof exports != 'undefined') {
@@ -210,4 +210,5 @@
 
     // Exports
     Tint.compile = compile;
-}).call(this);
+    return Tint;
+});

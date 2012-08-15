@@ -1,10 +1,10 @@
-(function(Views) {
+define(['tint'], function(Tint) {
     // Nav
     // ======
     var navTmplElem = document.getElementById('nav-template');
     var Nav = Tint.compile(navTmplElem.innerHTML, function() {
         this.item().header('Inbox');
-        this.item().link('Messages', 'inbox', '#');
+        this.item().link('Messages', 'inbox', '/');
         this.item().header('Services');
     });
     Nav.prototype.addService = function(service) {
@@ -49,7 +49,9 @@
     });
 
     // Export
-    Views.Nav = Nav;
-    Views.Inbox = Inbox;
-    Views.Message = Message;
-})(Views);
+    return {
+        Nav:Nav,
+        Inbox:Inbox,
+        Message:Message
+    };
+});

@@ -1,9 +1,10 @@
-(function(Modules) {
+define(['link', 'views'], function(Link, Views) {
     // Fixture
     // =======
     // Provides static debug data
-    var FixtureService = function(name) {
-        this.serviceName = name;
+    var FixtureService = function(structure, config) {
+        this.serviceName = config.name;
+        this.uri = config.uri;
         // fixture data
         this.messages = [
             { date:new Date('April 23 2012 21:20'), author:'rodger', recp:['bsmith'], subject:'Hey, Buddy!', body:'How are you doing?', re:null },
@@ -15,8 +16,8 @@
     // Handler Routes
     // ==============
     FixtureService.prototype.routes = [
-        { cb:'messagesHandler', uri:'^/?$', accept:'js/object' },
-        { cb:'messageHtmlHandler', uri:'^/([0-9]+)/?$', accept:'text/html' }
+        Link.route('messagesHandler', { uri:'^/?$', accept:'obj' }),
+        Link.route('messageHtmlHandler', { uri:'^/([0-9]+)/?$', accept:'text/html' })
     ];
     FixtureService.prototype.messagesHandler = function(request) {
         // Collect messages
@@ -31,17 +32,16 @@
                 view_link:this.uri + '/' + i
             });
         }
-        return { code:200, body:retMessages, 'content-type':'js/object' };
+        return Link.response(200, retMessages, 'obj/message');
     };    
-    FixtureService.prototype.messageHtmlHandler = function(request, response, match) {
+    FixtureService.prototype.messageHtmlHandler = function(request, match) {
         // Find message
         var message = this.messages[match.uri[1]];
-        if (!message) { return { code:404 }; }
+        if (!message) { return Link.response(404); }
         // Build html
         var messageView = new Views.Message(message);
-        return { code:200, body:messageView.toString(), 'content-type':'text/html' };
+        return Link.response(200, messageView.toString(), 'text/html');
     };
 
-    // Export
-    Modules.FixtureService = FixtureService;
-})(Modules);
+    return FixtureService;
+});
