@@ -1,4 +1,4 @@
-# LinkJS
+![LinkJS](http://linkshui.com/wp-content/uploads/2012/08/ljs_logo.png)
 
 Modular messaging architecture using the REST style.
 
