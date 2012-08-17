@@ -1,13 +1,12 @@
 ![LinkJS](http://linkshui.com/wp-content/uploads/2012/08/ljs_logo.png)
 
-Modular messaging architecture using the REST style.
+An Ajax library that allows JS modules to respond along with remote services.
 
 ````
-CartModule.someFunc() ==>[GET #inventory/sku/4003/price]==> InventoryModule.priceHandler()
+CartModule.someFunc() ==>[GET /item/4003/price]==> InventoryModule.priceHandler()
 ````
 
-LinkJS configures server modules into a URI structure, then provides path-based routing and request/response messaging
-between them and remote services.
+LinkJS configures server modules into a local URI space, then allows each one to respond to requests before defaulting to Ajax. This allows one-page applications to compose the document without having to tie directly to the DOM or each other.
 
 ## Getting Started
 
@@ -69,11 +68,6 @@ If some async work must be done first, the handler can return a `Promise`.
         return promise;
     });
 ```
-
-The vision for Link is to create applications which are easy to extend due to the constraints of the REST
-interfaces. For instance, an inbox application could issue requests to all resources under the /services URI,
-then combine the results, allowing direct integration from multiple different sources. This is exemplified in
-the inbox demo, which can be found in `/examples`.
 
 ## API
 
