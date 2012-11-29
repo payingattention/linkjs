@@ -1,78 +1,114 @@
-![LinkJS](http://linkshui.com/wp-content/uploads/2012/08/ljs_logo.png)
+# LinkJS
 
-An Ajax library that allows JS modules to respond along with remote services.
+LinkJS provides event- and request-messaging between objects using HTTP as an underlying protocol. 
 
-````
-CartModule.someFunc() ==>[GET /item/4003/price]==> InventoryModule.priceHandler()
-````
 
-LinkJS configures server modules into a local URI space, then allows each one to respond to requests before defaulting to Ajax. This allows one-page applications to compose the document without having to tie directly to the DOM or each other.
-
-## Getting Started
-
-Download `link.js` and load it into the document using [RequireJS](http://requirejs.org).
-
-Modules export routes for handling requests:
+Top-level (document / process) initialization:
 
 ```javascript
-    // typical constructor
-    var AccountModule = function() {
-        this.messages = [];
-    };
-    AccountModule.prototype.routes = [
-        Link.route('dashboard', { uri:'^/?$', method:'get', accept:'text/html' }),
-        Link.route('messages', { uri:'^/messages/?$', method:'get', accept:'application/json' }),
-        Link.route('message', { uri:'^/messages/([0-9]+)/?$' }),
-        Link.route('messageReply', { uri:'^/messages/([0-9]+/reply?$', method:'post' })
-    ];
-    // The second parameter of `route()` is a match object
-    // all of its string values are converted to regexps
+// add a server
+Link.register('localstorage.api', myLocalstorageServer);
+
+// decide who can open sessions
+Link.on('session:localstorage.api', function(client, session) {
+	if (isTrusted(client)) {
+		session.allow();
+	}
+});
+// or, if you don't care...
+Link.on('session', function(_, session) { session.allow(); });
+
+// import a set of intent handlers
+Link.implement('http://intent-registry.com/', Link.commonIntentHandlers);
 ```
 
-They're then configured into a URI structure to compose the application:
+The consumer:
 
 ```javascript
-    var app = new Link.Structure();
-    app.addModule('/', new StoreModule());
-    app.addModule('/account', new AccountModule());
-    app.addModule('/cart', new CartModule());
+// establish a session with the target
+var localStorage = Link.session(this, 'localstorage.api', { events:true });
+
+// standard pubsub
+localStorage.on('localstorage-event', function(data) {
+	//...
+});
+
+// request according to an intent spec
+localStorage.using('http://intent-registry.com/');
+localStorage('/collections/list', { collection:'settings', filters:{ app:'myapp' }})
+	.then(function(settings) {
+		//...
+	}, function(error) {
+		//...
+	});
+
+// request by standard http
+localStorage.using(null);
+localStorage('post', { path:'/settings/myapp', 'content-type':'application/json', body:somedata })
+	.then(function(response) {
+		//...
+	}, function(error) {
+		//...
+	});
 ```
 
-### Requests/Responses
-
-To issue a request in a module:
+The server:
 
 ```javascript
-    // get messages
-    app.dispatch({ method:'get', uri:'/account/messages', accept:'application/json' }, function(response) {
-        if (response.code == 200) { this.messages = response.body; }
-    }, this);
+// create the server
+var server = Link.server();
+
+// standard pubsub
+server.publish('localstorage-event', { foo:'bar' });
+server.on('subscribe', function(client) {
+	server.publish('another-localstorage-event', { foo:'bar' }, client);
+});
+
+// handler according to an intent sec
+server.using('http://intent-registry.com/');
+server.handle('/collections/list', { collection:localStorage.hasCollection } function(params) {
+	return localStorage.getCollection(params.collection); //...
+});
+
+// handler using standard http
+// (:NOTE: may overlap with an intent's implementation, as intents are still http request handlers)
+server.using(null);
+server.handle('post', { path:new RegExp('^/settings/(.*)/?$','i') }, function(request, match) {
+	// ...
+});
 ```
 
-Responses are formed by handlers:
+A sample intent handler:
 
 ```javascript
-    AccountModule.prototype.messages = function(request) {
-        return Link.response(200, this.messages, 'application/json');
-    });
+Link.commonIntentHandlers = {
+	'/collections/list':{
+		toHTTP:function(obj) {
+			return validate(function(v) {
+				var request = {
+					method:'get',
+					path:'/'+v(obj.collection, 'collection', v.NotNull, v.IsString),
+					accept:v(obj.accept||'application/json', 'accept', v.NotNull, v.IsString)
+				};
+				if (obj.filters) {
+					request.query = v(obj.filters, 'filters', v.IsObject);
+				}
+				return request;
+			});
+		},
+		fromHTTP:function(request) {
+			return validate(function(v) {
+				v(request.method, 'method', v.Equals('get'));
+				var object = {
+					collection:v(request.path.substr(1), 'path', v.NotNull, v.IsString),
+					accept:request.accept||'application/json'
+				};
+				if (request.query) {
+					object.filters = request.query;
+				}
+				return object;
+			});
+		}
+	}
+}
 ```
-
-If some async work must be done first, the handler can return a `Promise`.
-
-```javascript
-    AccountModule.prototype.messages = function(request) {
-        var promise = new Link.Promise();
-        this.someAsyncAction(function(data) {
-            promise.fulfill(Link.response(200, data, 'application/json'));
-        });
-        return promise;
-    });
-```
-
-## API
-
-Full API documentation is in the works.
-
-# License
-
-Link is released under the MIT License (found in the LICENSE file).
