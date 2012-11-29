@@ -35,7 +35,7 @@ localStorage.on('localstorage-event', function(data) {
 });
 
 // request by http
-localStorage('post', { path:'/settings/myapp', 'content-type':'application/json', body:somedata })
+localStorage.req('post', { path:'/settings/myapp', 'content-type':'application/json', body:somedata })
 	.then(function(response) {
 		//...
 	}, function(error) {
@@ -63,14 +63,14 @@ server.handle('post', { path:new RegExp('^/settings/(.*)/?$','i') }, function(re
 
 ## Request/Response Wrappers
 
-To save developers from having to build requests, a project can use wrappers, which is based on Web Intents. Possible actions are given URLs for reference (http://webintents.org/share, for example). Requests refer to those URLs and pass a parameter object which is converted into a request.
+To save developers from having to build requests, a project can use wrappers (which are based on Web Intents). Possible actions are given URLs for reference (http://webintents.org/share, for example). Requests refer to those URLs and pass a parameter object which is converted into a request.
 
 ```javascript
 localStorage.using('http://intent-registry.com/'); // probably called once during init
 //...
 
 // request according to an intent spec
-localStorage('/collections/list', { col:'settings', filters:{ app:'myapp' }})
+localStorage.req('/collections/list', { col:'settings', filters:{ app:'myapp' }})
 	.then(function(settings) {
 		//...
 	}, function(error) {
