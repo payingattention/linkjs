@@ -29,13 +29,13 @@ A consumer would then:
 // establish a session with the target
 var localStorage = Link.session(this, 'httpl://localstorage.api', { events:true }); // events=true tells us to support events
 
-// standard pubsub
+// event listening
 localStorage.on('localstorage-event', function(data) {
 	//...
 });
 
-// request by http
-localStorage.req('post', { path:'/settings/myapp', 'content-type':'application/json', body:somedata })
+// requests
+localStorage.request('post', { path:'/settings/myapp', 'content-type':'application/json', body:somedata })
 	.then(function(response) {
 		//...
 	}, function(error) {
@@ -49,13 +49,13 @@ The server:
 // create the server
 var server = Link.server();
 
-// standard pubsub
-server.publish('localstorage-event', { foo:'bar' });
+// event publishing
+server.notify('localstorage-event', { foo:'bar' });
 server.on('subscribe', function(client) {
-	server.publish('another-localstorage-event', { foo:'bar' }, client);
+	server.notify('another-localstorage-event', { foo:'bar' }, client);
 });
 
-// handler using http
+// request handling
 server.handle('post', { path:new RegExp('^/settings/(.*)/?$','i') }, function(request, match) {
 	// ...
 });
@@ -70,7 +70,7 @@ localStorage.using('http://intent-registry.com/'); // probably called once durin
 //...
 
 // request according to an intent spec
-localStorage.req('/collections/list', { col:'settings', filters:{ app:'myapp' }})
+localStorage.request('/collections/list', { col:'settings', filters:{ app:'myapp' }})
 	.then(function(settings) {
 		//...
 	}, function(error) {
