@@ -3,36 +3,228 @@ var Link = {};
 
 // Core
 // ====
-/*
-:TODO:
-Link.request 
- - implement http://nodejs.org/api/http.html#http_http_request_options_callback
-
-Link.registerLocal
-*/
 (function(exports) {
-	function request() {
+	// stores local server functions
+	var httpl_registry = {};
+
+	// request()
+	// =========
+	// EXPORTED
+	// HTTP request dispatcher
+	// - requires `method` and the target url
+	// - target url can be passed in options as `url`, or generated from `host` and `path`
+	// - query parameters may be passed in `query`
+	// - extra request headers may be specified in `headers`
+	// - on success (status code 2xx), `okCb` is called with (payload, headers)
+	// - on failure (status code 4xx,5xx), `failCb` is called with (payload, headers)
+	// - all protocol (status code 1xx,3xx) is handled internally :TODO:
+	function request(payload, options, okCb, failCb, cbContext) {
+		// were we passed (options, okCb, errCb, context)?
+		if (typeof payload === 'function') {
+			options = arguments[0];
+			okCb    = arguments[1];
+			errCb   = arguments[2];
+			context = arguments[3];
+		}
+		if (!options) { throw "no options provided to request"; }
+
+		// sane defaults
+		okCb  = okCb  || noop;
+		errCb = errCb || noop;
+		options.headers = options.headers || {};
+
+		// parse the url
+		var urld;
+		if (options.url) {
+			urld = Link.parse.url(options.url);
+		} else {
+			urld = Link.parse.url(__joinUrl(options.host, options.path));
+		}
+		if (!urld) {
+			throw "no URL or host/path provided in request options";
+		}
+
+		// execute according to protocol
+		if (urld.protocol == 'httpl') {
+			__requestLocal(payload, urld, options, okCb, failCb, cbContext);
+		} else {
+			__requestRemote(payload, urld, options, okCb, failCb, cbContext);
+		}
 	}
-	function registerLocal() {
+
+	// registerLocal()
+	// ===============
+	// EXPORTED
+	// adds a server to the httpl registry
+	function registerLocal(domain, server) {
+		var urld = Link.parse.url(domain);
+		if (urld.protocol && urld.protocol !== 'httpl') {
+			throw "registerLocal can only add servers to the httpl protocol";
+		}
+		if (!urld.host) {
+			throw "invalid domain provided to registerLocal";
+		}
+		if (httpl_registry[urld.host]) {
+			throw "server already registered at domain given to registerLocal";
+		}
+		httpl_registry[urld.host] = server;
+	}
+
+	// unregisterLocal()
+	// =================
+	// EXPORTED
+	// removes a server from the httpl registry
+	function unregisterLocal(domain) {
+		var urld = Link.parse.url(domain);
+		if (!urld.host) {
+			throw "invalid domain provided toun registerLocal";
+		}
+		if (httpl_registry[urld.host]) {
+			delete httpl_registry[urld.host];
+		}
+		
+	}
+
+	// executes a request locally
+	function __requestLocal(payload, urld, options, okCb, failCb, cbContext) {
+		// find the local server
+		var server = httpl_registry[urld.host];
+		if (!server) {
+			return failCb.call(cbContext, null, { status:404, reason:'server not found' });
+		}
+
+		// build the request
+		var request = {
+			path    : urld.path,
+			method  : options.method,
+			query   : options.query || {},
+			headers : options.headers || {},
+			body    : payload
+		};
+
+		// if the urld has query parameters, mix them into the request's query object
+		if (urld.query) {
+			var q = Link.contentTypes.deserialize(urld.query, 'text/url-query');
+			for (var k in q) {
+				request.query[k] = q[k];
+			}
+		}
+
+		// pass on to the server
+		server(request, function(responsePayload, responseHeaders) {
+			// validate response
+			if (typeof responseHeaders !== 'object') { responseHeaders = {}; }
+			if (!responseHeaders.status) {
+				responseHeaders.status = 500;
+				responseHeaders.reason = 'malformed response';
+			}
+
+			if (responseHeaders.status >= 200 && responseHeaders.status < 300) {
+				okCb.call(cbContext, responsePayload, responseHeaders);
+			} else if (responseHeaders.status >= 400 && responseHeaders.status < 600) {
+				failCb.call(cbContext, responsePayload, responseHeaders);
+			} else {
+				// :TODO: protocol handling
+			}
+		});
+	}
+
+	// executes a request remotely
+	function __requestRemote(payload, urld, options, okCb, failCb, cbContext) {
+
+		// if a query was given in the options, add it to the urld
+		if (request.query) {
+			// :TODO: move to contentTypes.serialize
+			var q = [];
+			for (var k in request.query) {
+				q.push(k+'='+request.query[k]);
+			}
+			if (q.length) {
+				q = q.join('&');
+				if (urld.query) {
+					urld.query    += '&' + q;
+					urld.relative += '&' + q;
+				} else {
+					urld.query     =  q;
+					urld.relative += '?' + q;
+				}
+			}
+		}
+
+		if (window) {
+			__requestRemoteBrowser(payload, urld, options, okCb, failCb, cbContext);
+		} else {
+			__requestRemoteNodejs(payload, urld, options, okCb, failCb, cbContext);
+		}
+	}
+
+	// executes a remote request in the browser
+	function __requestRemoteBrowser(payload, urld, options, okCb, failCb, cbContext) {
+
+		// assemble the final url
+		var url = (urld.protocol || 'http') + '://' + urld.authority + urld.relative;
+
+		// make sure our payload is serialized
+		if (payload) {
+			options.headers['content-type'] = options.headers['content-type'] || 'application/json';
+			if (typeof payload !== 'string') {
+				payload = Link.contentTypes.serialize(payload, options.headers['content-type']);
+			}
+		}
+
+		// create the request
+		var xhrRequest = new XMLHttpRequest();
+		xhrRequest.open(options.method, target_uri, true);
+		for (var k in options.headers) {
+			if (options.headers[k] === null) { continue; }
+			xhrRequest.setRequestHeader(k, options.headers[k]);
+		}
+
+		xhrRequest.onreadystatechange = function() {
+			if (xhrRequest.readyState == 4) {
+				var responseHeaders = {
+					status:xhrRequest.status,
+					reason:xhrRequest.statusText
+				};
+				// :NOTE: a bug in firefox causes getAllResponseHeaders to return an empty string on CORS
+				// we either need to bug them, or iterate the headers we care about with getResponseHeader
+				xhrRequest.getAllResponseHeaders().split("\n").forEach(function(h) {
+					if (!h) { return; }
+					var kv = h.toLowerCase().replace('\r','').split(': ');
+					responseHeaders[kv[0]] = kv[1];
+				});
+
+				var responsePayload = Link.contentTypes.deserialize(xhrRequest.responseText, responseHeaders['content-type']);
+
+				if (responseHeaders.status >= 200 && responseHeaders.status < 300) {
+					okCb.call(cbContext, responsePayload, responseHeaders);
+				} else if (responseHeaders.status >= 400 && responseHeaders.status < 600) {
+					failCb.call(cbContext, responsePayload, responseHeaders);
+				} else {
+					// :TODO: protocol handling
+				}
+			}
+		};
+		xhrRequest.send(payload);
+	}
+
+	// executes a remote request in a nodejs process
+	function __requestRemoteNodejs(payload, urld, options, okCb, failCb, cbContext) {
+		throw "request() has not yet been implemented for nodejs";
+	}
+
+	function __joinUrl() {
+		var parts = Array.prototype.map.call(arguments, function(arg) {
+			var lo = 0, hi = arg.length;
+			if (arg.charAt(0) === '/')      { lo += 1; }
+			if (arg.charAt(hi - 1) === '/') { hi -= 1; }
+			return arg.substring(lo, hi);
+		});
+		return parts.join('/');
 	}
 
 	exports.request       = request;
 	exports.registerLocal = registerLocal;
-})(Link);
-
-// Server
-// ======
-/*
-:TODO:
-Link.Server
-- implement http://nodejs.org/api/http.html#http_class_http_server
-- implement http://nodejs.org/api/http.html#http_http_createserver_requestlistener
-*/
-(function(exports) {
-	function Server() {
-	}
-
-	exports.Server = Server;
 })(Link);
 
 // Navigator
@@ -67,10 +259,10 @@ Link.Server
 	//  - may be "relative" if described by a relation from another context
 	//  - may be "absolute" if described by a URI
 	// :NOTE: absolute contexts may have a URI without being resolved, so don't take the presence of a URI as a sign that the resource exists
-	function NavigatorContext(rel, relparams, uri) {
+	function NavigatorContext(rel, relparams, url) {
 		this.rel          = rel;
 		this.relparams    = relparams;
-		this.uri          = uri;
+		this.url          = url;
 
 		this.resolveState = NavigatorContext.UNRESOLVED;
 		this.error        = null;
@@ -81,13 +273,13 @@ Link.Server
 	NavigatorContext.prototype.isResolved = function() { return this.resolveState === NavigatorContext.RESOLVED; };
 	NavigatorContext.prototype.isBad      = function() { return this.resolveState > 1; };
 	NavigatorContext.prototype.getError   = function() { return this.error; };
-	NavigatorContext.prototype.isRelative = function() { return (!this.uri && !!this.rel); };
-	NavigatorContext.prototype.isAbsolute = function() { return (!!this.uri); };
-	NavigatorContext.prototype.getUri     = function() { return this.uri; };
-	NavigatorContext.prototype.resolve    = function(uri) {
+	NavigatorContext.prototype.isRelative = function() { return (!this.url && !!this.rel); };
+	NavigatorContext.prototype.isAbsolute = function() { return (!!this.url); };
+	NavigatorContext.prototype.getUrl     = function() { return this.url; };
+	NavigatorContext.prototype.resolve    = function(url) {
 		this.error = null;
 		this.resolveState = NavigatorContext.RESOLVED;
-		this.uri = uri;
+		this.url = url;
 	};
 
 	// Navigator
@@ -138,7 +330,7 @@ Link.Server
 	}
 
 	// executes an HTTP request to our context
-	Navigator.prototype.request = function Navigator__request(payload, headers, okCb, errCb) {
+	Navigator.prototype.request = function Navigator__request(payload, options, okCb, errCb) {
 		// were we passed okCb, errCb?
 		if (typeof payload === 'function') {
 			okCb = arguments[0];
@@ -194,8 +386,8 @@ Link.Server
 		};
 
 		// make http request
-		headers.uri = this.context.getUri();
-		Link.request(headers, payload, onRequestSucceed, onRequestFail, this);
+		options.url = this.context.getUrl();
+		Link.request(payload, options, onRequestSucceed, onRequestFail, this);
 	};
 
 	// follows a link relation from our context, generating a new navigator
@@ -235,9 +427,9 @@ Link.Server
 		}
 
 		// ok, our context is good -- lets resolve the child
-		var uri = this.__lookupLink(childNav.context);
-		if (uri) {
-			childNav.context.resolve(uri);
+		var url = this.__lookupLink(childNav.context);
+		if (url) {
+			childNav.context.resolve(url);
 			okCb.call(childNav);
 		} else {
 			childNav.context.resolveState = NavigatorContext.NOTFOUND;
@@ -299,32 +491,43 @@ Link.Server
 
 // Helpers
 // =======
-/*
-:TODO:
-Link.format
-- uriTemplate
-
-Link.parse
-- linkHeader
-- uri
-
-Link.contentTypes
-- serialize, deserialize
-- register
-*/
 (function(exports) {
 	var format = {
 		uriTemplate : format__uriTemplate
 	};
 	var parse = {
 		linkHeader : parse__linkHeader,
-		uri        : parse__uri
+		url        : parse__url
 	};
 	var contentTypes = {
 		serialize   : contentTypes__serialize,
 		deserialize : contentTypes__deserialize,
 		register    : contentTypes__register
 	};
+
+	function format__uriTemplate() {
+		// :TODO:
+	}
+
+	function parse__linkHeader() {
+		// :TODO:
+	}
+
+	function parse__url() {
+		// :TODO:
+	}
+
+	function contentTypes__serialize() {
+		// :TODO:
+	}
+
+	function contentTypes__deserialize() {
+		// :TODO:
+	}
+
+	function contentTypes__register() {
+		// :TODO:
+	}
 
 	exports.format       = format;
 	exports.parse        = parse;
