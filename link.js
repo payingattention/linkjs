@@ -11,13 +11,15 @@ var Link = {};
 	// =========
 	// EXPORTED
 	// HTTP request dispatcher
-	// - requires `method` and the target url
-	// - target url can be passed in options as `url`, or generated from `host` and `path`
-	// - query parameters may be passed in `query`
-	// - extra request headers may be specified in `headers`
+	// - all parameters except `options` are optional
+	// - `options` param:
+	//   - requires `method` and the target url
+	//   - target url can be passed in options as `url`, or generated from `host` and `path`
+	//   - query parameters may be passed in `query`
+	//   - extra request headers may be specified in `headers`
 	// - on success (status code 2xx), `okCb` is called with (payload, headers)
 	// - on failure (status code 4xx,5xx), `failCb` is called with (payload, headers)
-	// - all protocol (status code 1xx,3xx) is handled internally :TODO:
+	// - all protocol (status code 1xx,3xx) is handled internally
 	function request(payload, options, okCb, failCb, cbContext) {
 		// were we passed (options, okCb, errCb, context)?
 		if (typeof payload === 'function') {
@@ -52,39 +54,6 @@ var Link = {};
 		}
 	}
 
-	// registerLocal()
-	// ===============
-	// EXPORTED
-	// adds a server to the httpl registry
-	function registerLocal(domain, server) {
-		var urld = Link.parse.url(domain);
-		if (urld.protocol && urld.protocol !== 'httpl') {
-			throw "registerLocal can only add servers to the httpl protocol";
-		}
-		if (!urld.host) {
-			throw "invalid domain provided to registerLocal";
-		}
-		if (httpl_registry[urld.host]) {
-			throw "server already registered at domain given to registerLocal";
-		}
-		httpl_registry[urld.host] = server;
-	}
-
-	// unregisterLocal()
-	// =================
-	// EXPORTED
-	// removes a server from the httpl registry
-	function unregisterLocal(domain) {
-		var urld = Link.parse.url(domain);
-		if (!urld.host) {
-			throw "invalid domain provided toun registerLocal";
-		}
-		if (httpl_registry[urld.host]) {
-			delete httpl_registry[urld.host];
-		}
-		
-	}
-
 	// executes a request locally
 	function __requestLocal(payload, urld, options, okCb, failCb, cbContext) {
 		// find the local server
@@ -104,14 +73,14 @@ var Link = {};
 
 		// if the urld has query parameters, mix them into the request's query object
 		if (urld.query) {
-			var q = Link.contentTypes.deserialize(urld.query, 'text/url-query');
+			var q = Link.contentTypes.deserialize(urld.query, 'application/x-www-form-urlencoded');
 			for (var k in q) {
 				request.query[k] = q[k];
 			}
 		}
 
 		// pass on to the server
-		server(request, function(responsePayload, responseHeaders) {
+		server.fn.call(server.context, request, function(responsePayload, responseHeaders) {
 			// validate response
 			if (typeof responseHeaders !== 'object') { responseHeaders = {}; }
 			if (!responseHeaders.status) {
@@ -134,13 +103,17 @@ var Link = {};
 
 		// if a query was given in the options, add it to the urld
 		if (request.query) {
+			var q = Link.contentTypes.serialize(request.query, 'application/x-www-form-urlencoded');
 			// :TODO: move to contentTypes.serialize
-			var q = [];
+			/*var q = [];
 			for (var k in request.query) {
 				q.push(k+'='+request.query[k]);
 			}
 			if (q.length) {
 				q = q.join('&');
+			}
+			*/
+			if (q) {
 				if (urld.query) {
 					urld.query    += '&' + q;
 					urld.relative += '&' + q;
@@ -213,6 +186,7 @@ var Link = {};
 		throw "request() has not yet been implemented for nodejs";
 	}
 
+	// joins url segments while avoiding double slashes
 	function __joinUrl() {
 		var parts = Array.prototype.map.call(arguments, function(arg) {
 			var lo = 0, hi = arg.length;
@@ -223,16 +197,45 @@ var Link = {};
 		return parts.join('/');
 	}
 
+	// registerLocal()
+	// ===============
+	// EXPORTED
+	// adds a server to the httpl registry
+	function registerLocal(domain, server, serverContext) {
+		var urld = Link.parse.url(domain);
+		if (urld.protocol && urld.protocol !== 'httpl') {
+			throw "registerLocal can only add servers to the httpl protocol";
+		}
+		if (!urld.host) {
+			throw "invalid domain provided to registerLocal";
+		}
+		if (httpl_registry[urld.host]) {
+			throw "server already registered at domain given to registerLocal";
+		}
+		httpl_registry[urld.host] = { fn:server, context:serverContext };
+	}
+
+	// unregisterLocal()
+	// =================
+	// EXPORTED
+	// removes a server from the httpl registry
+	function unregisterLocal(domain) {
+		var urld = Link.parse.url(domain);
+		if (!urld.host) {
+			throw "invalid domain provided toun registerLocal";
+		}
+		if (httpl_registry[urld.host]) {
+			delete httpl_registry[urld.host];
+		}
+		
+	}
+
 	exports.request       = request;
 	exports.registerLocal = registerLocal;
 })(Link);
 
 // Navigator
 // =========
-/*
-:TODO:
-- handle relative URIs
-*/
 (function(exports) {
 	// navigator sugar functions
 	// =========================
@@ -276,10 +279,18 @@ var Link = {};
 	NavigatorContext.prototype.isRelative = function() { return (!this.url && !!this.rel); };
 	NavigatorContext.prototype.isAbsolute = function() { return (!!this.url); };
 	NavigatorContext.prototype.getUrl     = function() { return this.url; };
+	NavigatorContext.prototype.getHost    = function() {
+		if (!this.host) {
+			if (!this.url) { return null; }
+			this.host = Link.parse.url(this.url).host;
+		}
+		return this.host;
+	};
 	NavigatorContext.prototype.resolve    = function(url) {
-		this.error = null;
+		this.error        = null;
 		this.resolveState = NavigatorContext.RESOLVED;
-		this.url = url;
+		this.url          = url;
+		this.host         = Link.parse.url(options.url).host;
 	};
 
 	// Navigator
@@ -331,16 +342,14 @@ var Link = {};
 
 	// executes an HTTP request to our context
 	Navigator.prototype.request = function Navigator__request(payload, options, okCb, errCb) {
-		// were we passed okCb, errCb?
-		if (typeof payload === 'function') {
-			okCb = arguments[0];
-			errCb = arguments[1];
+		// were we passed (options, okCb, errCb)?
+		if (typeof options !== 'object') {
+			payload = null;
+			options = arguments[0];
+			okCb    = arguments[1];
+			errCb   = arguments[2];
 		}
-		// were we passed payload, okCb, errCb?
-		else if (typeof headers === 'function') {
-			okCb = arguments[1];
-			errCb = arguments[2];
-		}
+		if (!options || !options.method) { throw "request options not provided"; }
 		// sane defaults
 		okCb  = okCb  || noop;
 		errCb = errCb || noop;
@@ -359,7 +368,7 @@ var Link = {};
 			);
 			return;
 		}
-		// :NOTE: an unresolved absolute context doesnt need prior resolution, as the request is what will resolve/mark bad
+		// :NOTE: an unresolved absolute context doesnt need prior resolution, as the request is what will resolve it
 
 		var onRequestSucceed = function(payload, headers) {
 			// we can now consider ourselves resolved (if we hadnt already)
@@ -464,16 +473,35 @@ var Link = {};
 		}
 		
 		if (match) {
-			return Link.format.uriTemplate(match, context.relparams);
+			var url = Link.format.uriTemplate(match.href, context.relparams);
+			var urld = Link.parse.url(url);
+			if (!urld.host) { // handle relative URLs
+				url = this.context.getHost() + urld.relative;
+			}
+			return url;
 		}
 		return null;
 	};
 
 	// add navigator request sugars
 	NAV_REQUEST_FNS.forEach(function (m) {
-		Navigator.prototype[m] = function(payload, headers, okCb, errCb) {
-			headers.method = m;
-			this.request(payload, headers, okCb, errCb);
+		Navigator.prototype[m] = function(payload, options, okCb, errCb) {
+			// were we passed (okCb, errCb)?
+			if (typeof payload === 'function') {
+				payload = null;
+				options = {};
+				okCb    = arguments[0];
+				errCb   = arguments[1];
+			}
+			// were we passed (payload, okCb, errCb)?
+			else if (typeof options === 'function') {
+				options = {};
+				okCb    = arguments[1];
+				errCb   = arguments[2];
+			}
+			options = options || {};
+			options.method = m;
+			this.request(payload, options, okCb, errCb);
 		};
 	});
 
@@ -492,44 +520,768 @@ var Link = {};
 // Helpers
 // =======
 (function(exports) {
+	// format
+	// ======
+	// EXPORTED
+	// string formatting according to various schemas
 	var format = {
 		uriTemplate : format__uriTemplate
 	};
+
+	// http://tools.ietf.org/html/rfc6570
+	function format__uriTemplate(template, params) {
+		return Link.UriTemplate.parse(template).expand(params);
+	}
+
+	// parse
+	// =====
+	// EXPORTED
+	// string parsing according to various schemas
 	var parse = {
 		linkHeader : parse__linkHeader,
 		url        : parse__url
 	};
+
+	// EXPORTED
+	// breaks a link header into a javascript object
+	function parse__linkHeader(headerStr) {
+		// '</foo/bar>; rel="baz"; title="blah", </foo/bar>; rel="baz"; title="blah", </foo/bar>; rel="baz"; title="blah"'
+		return headerStr.split(',').map(function(linkStr) {
+			// ['</foo/bar>; rel="baz"; title="blah"', '</foo/bar>; rel="baz"; title="blah"']
+			var link = {};
+			linkStr.trim().split(';').forEach(function(attrStr) {
+				// ['</foo/bar>', 'rel="baz"', 'title="blah"']
+				attrStr = attrStr.trim();
+				if (attrStr.charAt(0) === '<') {
+					// '</foo/bar>'
+					link.href = attrStr.trim().slice(1, -1);
+				} else {
+					var attrParts = attrStr.split('=');
+					// ['rel', '"baz"']
+					var k = attrParts[0].trim();
+					var v = attrParts[1].trim().slice(1, -1);
+					link[k] = v;
+				}
+			});
+			return link;
+		});
+	}
+
+	// EXPORTED
+	// parseUri 1.2.2, (c) Steven Levithan <stevenlevithan.com>, MIT License
+	function parse__url(str) {
+		var	o   = parse__url.options,
+			m   = o.parser[o.strictMode ? "strict" : "loose"].exec(str),
+			uri = {},
+			i   = 14;
+
+		while (i--) uri[o.key[i]] = m[i] || "";
+
+		uri[o.q.name] = {};
+		uri[o.key[12]].replace(o.q.parser, function ($0, $1, $2) {
+			if ($1) uri[o.q.name][$1] = $2;
+		});
+
+		return uri;
+	}
+
+	parse__url.options = {
+		strictMode: false,
+		key: ["source","protocol","authority","userInfo","user","password","host","port","relative","path","directory","file","query","anchor"],
+		q:   {
+			name:   "queryKey",
+			parser: /(?:^|&)([^&=]*)=?([^&]*)/g
+		},
+		parser: {
+			strict: /^(?:([^:\/?#]+):)?(?:\/\/((?:(([^:@]*)(?::([^:@]*))?)?@)?([^:\/?#]*)(?::(\d*))?))?((((?:[^?#\/]*\/)*)([^?#]*))(?:\?([^#]*))?(?:#(.*))?)/,
+			loose:  /^(?:(?![^:@]+:[^:@\/]*@)([^:\/?#.]+):)?(?:\/\/)?((?:(([^:@]*)(?::([^:@]*))?)?@)?([^:\/?#]*)(?::(\d*))?)(((\/(?:[^?#](?![^?#\/]*\.[^?#\/.]+(?:[?#]|$)))*\/?)?([^?#\/]*))(?:\?([^#]*))?(?:#(.*))?)/
+		}
+	};
+
+	// contentTypes
+	// ============
+	// EXPORTED
+	// provides serializers and deserializers for MIME types
 	var contentTypes = {
 		serialize   : contentTypes__serialize,
 		deserialize : contentTypes__deserialize,
 		register    : contentTypes__register
 	};
+	var contentTypes__registry = {};
 
-	function format__uriTemplate() {
-		// :TODO:
+	// EXPORTED
+	// serializes an object into a string
+	function contentTypes__serialize(obj, type) {
+		if (!obj || typeof(obj) != 'object' || !type) {
+			return obj;
+		}
+		var fn = contentTypes__find(type, 'serializer');
+		if (!fn) {
+			console.log('Unable to serialize', type, '(no serializer found)');
+			return obj;
+		}
+		return fn(obj);
 	}
 
-	function parse__linkHeader() {
-		// :TODO:
+	// EXPORTED
+	// deserializes a string into an object
+	function contentTypes__deserialize(str, type) {
+		if (!str || typeof(str) != 'string' || !type) {
+			return str;
+		}
+		var fn = contentTypes__find(type, 'deserializer');
+		if (!fn) {
+			console.log('Unable to deserialize', type, '(no deserializer found)');
+			return str;
+		}
+		return fn(str);
 	}
 
-	function parse__url() {
-		// :TODO:
+	// EXPORTED
+	// adds a type to the registry
+	function contentTypes__register(type, serializer, deserializer) {
+		contentTypes__registry[type] = {
+			serializer   : serializer,
+			deserializer : deserializer
+		};
 	}
 
-	function contentTypes__serialize() {
-		// :TODO:
+	// INTERNAL
+	// takes a mimetype (text/asdf+html), puts out the applicable types ([text/asdf+html, text/html, text])
+	function contentTypes__mkTypesList(type) {
+		var parts = type.split(';');
+		var t = parts[0];
+		parts = t.split('/');
+		if (parts[1]) {
+			var parts2 = parts[1].split('+');
+			if (parts2[1]) {
+				return [t, parts[0] + '/' + parts2[1], parts[0]];
+			}
+			return [t, parts[0]];
+		}
+		return [t];
 	}
 
-	function contentTypes__deserialize() {
-		// :TODO:
+	// INTERNAL
+	// finds the closest-matching type in the registry and gives the request function
+	function contentTypes__find(type, fn) {
+		var types = contentTypes__mkTypesList(type);
+		for (var i=0; i < types.length; i++) {
+			if (types[i] in contentTypes__registry) {
+				return contentTypes__registry[types[i]][fn];
+			}
+		}
+		return null;
 	}
 
-	function contentTypes__register() {
-		// :TODO:
-	}
+	// default types
+	contentTypes__register('application/json', JSON.stringify, JSON.parse);
+	contentTypes__register('application/x-www-form-urlencoded',
+		function(obj) {
+			var enc = encodeURIComponent;
+			var str = [];
+			for (var k in obj) {
+				if (obj[k] === null) {
+					str.push(k+'=');
+				} else if (Array.isArray(obj[k])) {
+					for (var i=0; i < obj[k].length; i++) {
+						str.push(k+'[]='+enc(obj[k][i]));
+					}
+				} else if (typeof obj[k] == 'object') {
+					for (var k2 in obj[k]) {
+						str.push(k+'['+k2+']='+enc(obj[k][k2]));
+					}
+				} else {
+					str.push(k+'='+enc(obj[k]));
+				}
+			}
+			return str.join('&');
+		},
+		function(params) {
+			// thanks to Brian Donovan
+			// http://stackoverflow.com/a/4672120
+			var pairs = params.split('&'),
+			result = {};
+
+			for (var i = 0; i < pairs.length; i++) {
+				var pair = pairs[i].split('='),
+				key = decodeURIComponent(pair[0]),
+				value = decodeURIComponent(pair[1]),
+				isArray = /\[\]$/.test(key),
+				dictMatch = key.match(/^(.+)\[([^\]]+)\]$/);
+
+				if (dictMatch) {
+					key = dictMatch[1];
+					var subkey = dictMatch[2];
+
+					result[key] = result[key] || {};
+					result[key][subkey] = value;
+				} else if (isArray) {
+					key = key.substring(0, key.length-2);
+					result[key] = result[key] || [];
+					result[key].push(value);
+				} else {
+					result[key] = value;
+				}
+			}
+
+			return result;
+		}
+	);
 
 	exports.format       = format;
 	exports.parse        = parse;
 	exports.contentTypes = contentTypes;
 })(Link);
+
+(function (exports){
+	"use strict";
+
+	// UriTemplate
+	// ===========
+	// https://github.com/fxa/uritemplate-js
+	// Copyright 2012 Franz Antesberger, MIT License
+
+	// http://blog.sangupta.com/2010/05/encodeuricomponent-and.html
+	//
+	// helpers
+	//
+	function isArray(value) {
+		return Object.prototype.toString.apply(value) === '[object Array]';
+	}
+
+	// performs an array.reduce for objects
+	function objectReduce(object, callback, initialValue) {
+		var
+			propertyName,
+			currentValue = initialValue;
+		for (propertyName in object) {
+			if (object.hasOwnProperty(propertyName)) {
+				currentValue = callback(currentValue, object[propertyName], propertyName, object);
+			}
+		}
+		return currentValue;
+	}
+
+	// performs an array.reduce, if reduce is not present (older browser...)
+	function arrayReduce(array, callback, initialValue) {
+		var
+			index,
+			currentValue = initialValue;
+		for (index = 0; index < array.length; index += 1) {
+			currentValue = callback(currentValue, array[index], index, array);
+		}
+		return currentValue;
+	}
+
+	function reduce(arrayOrObject, callback, initialValue) {
+		return isArray(arrayOrObject) ? arrayReduce(arrayOrObject, callback, initialValue) : objectReduce(arrayOrObject, callback, initialValue);
+	}
+
+	/**
+	 * Detects, whether a given element is defined in the sense of rfc 6570
+	 * Section 2.3 of the RFC makes clear defintions:
+	 * * undefined and null are not defined.
+	 * * the empty string is defined
+	 * * an array ("list") is defined, if it contains at least one defined element
+	 * * an object ("map") is defined, if it contains at least one defined property
+	 * @param object
+	 * @return {Boolean}
+	 */
+	function isDefined (object) {
+		var
+			index,
+			propertyName;
+		if (object === null || object === undefined) {
+			return false;
+		}
+		if (isArray(object)) {
+			for (index = 0; index < object.length; index +=1) {
+				if(isDefined(object[index])) {
+					return true;
+				}
+			}
+			return false;
+		}
+		if (typeof object === "string" || typeof object === "number" || typeof object === "boolean") {
+			// even the empty string is considered as defined
+			return true;
+		}
+		// else Object
+		for (propertyName in object) {
+			if (object.hasOwnProperty(propertyName) && isDefined(object[propertyName])) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	function isAlpha(chr) {
+		return (chr >= 'a' && chr <= 'z') || ((chr >= 'A' && chr <= 'Z'));
+	}
+
+	function isDigit(chr) {
+		return chr >= '0' && chr <= '9';
+	}
+
+	function isHexDigit(chr) {
+		return isDigit(chr) || (chr >= 'a' && chr <= 'f') || (chr >= 'A' && chr <= 'F');
+	}
+
+	var pctEncoder = (function () {
+
+		// see http://ecmanaut.blogspot.de/2006/07/encoding-decoding-utf8-in-javascript.html
+		function toUtf8 (s) {
+			return unescape(encodeURIComponent(s));
+		}
+
+		function encode(chr) {
+			var
+				result = '',
+				octets = toUtf8(chr),
+				octet,
+				index;
+			for (index = 0; index < octets.length; index += 1) {
+				octet = octets.charCodeAt(index);
+				result += '%' + octet.toString(16).toUpperCase();
+			}
+			return result;
+		}
+
+		function isPctEncoded (chr) {
+			if (chr.length < 3) {
+				return false;
+			}
+			for (var index = 0; index < chr.length; index += 3) {
+				if (chr.charAt(index) !== '%' || !isHexDigit(chr.charAt(index + 1) || !isHexDigit(chr.charAt(index + 2)))) {
+					return false;
+				}
+			}
+			return true;
+		}
+
+		function pctCharAt(text, startIndex) {
+			var chr = text.charAt(startIndex);
+			if (chr !== '%') {
+				return chr;
+			}
+			chr = text.substr(startIndex, 3);
+			if (!isPctEncoded(chr)) {
+				return '%';
+			}
+			return chr;
+		}
+
+		return {
+			encodeCharacter: encode,
+			decodeCharacter: decodeURIComponent,
+			isPctEncoded: isPctEncoded,
+			pctCharAt: pctCharAt
+		};
+	}());
+
+
+	/**
+	 * Returns if an character is an varchar character according 2.3 of rfc 6570
+	 * @param chr
+	 * @return (Boolean)
+	 */
+	function isVarchar(chr) {
+		return isAlpha(chr) || isDigit(chr) || chr === '_' || pctEncoder.isPctEncoded(chr);
+	}
+
+	/**
+	 * Returns if chr is an unreserved character according 1.5 of rfc 6570
+	 * @param chr
+	 * @return {Boolean}
+	 */
+	function isUnreserved(chr) {
+		return isAlpha(chr) || isDigit(chr) || chr === '-' || chr === '.' || chr === '_' || chr === '~';
+	}
+
+	/**
+	 * Returns if chr is an reserved character according 1.5 of rfc 6570
+	 * @param chr
+	 * @return {Boolean}
+	 */
+	function isReserved(chr) {
+		return chr === ':' || chr === '/' || chr === '?' || chr === '#' || chr === '[' || chr === ']' || chr === '@' || chr === '!' || chr === '$' || chr === '&' || chr === '(' ||
+			chr === ')' || chr === '*' || chr === '+' || chr === ',' || chr === ';' || chr === '=' || chr === "'";
+	}
+
+	function encode(text, passReserved) {
+		var
+			result = '',
+			index,
+			chr = '';
+		if (typeof text === "number" || typeof text === "boolean") {
+			text = text.toString();
+		}
+		for (index = 0; index < text.length; index += chr.length) {
+			chr = pctEncoder.pctCharAt(text, index);
+			if (chr.length > 1) {
+				result += chr;
+			}
+			else {
+				result += isUnreserved(chr) || (passReserved && isReserved(chr)) ? chr : pctEncoder.encodeCharacter(chr);
+			}
+		}
+		return result;
+	}
+
+	function encodePassReserved(text) {
+		return encode(text, true);
+	}
+
+	var
+		operators = (function () {
+			var
+				bySymbol = {};
+			function create(symbol) {
+				bySymbol[symbol] = {
+					symbol: symbol,
+					separator: (symbol === '?') ? '&' : (symbol === '' || symbol === '+' || symbol === '#') ? ',' : symbol,
+					named: symbol === ';' || symbol === '&' || symbol === '?',
+					ifEmpty: (symbol === '&' || symbol === '?') ? '=' : '',
+					first: (symbol === '+' ) ? '' : symbol,
+					encode: (symbol === '+' || symbol === '#') ? encodePassReserved : encode,
+					toString: function () {return this.symbol;}
+				};
+			}
+			create('');
+			create('+');
+			create('#');
+			create('.');
+			create('/');
+			create(';');
+			create('?');
+			create('&');
+			return {valueOf: function (chr) {
+				if (bySymbol[chr]) {
+					return bySymbol[chr];
+				}
+				if ("=,!@|".indexOf(chr) >= 0) {
+					throw new Error('Illegal use of reserved operator "' + chr + '"');
+				}
+				return bySymbol[''];
+			}};
+		}());
+
+	function UriTemplate(templateText, expressions) {
+		this.templateText = templateText;
+		this.expressions = expressions;
+	}
+
+	UriTemplate.prototype.toString = function () {
+		return this.templateText;
+	};
+
+	UriTemplate.prototype.expand = function (variables) {
+		var
+			index,
+			result = '';
+		for (index = 0; index < this.expressions.length; index += 1) {
+			result += this.expressions[index].expand(variables);
+		}
+		return result;
+	};
+
+	function encodeLiteral(literal) {
+		var
+			result = '',
+			index,
+			chr = '';
+		for (index = 0; index < literal.length; index += chr.length) {
+			chr = pctEncoder.pctCharAt(literal, index);
+			if (chr.length > 0) {
+				result += chr;
+			}
+			else {
+				result += isReserved(chr) || isUnreserved(chr) ? chr : pctEncoder.encodeCharacter(chr);
+			}
+		}
+		return result;
+	}
+
+	function LiteralExpression(literal) {
+		this.literal = encodeLiteral(literal);
+	}
+
+	LiteralExpression.prototype.expand = function () {
+		return this.literal;
+	};
+
+	LiteralExpression.prototype.toString = LiteralExpression.prototype.expand;
+
+	function VariableExpression(templateText, operator, varspecs) {
+		this.templateText = templateText;
+		this.operator = operator;
+		this.varspecs = varspecs;
+	}
+
+	VariableExpression.prototype.toString = function () {
+		return this.templateText;
+	};
+	
+	VariableExpression.prototype.expand = function expandExpression(variables) {
+		var
+			result = '',
+			index,
+			varspec,
+			value,
+			valueIsArr,
+			isFirstVarspec = true,
+			operator = this.operator;
+
+		// callback to be used within array.reduce
+		function reduceUnexploded(result, currentValue, currentKey) {
+			if (isDefined(currentValue)) {
+				if (result.length > 0) {
+					result += ',';
+				}
+				if (!valueIsArr) {
+					result += operator.encode(currentKey) + ',';
+				}
+				result += operator.encode(currentValue);
+			}
+			return result;
+		}
+
+		function reduceNamedExploded(result, currentValue, currentKey) {
+			if (isDefined(currentValue)) {
+				if (result.length > 0) {
+					result += operator.separator;
+				}
+				result += (valueIsArr) ? encodeLiteral(varspec.varname) : operator.encode(currentKey);
+				result += '=' + operator.encode(currentValue);
+			}
+			return result;
+		}
+
+		function reduceUnnamedExploded(result, currentValue, currentKey) {
+			if (isDefined(currentValue)) {
+				if (result.length > 0) {
+					result += operator.separator;
+				}
+				if (!valueIsArr) {
+					result += operator.encode(currentKey) + '=';
+				}
+				result += operator.encode(currentValue);
+			}
+			return result;
+		}
+
+		// expand each varspec and join with operator's separator
+		for (index = 0; index < this.varspecs.length; index += 1) {
+			varspec = this.varspecs[index];
+			value = variables[varspec.varname];
+			if (!isDefined(value)) {
+				continue;
+			}
+			if (isFirstVarspec)  {
+				result += this.operator.first;
+				isFirstVarspec = false;
+			}
+			else {
+				result += this.operator.separator;
+			}
+			valueIsArr = isArray(value);
+			if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+				value = value.toString();
+				if (this.operator.named) {
+					result += encodeLiteral(varspec.varname);
+					if (value === '') {
+						result += this.operator.ifEmpty;
+						continue;
+					}
+					result += '=';
+				}
+				if (varspec.maxLength && value.length > varspec.maxLength) {
+					value = value.substr(0, varspec.maxLength);
+				}
+				result += this.operator.encode(value);
+			}
+			else if (varspec.maxLength) {
+				// 2.4.1 of the spec says: "Prefix modifiers are not applicable to variables that have composite values."
+				throw new Error('Prefix modifiers are not applicable to variables that have composite values. You tried to expand ' + this + " with " + JSON.stringify(value));
+			}
+			else if (!varspec.exploded) {
+				if (operator.named) {
+					result += encodeLiteral(varspec.varname);
+					if (!isDefined(value)) {
+						result += this.operator.ifEmpty;
+						continue;
+					}
+					result += '=';
+				}
+				result += reduce(value, reduceUnexploded, '');
+			}
+			else {
+				// exploded and not string
+				result += reduce(value, operator.named ? reduceNamedExploded : reduceUnnamedExploded, '');
+			}
+		}
+		return result;
+	};
+
+	function parseExpression(outerText) {
+		var
+			text,
+			operator,
+			varspecs = [],
+			varspec = null,
+			varnameStart = null,
+			maxLengthStart = null,
+			index,
+			chr;
+
+		function closeVarname() {
+			varspec = {varname: text.substring(varnameStart, index), exploded: false, maxLength: null};
+			varnameStart = null;
+		}
+
+		function closeMaxLength() {
+			if (maxLengthStart === index) {
+				throw new Error("after a ':' you have to specify the length. position = " + index);
+			}
+			varspec.maxLength = parseInt(text.substring(maxLengthStart, index), 10);
+			maxLengthStart = null;
+		}
+
+		// remove outer {}
+		text = outerText.substr(1, outerText.length - 2);
+		for (index = 0; index < text.length; index += chr.length) {
+			chr = pctEncoder.pctCharAt(text, index);
+			if (index === 0) {
+				operator = operators.valueOf(chr);
+				if (operator.symbol !== '') {
+					// first char is operator symbol. so we can continue
+					varnameStart = 1;
+					continue;
+				}
+				// the first char was a regular varname char. We have simple strings and must go on.
+				varnameStart = 0;
+			}
+			if (varnameStart !== null) {
+
+				// the spec says: varname       =  varchar *( ["."] varchar )
+				// so a dot is allowed except for the first char
+				if (chr === '.') {
+					if (varnameStart === index) {
+						throw new Error('a varname MUST NOT start with a dot -- see position ' + index);
+					}
+					continue;
+				}
+				if (isVarchar(chr)) {
+					continue;
+				}
+				closeVarname();
+			}
+			if (maxLengthStart !== null) {
+				if (isDigit(chr)) {
+					continue;
+				}
+				closeMaxLength();
+			}
+			if (chr === ':') {
+				if (varspec.maxLength !== null) {
+					throw new Error('only one :maxLength is allowed per varspec at position ' + index);
+				}
+				maxLengthStart = index + 1;
+				continue;
+			}
+			if (chr === '*') {
+				if (varspec === null) {
+					throw new Error('explode exploded at position ' + index);
+				}
+				if (varspec.exploded) {
+					throw new Error('explode exploded twice at position ' + index);
+				}
+				if (varspec.maxLength) {
+					throw new Error('an explode (*) MUST NOT follow to a prefix, see position ' + index);
+				}
+				varspec.exploded = true;
+				continue;
+			}
+			// the only legal character now is the comma
+			if (chr === ',') {
+				varspecs.push(varspec);
+				varspec = null;
+				varnameStart = index + 1;
+				continue;
+			}
+			throw new Error("illegal character '" + chr + "' at position " + index);
+		} // for chr
+		if (varnameStart !== null) {
+			closeVarname();
+		}
+		if (maxLengthStart !== null) {
+			closeMaxLength();
+		}
+		varspecs.push(varspec);
+		return new VariableExpression(outerText, operator, varspecs);
+	}
+
+	UriTemplate.parse = function parse(uriTemplateText) {
+		// assert filled string
+		var
+			index,
+			chr,
+			expressions = [],
+			braceOpenIndex = null,
+			literalStart = 0;
+		for (index = 0; index < uriTemplateText.length; index += 1) {
+			chr = uriTemplateText.charAt(index);
+			if (literalStart !== null) {
+				if (chr === '}') {
+					throw new Error('brace was closed in position ' + index + " but never opened");
+				}
+				if (chr === '{') {
+					if (literalStart < index) {
+						expressions.push(new LiteralExpression(uriTemplateText.substring(literalStart, index)));
+					}
+					literalStart = null;
+					braceOpenIndex = index;
+				}
+				continue;
+			}
+
+			if (braceOpenIndex !== null) {
+				// here just { is forbidden
+				if (chr === '{') {
+					throw new Error('brace was opened in position ' + braceOpenIndex + " and cannot be reopened in position " + index);
+				}
+				if (chr === '}') {
+					if (braceOpenIndex + 1 === index) {
+						throw new Error("empty braces on position " + braceOpenIndex);
+					}
+					expressions.push(parseExpression(uriTemplateText.substring(braceOpenIndex, index + 1)));
+					braceOpenIndex = null;
+					literalStart = index + 1;
+				}
+				continue;
+			}
+			throw new Error('reached unreachable code');
+		}
+		if (braceOpenIndex !== null) {
+			throw new Error("brace was opened on position " + braceOpenIndex + ", but never closed");
+		}
+		if (literalStart < uriTemplateText.length) {
+			expressions.push(new LiteralExpression(uriTemplateText.substr(literalStart)));
+		}
+		return new UriTemplate(uriTemplateText, expressions);
+	};
+
+	exports.UriTemplate = UriTemplate;
+})(Link);
+
+
+// set up for node or AMD
+if (typeof module !== "undefined") {
+	module.exports = Link;
+} 
+else if (typeof define !== "undefined") {
+	define([], function() {
+		return Link;
+	});
+}
