@@ -41,6 +41,7 @@ function serveHome(request, response) {
 
 	// method
 	switch (request.method) {
+		case 'OPTIONS':
 		case 'HEAD':
 			break;
 		case 'GET':
@@ -62,7 +63,14 @@ function serveHome(request, response) {
 	}
 
 	// send
-	response.writeHead(200, 'Ok', { Allow:'HEAD, GET', Link:linkHeader });
+	response.writeHead(200, 'Ok', {
+		Allow:'OPTIONS, HEAD, GET',
+		Link:linkHeader,
+		'Access-Control-Allow-Origin'      : '*',
+		'Access-Control-Allow-Credentials' : 'true',
+		'Access-Control-Allow-Methods'     : 'OPTIONS, HEAD, GET',
+		'Access-Control-Expose-Headers'    : 'Allow, Link, Content-type'
+	});
 	response.end(payload);
 }
 
@@ -100,7 +108,14 @@ function serveFoo(request, response) {
 	}
 
 	// send
-	response.writeHead(200, 'Ok', { Allow:'HEAD, GET', Link:linkHeader });
+	response.writeHead(200, 'Ok', {
+		Allow:'OPTIONS, HEAD, GET',
+		Link:linkHeader,
+		'Access-Control-Allow-Origin'      : '*',
+		'Access-Control-Allow-Credentials' : 'true',
+		'Access-Control-Allow-Methods'     : 'OPTIONS, HEAD, GET',
+		'Access-Control-Expose-Headers'    : 'Allow, Link, Content-type'
+	});
 	response.end(payload);
 }
 
@@ -157,14 +172,28 @@ function serveFooItem(request, response) {
 	}
 
 	// send
-	response.writeHead(200, 'Ok', { Allow:'HEAD, GET', Link:linkHeader });
+	response.writeHead(200, 'Ok', {
+		Allow:'OPTIONS, HEAD, GET',
+		Link:linkHeader,
+		'Access-Control-Allow-Origin'      : '*',
+		'Access-Control-Allow-Credentials' : 'true',
+		'Access-Control-Allow-Methods'     : 'OPTIONS, HEAD, GET',
+		'Access-Control-Expose-Headers'    : 'Allow, Link, Content-type'
+	});
 	response.end(payload);
 }
 
 // helpers
 // =======
 function serveError(code, request, response) {
-	response.writeHead(code, http.STATUS_CODES[code]);
+	response.writeHead(code, http.STATUS_CODES[code], {
+		Allow:'OPTIONS, HEAD, GET',
+		Link:linkHeader,
+		'Access-Control-Allow-Origin'      : '*',
+		'Access-Control-Allow-Credentials' : 'true',
+		'Access-Control-Allow-Methods'     : 'OPTIONS, HEAD, GET',
+		'Access-Control-Expose-Headers'    : 'Allow, Link, Content-type'
+	});
 	response.end();
 }
 
