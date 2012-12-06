@@ -6,6 +6,9 @@ var Link = {};
 (function(exports) {
 	// stores local server functions
 	var httpl_registry = {};
+	// keeps the current message id, used for tracking messages
+	var cur_mid = 1;
+	function gen_mid() { return cur_mid++; }
 
 	// request()
 	// =========
@@ -17,10 +20,12 @@ var Link = {};
 	//   - target url can be passed in options as `url`, or generated from `host` and `path`
 	//   - query parameters may be passed in `query`
 	//   - extra request headers may be specified in `headers`
+	//   - if `stream` is true, the callbacks will be called as soon as headers are received
 	// - on success (status code 2xx), `okCb` is called with (payload, headers)
 	// - on failure (status code 4xx,5xx), `errCb` is called with (payload, headers)
 	// - all protocol (status code 1xx,3xx) is handled internally
 	function request(payload, options, okCb, errCb, cbContext) {
+
 		// were we passed (options, okCb, errCb, context)?
 		if (typeof payload === 'function') {
 			options = arguments[0];
@@ -48,6 +53,7 @@ var Link = {};
 		}
 
 		// execute according to protocol
+		options.mid = gen_mid();
 		if (urld.protocol == 'httpl') {
 			__requestLocal(payload, urld, options, okCb, errCb, cbContext);
 		} else {
@@ -55,16 +61,22 @@ var Link = {};
 		}
 	}
 
+	function subscribe(options, okCb, errCb, cbContext) {
+		// :TODO:
+	}
+
 	// executes a request locally
 	function __requestLocal(payload, urld, options, okCb, errCb, cbContext) {
+
 		// find the local server
 		var server = httpl_registry[urld.host];
 		if (!server) {
-			return errCb.call(cbContext, null, { status:404, reason:'server not found' });
+			return errCb.call(cbContext, null, { status:404, reason:'server not found' }, false);
 		}
 
 		// build the request
 		var request = {
+			mid     : options.mid,
 			path    : urld.path,
 			method  : options.method,
 			query   : options.query || {},
@@ -81,22 +93,8 @@ var Link = {};
 		}
 
 		// pass on to the server
-		server.fn.call(server.context, request, function(responsePayload, responseHeaders) {
-			// validate response
-			if (typeof responseHeaders !== 'object') { responseHeaders = {}; }
-			if (!responseHeaders.status) {
-				responseHeaders.status = 500;
-				responseHeaders.reason = 'malformed response';
-			}
-
-			if (responseHeaders.status >= 200 && responseHeaders.status < 300) {
-				okCb.call(cbContext, responsePayload, responseHeaders);
-			} else if (responseHeaders.status >= 400 && responseHeaders.status < 600) {
-				errCb.call(cbContext, responsePayload, responseHeaders);
-			} else {
-				// :TODO: protocol handling
-			}
-		});
+		var response = new ServerResponse({ okCb:okCb, errCb:errCb, cbContext:cbContext, stream:options.stream });
+		server.fn.call(server.context, request, response);
 	}
 
 	// executes a request remotely
@@ -105,15 +103,6 @@ var Link = {};
 		// if a query was given in the options, add it to the urld
 		if (request.query) {
 			var q = Link.contentTypes.serialize(request.query, 'application/x-www-form-urlencoded');
-			// :TODO: move to contentTypes.serialize
-			/*var q = [];
-			for (var k in request.query) {
-				q.push(k+'='+request.query[k]);
-			}
-			if (q.length) {
-				q = q.join('&');
-			}
-			*/
 			if (q) {
 				if (urld.query) {
 					urld.query    += '&' + q;
@@ -149,9 +138,11 @@ var Link = {};
 		// create the request
 		var xhrRequest = new XMLHttpRequest();
 		xhrRequest.open(options.method, url, true);
+
 		for (var k in options.headers) {
-			if (options.headers[k] === null) { continue; }
-			xhrRequest.setRequestHeader(k, options.headers[k]);
+			if (options.headers[k] !== null) {
+				xhrRequest.setRequestHeader(k, options.headers[k]);
+			}
 		}
 
 		xhrRequest.onreadystatechange = function() {
@@ -171,9 +162,9 @@ var Link = {};
 				var responsePayload = Link.contentTypes.deserialize(xhrRequest.responseText, responseHeaders['content-type']);
 
 				if (responseHeaders.status >= 200 && responseHeaders.status < 300) {
-					okCb.call(cbContext, responsePayload, responseHeaders);
+					okCb.call(cbContext, responsePayload, responseHeaders, false);
 				} else if (responseHeaders.status >= 400 && responseHeaders.status < 600) {
-					errCb.call(cbContext, responsePayload, responseHeaders);
+					errCb.call(cbContext, responsePayload, responseHeaders, false);
 				} else {
 					// :TODO: protocol handling
 				}
@@ -186,6 +177,173 @@ var Link = {};
 	function __requestRemoteNodejs(payload, urld, options, okCb, errCb, cbContext) {
 		throw "request() has not yet been implemented for nodejs";
 	}
+
+	// EventEmitter
+	// ============
+	// EXPORTED
+	// A minimal event emitter, based on the NodeJS api
+	// initial code borrowed from https://github.com/tmpvar/node-eventemitter (thanks tmpvar)
+	function EventEmitter() {
+		this._events = {};
+	}
+
+	EventEmitter.prototype.emit = function(type) {
+		var handlers = this._events[type];
+		if (!handlers) return false;
+
+		var args = Array.prototype.slice.call(arguments, 1);
+		for (var i = 0, l = handler.length; i < l; i++) {
+			handler[i].apply(this, args);
+		}
+		return true;
+	};
+
+	EventEmitter.prototype.addListener = function(type, listener) {
+		if ('function' !== typeof listener) {
+			throw new Error('addListener only takes instances of Function');
+		}
+
+		// To avoid recursion in the case that type == "newListeners"! Before
+		// adding it to the listeners, first emit "newListeners".
+		this.emit('newListener', type, listener);
+
+		if (!this._events[type]) {
+			this._events[type] = [listener];
+		} else {
+			this._events[type].push(listener);
+		}
+
+		return this;
+	};
+
+	EventEmitter.prototype.on = EventEmitter.prototype.addListener;
+
+	EventEmitter.prototype.once = function(type, listener) {
+		var self = this;
+		self.on(type, function g() {
+			self.removeListener(type, g);
+			listener.apply(this, arguments);
+		});
+	};
+
+	EventEmitter.prototype.removeListener = function(type, listener) {
+		if ('function' !== typeof listener) {
+			throw new Error('removeListener only takes instances of Function');
+		}
+		if (!this._events[type]) return this;
+
+		var list = this._events[type];
+		var i = list.indexOf(listener);
+		if (i < 0) return this;
+		list.splice(i, 1);
+		if (list.length === 0) {
+			delete this._events[type];
+		}
+
+		return this;
+	};
+
+	EventEmitter.prototype.removeAllListeners = function(type) {
+		if (type && this._events[type]) this._events[type] = null;
+		return this;
+	};
+
+	EventEmitter.prototype.listeners = function(type) {
+		return this._events[type];
+	};
+
+	// ServerResponse
+	// ==============
+	// INTERNAL
+	// Interface for responding to requests
+	// - generated internally and given to document-local servers
+	// - not given to clients; instead, will run client's callbacks as appropriate
+	// - reasons this exists:
+	//     1) to make it easier to reuse nodejs server code in local servers
+    //     2) for streaming, which requires some tracked state
+	function ServerResponse(options) {
+		EventEmitter.call(this);
+
+		this.cb          = options.cb    || noop;
+		this.okCb        = options.okCb  || noop;
+		this.errCb       = options.errCb || noop;
+		this.cbContext   = options.cbContext;
+		this.isStreaming = options.stream;
+		this.isOpen      = true;
+
+		this.headers = {};
+		this.statusCode = 0;
+		this.payload = '';
+	}
+	ServerResponse.prototype = Object.create(EventEmitter.prototype);
+
+	// writes the header to the response
+	// if streaming, will notify the client
+	ServerResponse.prototype.writeHead = function(status, reason, headers) {
+		this.statusCode = status;
+		for (var k in headers) {
+			this.setHeader(k, headers[k]);
+		}
+		this.headers.status = status;
+		this.headers.reason = reason;
+		if (this.isStreaming) {
+			this.__notify();
+		}
+	};
+
+	// header access/mutation fns
+	ServerResponse.prototype.setHeader    = function(k, v) { this.headers[k] = v; };
+	ServerResponse.prototype.getHeader    = function(k) { return this.headers[k]; };
+	ServerResponse.prototype.removeHeader = function(k) { delete this.headers[k]; };
+
+	// writes data to the response
+	// if streaming, will notify the client
+	ServerResponse.prototype.write = function(data) {
+		if (typeof data === 'string') {
+			// add to the buffer if its a string
+			this.payload += data;
+		} else {
+			// overwrite otherwise
+			this.payload = data;
+		}
+		if (this.isStreaming) {
+			this.__notify();
+		}
+	};
+
+	// ends the response, optionally writing any final data
+	ServerResponse.prototype.end = function(data) {
+		// write any remaining data
+		if (data) { this.write(data); }
+
+		// now that we have it all, try to deserialize the payload
+		this.payload = Link.contentTypes.deserialize(this.payload, this.headers['content-type']);
+
+		this.isOpen = false;
+		this.__notify();
+		this.emit('close');
+
+		// unbind all listeners
+		this.cb = this.okCb = this.errCb = noop;
+	};
+
+	// internal, runs the callbacks provided during construction
+	ServerResponse.prototype.__notify = function() {
+		if (!this.headers) { throw "Must write headers to response before ending"; }
+		this.cb.call(this.cbContext, this.payload, this.headers, this.isOpen);
+		if (this.headers.status >= 200 && this.headers.status < 300) {
+			this.okCb.call(this.cbContext, this.payload, this.headers, this.isOpen);
+		} else if (this.headers.status >= 400 && this.headers.status < 600) {
+			this.errCb.call(this.cbContext, this.payload, this.headers, this.isOpen);
+		} else {
+			// :TODO: protocol handling
+		}
+	};
+
+	// functions added just to compat with nodejs
+	ServerResponse.prototype.writeContinue = noop;
+	ServerResponse.prototype.addTrailers   = noop;
+	ServerResponse.prototype.sendDate      = noop; // :TODO: is this useful?
 
 	// joins url segments while avoiding double slashes
 	function __joinUrl() {
@@ -232,6 +390,7 @@ var Link = {};
 	}
 
 	exports.request       = request;
+	exports.EventEmitter  = EventEmitter;
 	exports.registerLocal = registerLocal;
 })(Link);
 
@@ -359,7 +518,7 @@ var Link = {};
 
 		// are we a bad context?
 		if (this.context.isBad()) {
-			return errCb.call(this, null, this.context.getError());
+			return errCb.call(this, null, this.context.getError(), false);
 		}
 
 		// are we an unresolved relation?
@@ -367,34 +526,40 @@ var Link = {};
 			// yes, ask our parent to resolve us
 			this.parentNavigator.__resolve(this,
 				function() { this.request(payload, options, okCb, errCb); }, // we're resolved, start over
-				function() { errCb.call(this, null, this.context.getError()); }
+				function() { errCb.call(this, null, this.context.getError(), false); }
 			);
 			return this;
 		}
 		// :NOTE: an unresolved absolute context doesnt need prior resolution, as the request is what will resolve it
 
-		var onRequestSucceed = function(payload, headers) {
-			// we can now consider ourselves resolved (if we hadnt already)
-			this.context.resolveState = NavigatorContext.RESOLVED;
-			// cache the links
-			if (headers.link) {
-				this.links = Link.parse.linkHeader(headers.link);
-			} else {
-				this.links = []; // the resource doesn't give links -- cache an empty list so we dont keep trying during resolution
+		var firstResponse = true;
+		var onRequestSucceed = function(payload, headers, connIsOpen) {
+			if (firstResponse) {
+				// we can now consider ourselves resolved (if we hadnt already)
+				this.context.resolveState = NavigatorContext.RESOLVED;
+				// cache the links
+				if (headers.link) {
+					this.links = Link.parse.linkHeader(headers.link);
+				} else {
+					this.links = []; // the resource doesn't give links -- cache an empty list so we dont keep trying during resolution
+				}
+				firstResponse = false;
 			}
 			// pass back to caller
-			okCb.call(this, payload, headers);
+			okCb.call(this, payload, headers, connIsOpen);
 		};
 
-		var onRequestFail = function(payload, headers) {
-			// is the context bad?
-			if (headers.status === 404) {
-				// store that knowledge
-				this.context.resolveState = NavigatorContext.NOTFOUND;
-				this.context.error        = headers;
+		var onRequestFail = function(payload, headers, connIsOpen) {
+			if (firstResponse) {
+				// is the context bad?
+				if (headers.status === 404) {
+					// store that knowledge
+					this.context.resolveState = NavigatorContext.NOTFOUND;
+					this.context.error        = headers;
+				}
 			}
 			// pass back to caller
-			errCb.call(this, payload, headers);
+			errCb.call(this, payload, headers, connIsOpen);
 		};
 
 		// make http request
@@ -418,7 +583,7 @@ var Link = {};
 	Navigator.prototype.__resolve = function Navigator__resolve(childNav, okCb, errCb) {
 		var self = this;
 		var restartResolve = function() { self.__resolve(childNav, okCb, errCb); }; // used when we have to handle something async before proceeding
-		var failResolve = function() { 
+		var failResolve = function() {
 			// we're bad, and all children are bad as well
 			childNav.context.resolveState = self.context.resolveState;
 			childNav.context.error        = self.context.error;
@@ -520,6 +685,47 @@ var Link = {};
 
 	// exports
 	exports.Navigator = Navigator;
+})(Link);
+
+// Tools
+// =====
+(function(exports) {
+
+	// Notifier
+	// ========
+	// EXPORTED
+	// Tool to send events over a Stream object
+	// :TODO: remove?
+	function Notifier() {
+		this.__streams = [];
+	}
+
+	// adds a stream to the list of receivers
+	Notifier.prototype.addStream = function(stream) {
+		if (!(stream instanceof Stream)) {
+			throw "Stream type must be passed to Notifier.addStream";
+		}
+		this.__streams.push(stream);
+	};
+
+	// broadcasts an event
+	Notifier.prototype.broadcast = function(event, data) {
+		var chunk = { event:event };
+		if (data) { chunk.data = data; }
+		for (var i=0; i < this.__streams.length; i++) {
+			this.__streams[i].write(chunk);
+		}
+	};
+
+	// broadcasts an event to a particular stream
+	Notifier.prototype.broadcastTo = function(stream, event, data) {
+		var chunk = { event:event };
+		if (data) { chunk.data = data; }
+		stream.write(chunk);
+	};
+
+	// exports
+	exports.Notifier = Notifier;
 })(Link);
 
 // Helpers
@@ -683,9 +889,25 @@ var Link = {};
 	}
 
 	// default types
-	contentTypes__register('application/json', JSON.stringify, JSON.parse);
+	contentTypes__register('application/json',
+		function (obj) {
+			try {
+				return JSON.stringify(obj);
+			} catch (e) {
+				console.log('Failed to serialize json', obj, e);
+				return '';
+			}
+		},
+		function (str) {
+			try {
+				return JSON.parse(str);
+			} catch (e) {
+				console.log('Failed to deserialize json', str, e);
+			}
+		}
+	);
 	contentTypes__register('application/x-www-form-urlencoded',
-		function(obj) {
+		function (obj) {
 			var enc = encodeURIComponent;
 			var str = [];
 			for (var k in obj) {
@@ -705,7 +927,7 @@ var Link = {};
 			}
 			return str.join('&');
 		},
-		function(params) {
+		function (params) {
 			// thanks to Brian Donovan
 			// http://stackoverflow.com/a/4672120
 			var pairs = params.split('&'),
