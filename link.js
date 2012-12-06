@@ -1,7 +1,119 @@
 function noop() {}
-var Link = {};
+var Link = {};// Tools
+// =====
+(function(exports) {
 
-// Core
+	// EventEmitter
+	// ============
+	// EXPORTED
+	// A minimal event emitter, based on the NodeJS api
+	// initial code borrowed from https://github.com/tmpvar/node-eventemitter (thanks tmpvar)
+	function EventEmitter() {
+		this._events = {};
+	}
+
+	EventEmitter.prototype.emit = function(type) {
+		var handlers = this._events[type];
+		if (!handlers) return false;
+
+		var args = Array.prototype.slice.call(arguments, 1);
+		for (var i = 0, l = handler.length; i < l; i++) {
+			handler[i].apply(this, args);
+		}
+		return true;
+	};
+
+	EventEmitter.prototype.addListener = function(type, listener) {
+		if ('function' !== typeof listener) {
+			throw new Error('addListener only takes instances of Function');
+		}
+
+		// To avoid recursion in the case that type == "newListeners"! Before
+		// adding it to the listeners, first emit "newListeners".
+		this.emit('newListener', type, listener);
+
+		if (!this._events[type]) {
+			this._events[type] = [listener];
+		} else {
+			this._events[type].push(listener);
+		}
+
+		return this;
+	};
+
+	EventEmitter.prototype.on = EventEmitter.prototype.addListener;
+
+	EventEmitter.prototype.once = function(type, listener) {
+		var self = this;
+		self.on(type, function g() {
+			self.removeListener(type, g);
+			listener.apply(this, arguments);
+		});
+	};
+
+	EventEmitter.prototype.removeListener = function(type, listener) {
+		if ('function' !== typeof listener) {
+			throw new Error('removeListener only takes instances of Function');
+		}
+		if (!this._events[type]) return this;
+
+		var list = this._events[type];
+		var i = list.indexOf(listener);
+		if (i < 0) return this;
+		list.splice(i, 1);
+		if (list.length === 0) {
+			delete this._events[type];
+		}
+
+		return this;
+	};
+
+	EventEmitter.prototype.removeAllListeners = function(type) {
+		if (type && this._events[type]) this._events[type] = null;
+		return this;
+	};
+
+	EventEmitter.prototype.listeners = function(type) {
+		return this._events[type];
+	};
+
+	// Notifier
+	// ========
+	// EXPORTED
+	// Manages a set of callbacks
+	// :TODO: remove?
+	function Notifier() {
+		this.__streams = [];
+	}
+
+	// adds a stream to the list of receivers
+	Notifier.prototype.addStream = function(stream) {
+		if (!(stream instanceof Stream)) {
+			throw "Stream type must be passed to Notifier.addStream";
+		}
+		this.__streams.push(stream);
+	};
+
+	// broadcasts an event
+	Notifier.prototype.broadcast = function(event, data) {
+		var chunk = { event:event };
+		if (data) { chunk.data = data; }
+		for (var i=0; i < this.__streams.length; i++) {
+			this.__streams[i].write(chunk);
+		}
+	};
+
+	// broadcasts an event to a particular stream
+	Notifier.prototype.broadcastTo = function(stream, event, data) {
+		var chunk = { event:event };
+		if (data) { chunk.data = data; }
+		stream.write(chunk);
+	};
+
+	// exports
+	exports.EventEmitter  = EventEmitter;
+	exports.Notifier = Notifier;
+})(Link);// Core
 // ====
 (function(exports) {
 	// stores local server functions
@@ -178,80 +290,6 @@ var Link = {};
 		throw "request() has not yet been implemented for nodejs";
 	}
 
-	// EventEmitter
-	// ============
-	// EXPORTED
-	// A minimal event emitter, based on the NodeJS api
-	// initial code borrowed from https://github.com/tmpvar/node-eventemitter (thanks tmpvar)
-	function EventEmitter() {
-		this._events = {};
-	}
-
-	EventEmitter.prototype.emit = function(type) {
-		var handlers = this._events[type];
-		if (!handlers) return false;
-
-		var args = Array.prototype.slice.call(arguments, 1);
-		for (var i = 0, l = handler.length; i < l; i++) {
-			handler[i].apply(this, args);
-		}
-		return true;
-	};
-
-	EventEmitter.prototype.addListener = function(type, listener) {
-		if ('function' !== typeof listener) {
-			throw new Error('addListener only takes instances of Function');
-		}
-
-		// To avoid recursion in the case that type == "newListeners"! Before
-		// adding it to the listeners, first emit "newListeners".
-		this.emit('newListener', type, listener);
-
-		if (!this._events[type]) {
-			this._events[type] = [listener];
-		} else {
-			this._events[type].push(listener);
-		}
-
-		return this;
-	};
-
-	EventEmitter.prototype.on = EventEmitter.prototype.addListener;
-
-	EventEmitter.prototype.once = function(type, listener) {
-		var self = this;
-		self.on(type, function g() {
-			self.removeListener(type, g);
-			listener.apply(this, arguments);
-		});
-	};
-
-	EventEmitter.prototype.removeListener = function(type, listener) {
-		if ('function' !== typeof listener) {
-			throw new Error('removeListener only takes instances of Function');
-		}
-		if (!this._events[type]) return this;
-
-		var list = this._events[type];
-		var i = list.indexOf(listener);
-		if (i < 0) return this;
-		list.splice(i, 1);
-		if (list.length === 0) {
-			delete this._events[type];
-		}
-
-		return this;
-	};
-
-	EventEmitter.prototype.removeAllListeners = function(type) {
-		if (type && this._events[type]) this._events[type] = null;
-		return this;
-	};
-
-	EventEmitter.prototype.listeners = function(type) {
-		return this._events[type];
-	};
-
 	// ServerResponse
 	// ==============
 	// INTERNAL
@@ -262,7 +300,7 @@ var Link = {};
 	//     1) to make it easier to reuse nodejs server code in local servers
     //     2) for streaming, which requires some tracked state
 	function ServerResponse(options) {
-		EventEmitter.call(this);
+		Link.EventEmitter.call(this);
 
 		this.cb          = options.cb    || noop;
 		this.okCb        = options.okCb  || noop;
@@ -275,7 +313,7 @@ var Link = {};
 		this.statusCode = 0;
 		this.payload = '';
 	}
-	ServerResponse.prototype = Object.create(EventEmitter.prototype);
+	ServerResponse.prototype = Object.create(Link.EventEmitter.prototype);
 
 	// writes the header to the response
 	// if streaming, will notify the client
@@ -390,11 +428,8 @@ var Link = {};
 	}
 
 	exports.request       = request;
-	exports.EventEmitter  = EventEmitter;
 	exports.registerLocal = registerLocal;
-})(Link);
-
-// Navigator
+})(Link);// Navigator
 // =========
 (function(exports) {
 	// navigator sugar functions
@@ -685,50 +720,7 @@ var Link = {};
 
 	// exports
 	exports.Navigator = Navigator;
-})(Link);
-
-// Tools
-// =====
-(function(exports) {
-
-	// Notifier
-	// ========
-	// EXPORTED
-	// Tool to send events over a Stream object
-	// :TODO: remove?
-	function Notifier() {
-		this.__streams = [];
-	}
-
-	// adds a stream to the list of receivers
-	Notifier.prototype.addStream = function(stream) {
-		if (!(stream instanceof Stream)) {
-			throw "Stream type must be passed to Notifier.addStream";
-		}
-		this.__streams.push(stream);
-	};
-
-	// broadcasts an event
-	Notifier.prototype.broadcast = function(event, data) {
-		var chunk = { event:event };
-		if (data) { chunk.data = data; }
-		for (var i=0; i < this.__streams.length; i++) {
-			this.__streams[i].write(chunk);
-		}
-	};
-
-	// broadcasts an event to a particular stream
-	Notifier.prototype.broadcastTo = function(stream, event, data) {
-		var chunk = { event:event };
-		if (data) { chunk.data = data; }
-		stream.write(chunk);
-	};
-
-	// exports
-	exports.Notifier = Notifier;
-})(Link);
-
-// Helpers
+})(Link);// Helpers
 // =======
 (function(exports) {
 	// format
@@ -962,9 +954,7 @@ var Link = {};
 	exports.format       = format;
 	exports.parse        = parse;
 	exports.contentTypes = contentTypes;
-})(Link);
-
-// UriTemplate
+})(Link);// UriTemplate
 // ===========
 // https://github.com/fxa/uritemplate-js
 // Copyright 2012 Franz Antesberger, MIT License
@@ -1502,12 +1492,10 @@ var Link = {};
 	};
 
 	exports.UriTemplate = UriTemplate;
-})(Link);
-
-// set up for node or AMD
+})(Link);// set up for node or AMD
 if (typeof module !== "undefined") {
 	module.exports = Link;
-} 
+}
 else if (typeof define !== "undefined") {
 	define([], function() {
 		return Link;
