@@ -3,6 +3,7 @@ link-js-files =\
 	${src}_compiled_header.js\
 	${src}tools.js\
 	${src}core.js\
+	${src}events.js\
 	${src}navigator.js\
 	${src}helpers.js\
 	${src}uri-template.js\

@@ -16,8 +16,8 @@
 		if (!handlers) return false;
 
 		var args = Array.prototype.slice.call(arguments, 1);
-		for (var i = 0, l = handler.length; i < l; i++) {
-			handler[i].apply(this, args);
+		for (var i = 0, l = handlers.length; i < l; i++) {
+			handlers[i].apply(this, args);
 		}
 		return true;
 	};

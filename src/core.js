@@ -1,5 +1,6 @@
 // Core
 // ====
+// :NOTE: currently, Firefox is not able to retrieve response headers over CORS
 (function(exports) {
 	// stores local server functions
 	var httpl_registry = {};
@@ -17,20 +18,22 @@
 	//   - target url can be passed in options as `url`, or generated from `host` and `path`
 	//   - query parameters may be passed in `query`
 	//   - extra request headers may be specified in `headers`
-	//   - if `stream` is true, the callbacks will be called as soon as headers are received
-	// - on success (status code 2xx), `okCb` is called with (payload, headers)
-	// - on failure (status code 4xx,5xx), `errCb` is called with (payload, headers)
+	//   - if `stream` is true, the callbacks will be called as soon as headers or data are received
+	// - when streaming, the third parameter of the callback will indicate if the stream is active
+	// - on success (status code 2xx), `okCb` is called with (payload, headers, isConnOpen)
+	// - on failure (status code 4xx,5xx), `errCb` is called with (payload, headers, isConnOpen)
 	// - all protocol (status code 1xx,3xx) is handled internally
 	function request(payload, options, okCb, errCb, cbContext) {
 
 		// were we passed (options, okCb, errCb, context)?
-		if (typeof payload === 'function') {
+		// :TODO: fix
+		/*if (typeof options === 'function') {
 			options = arguments[0];
 			okCb    = arguments[1];
 			errCb   = arguments[2];
 			context = arguments[3];
 			payload = null;
-		}
+		}*/
 		if (!options) { throw "no options provided to request"; }
 
 		// sane defaults
@@ -52,14 +55,10 @@
 		// execute according to protocol
 		options.mid = gen_mid();
 		if (urld.protocol == 'httpl') {
-			__requestLocal(payload, urld, options, okCb, errCb, cbContext);
+			setTimeout(function() { __requestLocal(payload, urld, options, okCb, errCb, cbContext); }, 0);
 		} else {
-			__requestRemote(payload, urld, options, okCb, errCb, cbContext);
+			setTimeout(function() { __requestRemote(payload, urld, options, okCb, errCb, cbContext); }, 0);
 		}
-	}
-
-	function subscribe(options, okCb, errCb, cbContext) {
-		// :TODO:
 	}
 
 	// executes a request locally
@@ -312,6 +311,7 @@
 		
 	}
 
-	exports.request       = request;
-	exports.registerLocal = registerLocal;
+	exports.request         = request;
+	exports.registerLocal   = registerLocal;
+	exports.unregisterLocal = unregisterLocal;
 })(Link);

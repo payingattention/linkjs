@@ -20,6 +20,8 @@ var server = http.createServer(function(request, response) {
 			serveFoo(request, response);
 		} else if (/^\/foo\/([A-z]*)\/?$/.test(request.url)) {
 			serveFooItem(request, response);
+		} else if (/^\/events\/?$/.test(request.url)) {
+			serveEvents(request, response);
 		} else {
 			serveError(404, request, response);
 		}
@@ -183,12 +185,41 @@ function serveFooItem(request, response) {
 	response.end(payload);
 }
 
+
+// /events
+function serveEvents(request, response) {
+	// method
+	switch (request.method) {
+		case 'OPTIONS':
+		case 'HEAD':
+		case 'GET':
+			break;
+		default:
+			return serveError(405, request, response);
+	}
+
+	// send headers
+	response.writeHead(200, 'Ok', {
+		Allow          : 'OPTIONS, HEAD, GET',
+		'Content-type' : 'text/event-stream',
+		'Access-Control-Allow-Origin'      : '*',
+		'Access-Control-Allow-Credentials' : 'true',
+		'Access-Control-Allow-Methods'     : 'OPTIONS, HEAD, GET',
+		'Access-Control-Expose-Headers'    : 'Allow, Link, Content-type'
+	});
+
+	response.write("event: foo\r\ndata:{ \"c\":1 }\r\n\r\n");
+	response.write("event: foo\r\ndata:{ \"c\":2 }\r\n\r\n");
+	response.write("event: bar\r\ndata:{ \"c\":3 }\r\n\r\n");
+	response.write("event: foo\r\ndata:{ \"c\":4 }\r\n\r\n");
+	response.end("event: foo\r\ndata:{ \"c\":5 }\r\n\r\n");
+}
+
 // helpers
 // =======
 function serveError(code, request, response) {
 	response.writeHead(code, http.STATUS_CODES[code], {
 		Allow:'OPTIONS, HEAD, GET',
-		Link:linkHeader,
 		'Access-Control-Allow-Origin'      : '*',
 		'Access-Control-Allow-Credentials' : 'true',
 		'Access-Control-Allow-Methods'     : 'OPTIONS, HEAD, GET',

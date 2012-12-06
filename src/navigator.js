@@ -237,7 +237,7 @@
 				if (link.title) {
 					if (link.title.toLowerCase() === context.relparams[context.rel]) {
 						match = link;
-						break; 
+						break;
 					}
 				} else {
 					// no title attribute -- it's the template URI, so hold onto it

@@ -119,7 +119,16 @@ Link.registerLocal('test.com', function(request, response) {
 		}
 		response.writeHead(200, 'ok', { 'content-type':'application/json', 'link':linkHeader });
 		response.end('"'+payload+'"');
-	} else {
+	}
+	else if (/^\/events\/?$/.test(request.path)) {
+		response.writeHead(200, 'ok', { 'content-type':'text/event-stream' });
+		response.write({ event:'foo', data:{ c:1 }});
+		response.write({ event:'foo', data:{ c:2 }});
+		response.write({ event:'bar', data:{ c:3 }});
+		response.write({ event:'foo', data:{ c:4 }});
+		response.end({ event:'foo', data:{ c:5 }});
+	}
+	else {
 		response.writeHead(404, 'not found');
 		response.end();
 	}
@@ -173,25 +182,6 @@ baz
 
 done = false;
 startTime = Date.now();
-var numFinished = 0;
-var testLocal = (new Link.Navigator('httpl://test.com')).collection('foo').item('baz');
-for (var i=0; i < 10000; i++) {
-	testLocal.get(
-		function theSuccessCallback(payload, headers) {
-			if (++numFinished === 10000) {
-				print('stress test complete: executed '+numFinished+' times');
-				console.log(Date.now() - startTime, 'ms');
-				done = true;
-			}
-		},
-		function theFailCallback(payload, headers) { print('err'); print(payload); print(headers); console.log(Date.now() - startTime, 'ms'); done = true; });
-}
-wait(function () { return done; });
-
-// => stress test complete: executed 10000 times
-
-done = false;
-startTime = Date.now();
 var testLocal = new Link.Navigator('httpl://test.com');
 testLocal.collection('foo').get(null, { stream:true },
 	function(payload, headers, connIsOpen) {
@@ -237,4 +227,60 @@ connection open
 ["bar", "baz", "blah"]
 object
 connection closed
+*/
+
+done = false;
+startTime = Date.now();
+var stream = Link.subscribe({ url:'httpl://test.com/events' });
+stream.on('message', function(m) { print(m); });
+stream.on('foo', function(m) { print('foo', m.data); });
+stream.on('bar', function(m) { print('bar', m.data); });
+stream.on('error', function(e) {
+	print('close', e);
+	console.log(Date.now() - startTime, 'ms');
+	done = true;
+});
+wait(function () { return done; });
+
+/* =>
+{data: {c: 1}, event: "foo"}
+foo {c: 1}
+{data: {c: 2}, event: "foo"}
+foo {c: 2}
+{data: {c: 3}, event: "bar"}
+bar {c: 3}
+{data: {c: 4}, event: "foo"}
+foo {c: 4}
+{data: {c: 5}, event: "foo"}
+foo {c: 5}
+{data: undefined, event: "error"}
+close {data: undefined, event: "error"}
+*/
+
+done = false;
+startTime = Date.now();
+var stream2 = Link.subscribe({ url:'http://linkapjs.com:8080/events' });
+stream2.on('message', function(m) { print(m); });
+stream2.on('foo', function(m) { print('foo', m.data); });
+stream2.on('bar', function(m) { print('bar', m.data); });
+stream2.on('error', function(e) {
+	print('close', e);
+	console.log(Date.now() - startTime, 'ms');
+	done = true;
+});
+wait(function () { return done; });
+
+/* =>
+{data: {c: 1}, event: "foo"}
+foo {c: 1}
+{data: {c: 2}, event: "foo"}
+foo {c: 2}
+{data: {c: 3}, event: "bar"}
+bar {c: 3}
+{data: {c: 4}, event: "foo"}
+foo {c: 4}
+{data: {c: 5}, event: "foo"}
+foo {c: 5}
+{data: undefined, event: "error"}
+close {data: undefined, event: "error"}
 */
