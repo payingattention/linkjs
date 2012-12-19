@@ -7,6 +7,9 @@
 	// keeps the current message id, used for tracking messages
 	var cur_mid = 1;
 	function gen_mid() { return cur_mid++; }
+	// request dispatcher func
+	// - used in workers to transport requests to the parent for routing
+	var customRequestDispatcher = null;
 
 	// request()
 	// =========
@@ -40,6 +43,11 @@
 		okCb  = okCb  || noop;
 		errCb = errCb || noop;
 		options.headers = options.headers || {};
+
+		if (customRequestDispatcher) {
+			var response = new ServerResponse({ okCb:okCb, errCb:errCb, cbContext:cbContext, stream:options.stream });
+			return customRequestDispatcher(payload, options, response);
+		}
 
 		// parse the url
 		var urld;
@@ -172,6 +180,13 @@
 	// executes a remote request in a nodejs process
 	function __requestRemoteNodejs(payload, urld, options, okCb, errCb, cbContext) {
 		throw "request() has not yet been implemented for nodejs";
+	}
+
+	// EXPORTED
+	// allows the API consumer to dispatch requests with their own code
+	// - mainly for workers to submit requests to the document for routing
+	function setRequestDispatcher(fn) {
+		customRequestDispatcher = fn;
 	}
 
 	// ServerResponse
@@ -311,8 +326,9 @@
 		
 	}
 
-	exports.request         = request;
-	exports.registerLocal   = registerLocal;
-	exports.unregisterLocal = unregisterLocal;
-	exports.ServerResponse  = ServerResponse;
+	exports.request              = request;
+	exports.registerLocal        = registerLocal;
+	exports.unregisterLocal      = unregisterLocal;
+	exports.setRequestDispatcher = setRequestDispatcher;
+	exports.ServerResponse       = ServerResponse;
 })(Link);
