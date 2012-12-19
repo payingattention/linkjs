@@ -209,7 +209,8 @@
 		this.isOpen      = true;
 
 		this.headers = {};
-		this.statusCode = 0;
+		this.status = 0;
+		this.reason = '';
 		this.payload = '';
 	}
 	ServerResponse.prototype = Object.create(Link.EventEmitter.prototype);
@@ -221,8 +222,8 @@
 		for (var k in headers) {
 			this.setHeader(k, headers[k]);
 		}
-		this.headers.status = status;
-		this.headers.reason = reason;
+		this.status = status;
+		this.reason = reason;
 		if (this.isStreaming) {
 			this.__notify();
 		}
@@ -266,12 +267,13 @@
 
 	// internal, runs the callbacks provided during construction
 	ServerResponse.prototype.__notify = function() {
-		if (!this.headers) { throw "Must write headers to response before ending"; }
-		this.cb.call(this.cbContext, this.payload, this.headers, this.isOpen);
-		if (this.headers.status >= 200 && this.headers.status < 300) {
-			this.okCb.call(this.cbContext, this.payload, this.headers, this.isOpen);
-		} else if (this.headers.status >= 400 && this.headers.status < 600) {
-			this.errCb.call(this.cbContext, this.payload, this.headers, this.isOpen);
+		if (!this.status) { throw "Must write headers to response before ending"; }
+		var headers = { status:this.status, reason:this.reason, headers:this.headers };
+		this.cb.call(this.cbContext, this.payload, headers, this.isOpen);
+		if (this.status >= 200 && this.status < 300) {
+			this.okCb.call(this.cbContext, this.payload, headers, this.isOpen);
+		} else if (this.status >= 400 && this.status < 600) {
+			this.errCb.call(this.cbContext, this.payload, headers, this.isOpen);
 		} else {
 			// :TODO: protocol handling
 		}

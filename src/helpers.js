@@ -101,7 +101,6 @@
 		}
 		var fn = contentTypes__find(type, 'serializer');
 		if (!fn) {
-			console.log('Unable to serialize', type, '(no serializer found)');
 			return obj;
 		}
 		return fn(obj);
@@ -115,7 +114,6 @@
 		}
 		var fn = contentTypes__find(type, 'deserializer');
 		if (!fn) {
-			console.log('Unable to deserialize', type, '(no deserializer found)');
 			return str;
 		}
 		return fn(str);
@@ -164,7 +162,6 @@
 			try {
 				return JSON.stringify(obj);
 			} catch (e) {
-				console.log('Failed to serialize json', obj, e);
 				return '';
 			}
 		},
@@ -172,7 +169,7 @@
 			try {
 				return JSON.parse(str);
 			} catch (e) {
-				console.log('Failed to deserialize json', str, e);
+				return null;
 			}
 		}
 	);
