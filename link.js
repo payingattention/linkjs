@@ -1,3 +1,6 @@
+// LinkJS
+// ======
+// pfraze 2012
 function noop() {}
 var Link = {};// Tools
 // =====
@@ -291,7 +294,7 @@ var Link = {};// Tools
 
 	// ServerResponse
 	// ==============
-	// INTERNAL
+	// EXPORTED
 	// Interface for responding to requests
 	// - generated internally and given to document-local servers
 	// - not given to clients; instead, will run client's callbacks as appropriate
@@ -429,6 +432,7 @@ var Link = {};// Tools
 	exports.request         = request;
 	exports.registerLocal   = registerLocal;
 	exports.unregisterLocal = unregisterLocal;
+	exports.ServerResponse  = ServerResponse;
 })(Link);// Events
 // ======
 // :NOTE: currently, Chrome does not support event streams with CORS

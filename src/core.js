@@ -176,7 +176,7 @@
 
 	// ServerResponse
 	// ==============
-	// INTERNAL
+	// EXPORTED
 	// Interface for responding to requests
 	// - generated internally and given to document-local servers
 	// - not given to clients; instead, will run client's callbacks as appropriate
@@ -314,4 +314,5 @@
 	exports.request         = request;
 	exports.registerLocal   = registerLocal;
 	exports.unregisterLocal = unregisterLocal;
+	exports.ServerResponse  = ServerResponse;
 })(Link);
