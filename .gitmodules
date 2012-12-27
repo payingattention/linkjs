@@ -1,0 +1,3 @@
+[submodule "lib/promises"]
+	path = lib/promises
+	url = git@github.com:pfraze/promises.git

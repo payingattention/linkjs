@@ -76,40 +76,6 @@
 		return this._events[type];
 	};
 
-	// Notifier
-	// ========
-	// EXPORTED
-	// Manages a set of callbacks
-	// :TODO: remove?
-	function Notifier() {
-		this.__streams = [];
-	}
-
-	// adds a stream to the list of receivers
-	Notifier.prototype.addStream = function(stream) {
-		if (!(stream instanceof Stream)) {
-			throw "Stream type must be passed to Notifier.addStream";
-		}
-		this.__streams.push(stream);
-	};
-
-	// broadcasts an event
-	Notifier.prototype.broadcast = function(event, data) {
-		var chunk = { event:event };
-		if (data) { chunk.data = data; }
-		for (var i=0; i < this.__streams.length; i++) {
-			this.__streams[i].write(chunk);
-		}
-	};
-
-	// broadcasts an event to a particular stream
-	Notifier.prototype.broadcastTo = function(stream, event, data) {
-		var chunk = { event:event };
-		if (data) { chunk.data = data; }
-		stream.write(chunk);
-	};
-
 	// exports
 	exports.EventEmitter  = EventEmitter;
-	exports.Notifier = Notifier;
 })(Link);
