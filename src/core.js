@@ -4,182 +4,182 @@
 (function(exports) {
 	// stores local server functions
 	var httpl_registry = {};
-	// keeps the current message id, used for tracking messages
-	var cur_mid = 1;
-	function gen_mid() { return cur_mid++; }
 	// request dispatcher func
 	// - used in workers to transport requests to the parent for routing
 	var customRequestDispatcher = null;
+
+	// custom error type, for promises
+	function ResponseError(response) {
+		this.message  = ''+response.status+': '+response.reason;
+		this.response = response;
+	}
+	ResponseError.prototype = new Error();
 
 	// request()
 	// =========
 	// EXPORTED
 	// HTTP request dispatcher
-	// - all parameters except `options` are optional
-	// - `options` param:
-	//   - requires `method` and the target url
+	// - `req` param:
+	//   - requires `method`, `body`, and the target url
 	//   - target url can be passed in options as `url`, or generated from `host` and `path`
 	//   - query parameters may be passed in `query`
 	//   - extra request headers may be specified in `headers`
-	//   - if `stream` is true, the callbacks will be called as soon as headers or data are received
-	// - when streaming, the third parameter of the callback will indicate if the stream is active
-	// - on success (status code 2xx), `okCb` is called with (payload, headers, isConnOpen)
-	// - on failure (status code 4xx,5xx), `errCb` is called with (payload, headers, isConnOpen)
-	// - all protocol (status code 1xx,3xx) is handled internally
-	function request(payload, options, okCb, errCb, cbContext) {
-
-		// were we passed (options, okCb, errCb, context)?
-		// :TODO: fix
-		/*if (typeof options === 'function') {
-			options = arguments[0];
-			okCb    = arguments[1];
-			errCb   = arguments[2];
-			context = arguments[3];
-			payload = null;
-		}*/
-		if (!options) { throw "no options provided to request"; }
+	//   - if `stream` is true, the ClientResponse 'data' events will be called as soon as headers or data are received
+	// - returns a `Promise` object
+	//   - on success (status code 2xx), the promise is fulfilled with a `ClientResponse` object
+	//   - on failure (status code 4xx,5xx), the promise is rejected with a `ClientResponse` object
+	//   - all protocol (status code 1xx,3xx) is handled internally
+	function request(req) {
+		// sanity check
+		if (!req) { throw "no req param provided to request"; }
 
 		// sane defaults
-		okCb  = okCb  || noop;
-		errCb = errCb || noop;
-		options.headers = options.headers || {};
+		req.headers = req.headers || {};
 
+		// dispatch behavior override
+		// (used by workers to send requests to the parent document for routing)
 		if (customRequestDispatcher) {
-			var response = new ServerResponse({ okCb:okCb, errCb:errCb, cbContext:cbContext, stream:options.stream });
-			return customRequestDispatcher(payload, options, response);
+			return customRequestDispatcher(req);
 		}
 
 		// parse the url
-		var urld;
-		if (options.url) {
-			urld = Link.parse.url(options.url);
+		// (urld = url description)
+		if (req.url) {
+			req.urld = Link.parse.url(req.url);
 		} else {
-			urld = Link.parse.url(__joinUrl(options.host, options.path));
+			req.urld = Link.parse.url(__joinUrl(req.host, req.path));
 		}
-		if (!urld) {
-			throw "no URL or host/path provided in request options";
+		if (!req.urld) {
+			throw "no URL or host/path provided in request";
 		}
 
-		// execute according to protocol
-		options.mid = gen_mid();
-		if (urld.protocol == 'httpl') {
-			setTimeout(function() { __requestLocal(payload, urld, options, okCb, errCb, cbContext); }, 0);
+		// execute according to protocol (asyncronously)
+		var resPromise = promise();
+		if (req.urld.protocol == 'httpl') {
+			setTimeout(function() { __requestLocal(req, resPromise); }, 0);
 		} else {
-			setTimeout(function() { __requestRemote(payload, urld, options, okCb, errCb, cbContext); }, 0);
+			setTimeout(function() { __requestRemote(req, resPromise); }, 0);
 		}
+		return resPromise;
 	}
 
 	// executes a request locally
-	function __requestLocal(payload, urld, options, okCb, errCb, cbContext) {
+	function __requestLocal(req, resPromise) {
 
 		// find the local server
-		var server = httpl_registry[urld.host];
+		var server = httpl_registry[req.urld.host];
 		if (!server) {
-			return errCb.call(cbContext, null, { status:404, reason:'server not found' }, false);
+			var res = new ClientResponse(404, 'server not found');
+			resPromise.reject(new ResponseError(res));
+			res.end();
+			return;
 		}
 
-		// build the request
-		var request = {
-			mid     : options.mid,
-			path    : urld.path,
-			method  : options.method,
-			query   : options.query || {},
-			headers : options.headers || {},
-			body    : payload
+		// rebuild the request
+		// :NOTE: could just pass `req`, but would rather be explicit about what a local server receives
+		var req2 = {
+			path    : req.urld.path,
+			method  : req.method,
+			query   : req.query || {},
+			headers : req.headers || {},
+			body    : req.body
 		};
 
 		// if the urld has query parameters, mix them into the request's query object
-		if (urld.query) {
-			var q = Link.contentTypes.deserialize(urld.query, 'application/x-www-form-urlencoded');
+		if (req.urld.query) {
+			var q = Link.contentTypes.deserialize(req.urld.query, 'application/x-www-form-urlencoded');
 			for (var k in q) {
-				request.query[k] = q[k];
+				req2.query[k] = q[k];
 			}
 		}
 
 		// pass on to the server
-		var response = new ServerResponse({ okCb:okCb, errCb:errCb, cbContext:cbContext, stream:options.stream });
-		server.fn.call(server.context, request, response);
+		server.fn.call(server.context, req2, new ServerResponse(resPromise, req.stream));
 	}
 
 	// executes a request remotely
-	function __requestRemote(payload, urld, options, okCb, errCb, cbContext) {
+	function __requestRemote(req, resPromise) {
 
-		// if a query was given in the options, add it to the urld
-		if (request.query) {
-			var q = Link.contentTypes.serialize(request.query, 'application/x-www-form-urlencoded');
+		// if a query was given in the options, mix it into the urld
+		if (req.query) {
+			var q = Link.contentTypes.serialize(req.query, 'application/x-www-form-urlencoded');
 			if (q) {
-				if (urld.query) {
-					urld.query    += '&' + q;
-					urld.relative += '&' + q;
+				if (req.urld.query) {
+					req.urld.query    += '&' + q;
+					req.urld.relative += '&' + q;
 				} else {
-					urld.query     =  q;
-					urld.relative += '?' + q;
+					req.urld.query     =  q;
+					req.urld.relative += '?' + q;
 				}
 			}
 		}
 
 		if (window) {
-			__requestRemoteBrowser(payload, urld, options, okCb, errCb, cbContext);
+			__requestRemoteBrowser(req, resPromise);
 		} else {
-			__requestRemoteNodejs(payload, urld, options, okCb, errCb, cbContext);
+			__requestRemoteNodejs(req, resPromise);
 		}
 	}
 
 	// executes a remote request in the browser
-	function __requestRemoteBrowser(payload, urld, options, okCb, errCb, cbContext) {
+	// :TODO: streaming
+	function __requestRemoteBrowser(req, resPromise) {
 
 		// assemble the final url
-		var url = (urld.protocol || 'http') + '://' + urld.authority + urld.relative;
+		var url = (req.urld.protocol || 'http') + '://' + req.urld.authority + req.urld.relative;
 
 		// make sure our payload is serialized
-		if (payload) {
-			options.headers['content-type'] = options.headers['content-type'] || 'application/json';
-			if (typeof payload !== 'string') {
-				payload = Link.contentTypes.serialize(payload, options.headers['content-type']);
+		if (req.body) {
+			req.headers['content-type'] = req.headers['content-type'] || 'application/json';
+			if (typeof req.body !== 'string') {
+				req.body = Link.contentTypes.serialize(req.body, req.headers['content-type']);
 			}
 		}
 
 		// create the request
 		var xhrRequest = new XMLHttpRequest();
-		xhrRequest.open(options.method, url, true);
+		xhrRequest.open(req.method, url, true);
 
-		for (var k in options.headers) {
-			if (options.headers[k] !== null) {
-				xhrRequest.setRequestHeader(k, options.headers[k]);
+		for (var k in req.headers) {
+			if (req.headers[k] !== null) {
+				xhrRequest.setRequestHeader(k, req.headers[k]);
 			}
 		}
 
 		xhrRequest.onreadystatechange = function() {
 			if (xhrRequest.readyState == 4) {
-				var responseHeaders = {
-					status:xhrRequest.status,
-					reason:xhrRequest.statusText
-				};
+				var response = new ClientResponse(xhrRequest.status, xhrRequest.statusText);
+
 				// :NOTE: a bug in firefox causes getAllResponseHeaders to return an empty string on CORS
 				// we either need to bug them, or iterate the headers we care about with getResponseHeader
 				xhrRequest.getAllResponseHeaders().split("\n").forEach(function(h) {
 					if (!h) { return; }
 					var kv = h.toLowerCase().replace('\r','').split(': ');
-					responseHeaders[kv[0]] = kv[1];
+					response.headers[kv[0]] = kv[1];
 				});
 
-				var responsePayload = Link.contentTypes.deserialize(xhrRequest.responseText, responseHeaders['content-type']);
+				response.body = Link.contentTypes.deserialize(xhrRequest.responseText, response.headers['content-type']);
 
-				if (responseHeaders.status >= 200 && responseHeaders.status < 300) {
-					okCb.call(cbContext, responsePayload, responseHeaders, false);
-				} else if (responseHeaders.status >= 400 && responseHeaders.status < 600) {
-					errCb.call(cbContext, responsePayload, responseHeaders, false);
+				if (response.status >= 200 && response.status < 300) {
+					resPromise.fulfill(response);
+				} else if (response.status >= 400 && response.status < 600) {
+					resPromise.reject(new ResponseError(response));
 				} else {
 					// :TODO: protocol handling
 				}
+
+				response.write(response.body);
+				response.end();
 			}
 		};
-		xhrRequest.send(payload);
+		xhrRequest.send(req.body);
 	}
 
 	// executes a remote request in a nodejs process
-	function __requestRemoteNodejs(payload, urld, options, okCb, errCb, cbContext) {
-		throw "request() has not yet been implemented for nodejs";
+	function __requestRemoteNodejs(req, resPromise) {
+		var res = new ClientResponse(0, 'request() has not yet been implemented for nodejs');
+		resPromise.reject(res);
+		res.end();
 	}
 
 	// EXPORTED
@@ -189,60 +189,69 @@
 		customRequestDispatcher = fn;
 	}
 
+	// ClientResponse
+	// ==============
+	// EXPORTED
+	// Interface for receiving responses
+	// - generated internally and returned by `request`
+	// - emits 'data' events when a streaming request receives data
+	// - emits an 'end' event when the connection is ended
+	// - if the request is not streaming, the response body will be present in `body` (and no 'end' event is needed)
+	function ClientResponse(status, reason) {
+		Link.EventEmitter.call(this);
+
+		this.status = status;
+		this.reason = reason;
+		this.headers = {};
+		this.body = null;
+		this.isConnOpen = true;
+	}
+	ClientResponse.prototype = Object.create(Link.EventEmitter.prototype);
+	ClientResponse.prototype.write = function() { this.emit.apply(this, ['data'].concat(arguments)); };
+	ClientResponse.prototype.end = function() { this.emit.apply(this, ['end'].concat(arguments)); };
+
 	// ServerResponse
 	// ==============
 	// EXPORTED
 	// Interface for responding to requests
 	// - generated internally and given to document-local servers
 	// - not given to clients; instead, will run client's callbacks as appropriate
-	// - reasons this exists:
-	//     1) to make it easier to reuse nodejs server code in local servers
-    //     2) for streaming, which requires some tracked state
-	function ServerResponse(options) {
+	function ServerResponse(resPromise, isStreaming) {
 		Link.EventEmitter.call(this);
 
-		this.cb          = options.cb    || noop;
-		this.okCb        = options.okCb  || noop;
-		this.errCb       = options.errCb || noop;
-		this.cbContext   = options.cbContext;
-		this.isStreaming = options.stream;
-		this.isOpen      = true;
-
-		this.headers = {};
-		this.status = 0;
-		this.reason = '';
-		this.payload = '';
+		this.resPromise  = resPromise;
+		this.isStreaming = isStreaming;
+		this.clientResponse = new ClientResponse();
 	}
 	ServerResponse.prototype = Object.create(Link.EventEmitter.prototype);
 
 	// writes the header to the response
 	// if streaming, will notify the client
 	ServerResponse.prototype.writeHead = function(status, reason, headers) {
-		this.statusCode = status;
+		this.clientResponse.status = status;
+		this.clientResponse.reason = reason;
 		for (var k in headers) {
 			this.setHeader(k, headers[k]);
 		}
-		this.status = status;
-		this.reason = reason;
 		if (this.isStreaming) {
 			this.__notify();
 		}
 	};
 
 	// header access/mutation fns
-	ServerResponse.prototype.setHeader    = function(k, v) { this.headers[k] = v; };
-	ServerResponse.prototype.getHeader    = function(k) { return this.headers[k]; };
-	ServerResponse.prototype.removeHeader = function(k) { delete this.headers[k]; };
+	ServerResponse.prototype.setHeader    = function(k, v) { this.clientResponse.headers[k] = v; };
+	ServerResponse.prototype.getHeader    = function(k) { return this.clientResponse.headers[k]; };
+	ServerResponse.prototype.removeHeader = function(k) { delete this.clientResponse.headers[k]; };
 
 	// writes data to the response
 	// if streaming, will notify the client
 	ServerResponse.prototype.write = function(data) {
-		if (typeof data === 'string') {
+		if (typeof data == 'string' && typeof this.clientResponse.body == 'string') {
 			// add to the buffer if its a string
-			this.payload += data;
+			this.clientResponse.body += data;
 		} else {
 			// overwrite otherwise
-			this.payload = data;
+			this.clientResponse.body = data;
 		}
 		if (this.isStreaming) {
 			this.__notify();
@@ -255,27 +264,40 @@
 		if (data) { this.write(data); }
 
 		// now that we have it all, try to deserialize the payload
-		this.payload = Link.contentTypes.deserialize(this.payload, this.headers['content-type']);
+		this.clientResponse.body = Link.contentTypes.deserialize(this.clientResponse.body, this.clientResponse.headers['content-type']);
 
-		this.isOpen = false;
+		this.clientResponse.isConnOpen = false;
 		this.__notify();
 		this.emit('close');
 
 		// unbind all listeners
-		this.cb = this.okCb = this.errCb = noop;
+		this.removeAllListeners('close');
+		this.clientResponse.removeAllListeners('data');
+		this.clientResponse.removeAllListeners('end');
 	};
 
 	// internal, runs the callbacks provided during construction
 	ServerResponse.prototype.__notify = function() {
-		if (!this.status) { throw "Must write headers to response before ending"; }
-		var headers = { status:this.status, reason:this.reason, headers:this.headers };
-		this.cb.call(this.cbContext, this.payload, headers, this.isOpen);
-		if (this.status >= 200 && this.status < 300) {
-			this.okCb.call(this.cbContext, this.payload, headers, this.isOpen);
-		} else if (this.status >= 400 && this.status < 600) {
-			this.errCb.call(this.cbContext, this.payload, headers, this.isOpen);
+		if (!this.clientResponse.status) { throw "Must write headers to response before ending"; }
+
+		// fulfill the promise first (getting `clientResponse` into the requester's hands)
+		if (this.resPromise.isUnfulfilled()) {
+			if (this.clientResponse.status >= 200 && this.clientResponse.status < 300) {
+				this.resPromise.fulfill(this.clientResponse);
+			} else if (this.clientResponse.status >= 400 && this.clientResponse.status < 600) {
+				this.resPromise.reject(new ResponseError(this.clientResponse));
+			} else {
+				// :TODO: protocol handling
+			}
+		}
+
+		// emit events according to stream status
+		if (this.clientResponse.isConnOpen) {
+			if (this.clientResponse.body) {
+				this.clientResponse.emit('data', this.clientResponse.body);
+			}
 		} else {
-			// :TODO: protocol handling
+			this.clientResponse.emit('end');
 		}
 	};
 
@@ -332,5 +354,6 @@
 	exports.registerLocal        = registerLocal;
 	exports.unregisterLocal      = unregisterLocal;
 	exports.setRequestDispatcher = setRequestDispatcher;
+	exports.ClientResponse       = ClientResponse;
 	exports.ServerResponse       = ServerResponse;
 })(Link);

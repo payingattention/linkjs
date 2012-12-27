@@ -8,73 +8,67 @@
 	// EXPORTED
 	// Establishes a connection and begins an event stream
 	// - sends a GET request with 'text/event-stream' as the Accept header
-	// - `options` param:
+	// - `req` param:
 	//   - requires the target url
-	//   - target url can be passed in options as `url`, or generated from `host` and `path`
-	// - on success (status code 2xx), `okCb` is called with (payload, headers)
-	// - on failure (status code 4xx,5xx), `errCb` is called with (payload, headers)
-	function subscribe(options) {
+	//   - target url can be passed in req as `url`, or generated from `host` and `path`
+	// - returns a `EventStream` object
+	function subscribe(req) {
 
-		if (!options) { throw "no options provided to subscribe"; }
+		if (!req) { throw "no options provided to subscribe"; }
 
 		// parse the url
-		var urld;
-		if (options.url) {
-			urld = Link.parse.url(options.url);
+		if (req.url) {
+			req.urld = Link.parse.url(req.url);
 		} else {
-			urld = Link.parse.url(__joinUrl(options.host, options.path));
+			req.urld = Link.parse.url(__joinUrl(req.host, req.path));
 		}
-		if (!urld) {
-			throw "no URL or host/path provided in subscribe options";
+		if (!req.urld) {
+			throw "no URL or host/path provided to subscribe";
 		}
 
 		// execute according to protocol
-		if (urld.protocol == 'httpl') {
-			return __subscribeLocal(urld, options);
+		if (req.urld.protocol == 'httpl') {
+			return __subscribeLocal(req);
 		} else {
-			return __subscribeRemote(urld, options);
+			return __subscribeRemote(req);
 		}
 	}
 
 	// subscribes to a local host
-	function __subscribeLocal(urld, options) {
-
-		// set up options
-		var reqOpts = {
-			method  : 'get',
-			url     : (urld.protocol || 'http') + '://' + urld.authority + urld.relative,
-			headers : { accept : 'text/event-stream' },
-			stream  : true
-		};
+	function __subscribeLocal(req) {
 
 		// initiate the event stream
-		var stream = new LocalEventStream();
-		Link.request(null, reqOpts, stream.okCb, stream.errCb, stream);
+		var stream = new LocalEventStream(Link.request({
+			method  : 'get',
+			url     : 'httpl://' + req.urld.authority + req.urld.relative,
+			headers : { accept : 'text/event-stream' },
+			stream  : true
+		}));
 		return stream;
 	}
 
 	// subscribes to a remote host
-	function __subscribeRemote(urld, options) {
+	function __subscribeRemote(req) {
 		if (window) {
-			return __subscribeRemoteBrowser(urld, options);
+			return __subscribeRemoteBrowser(req);
 		} else {
-			return __subscribeRemoteNodejs(urld, options);
+			return __subscribeRemoteNodejs(req);
 		}
 	}
 
 	// subscribes to a remote host in the browser
-	function __subscribeRemoteBrowser(urld, options) {
+	function __subscribeRemoteBrowser(req) {
 
 		// assemble the final url
-		var url = (urld.protocol || 'http') + '://' + urld.authority + urld.relative;
+		var url = (req.urld.protocol || 'http') + '://' + req.urld.authority + req.urld.relative;
 
 		// initiate the event stream
 		return new BrowserRemoteEventStream(url);
 	}
 
 	// subscribes to a remote host in a nodejs process
-	function __requestRemoteNodejs(urld, options, okCb, errCb, cbContext) {
-		throw "request() has not yet been implemented for nodejs";
+	function __subscribeRemoteNodejs(req) {
+		throw "subscribe() has not yet been implemented for nodejs";
 	}
 
 	// EventStream
@@ -83,11 +77,11 @@
 	// Provided by subscribe() to manage the events
 	function EventStream() {
 		Link.EventEmitter.call(this);
-		this.isOpen = true;
+		this.isConnOpen = true;
 	}
 	EventStream.prototype = Object.create(Link.EventEmitter.prototype);
 	EventStream.prototype.close = function() {
-		this.isOpen = false;
+		this.isConnOpen = false;
 		this.removeAllListeners();
 	};
 	EventStream.prototype.__emitError = function(e) {
@@ -103,28 +97,31 @@
 	// ================
 	// INTERNAL
 	// Descendent of EventStream
-	function LocalEventStream() {
+	function LocalEventStream(resPromise) {
 		EventStream.call(this);
 
-		// :TODO:
+		// wait for the promise
+		var self = this;
+		resPromise
+			.then(function(response) {
+				// begin emitting
+				response.on('data', function(payload) {
+					self.__emitEvent(payload);
+				});
+				response.on('end', function() {
+					self.close();
+				});
+			})
+			.except(function(response) {
+				// fail town
+				self.__emitError({ event:'error', data:response });
+				self.close();
+			});
 	}
 	LocalEventStream.prototype = Object.create(EventStream.prototype);
-	LocalEventStream.prototype.okCb = function(payload, headers, isConnOpen) {
-		if (!isConnOpen) {
-			this.close();
-		}
-		else if (payload && typeof payload === 'object') {
-			this.__emitEvent(payload);
-		}
-	};
-	LocalEventStream.prototype.errCb = function(payload, headers, isConnOpen) {
-		if (payload && typeof payload === 'object') {
-			this.__emitError({ event:'error', data:undefined });
-		}
-		this.close();
-	};
 	LocalEventStream.prototype.close = function() {
-		this.__emitError({ event:'error', data:undefined });
+		this.__emitError({ event:'error', data:undefined }); // :NOTE: emulating the behavior of EventSource
+		// :TODO: would be great if close didn't emit the above error
 		EventStream.prototype.close.call(this);
 	};
 
