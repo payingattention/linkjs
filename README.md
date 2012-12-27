@@ -40,16 +40,16 @@ From a client:
 
 ```javascript
 // dispatch a GET request
-Link.request(null, { method:'get', url:'httpl://localserver.api', accept:'text/html' },
-	function(responsePayload, responseHeaders) {
-		myDiv.innerHTML = responsePayload;
-	},
-	function(responsePayload, responseHeaders) {
-		myDiv.innerText = responseHeaders.status + ': ' + responseHeaders.reason;
-	}, this);
-});
+Link.request({ method:'get', url:'httpl://localserver.api', accept:'text/html' })
+	// responses are handled via promises:
+	.then(function(response) {
+		myDiv.innerHTML = response.body;
+	})
+	.except(function(err) {
+		myDiv.innerText = err.message;
+	});
 
-// subscribe to the events
+// subscribe to an event stream
 var events = Link.subscribe({ url:'httpl://localserver.api' });
 stream.on('hello', console.log); // => { event:'hello' data:'world' }
 stream.on('bye', console.log); // => { event:'bye' data:undefined }
@@ -63,7 +63,7 @@ The Navigator provides an interface to HTTP servers which behaves somewhat like 
 var github = new Navigator('https://api.github.com');
 var me = github.collection('users').item('pfraze');
 
-me.get(function(profile) {
+me.get(function(res) {
 	// -> HEAD https://api.github.com
 	// -> HEAD https://api.github.com/users
 	// -> GET  https://api.github.com/users/pfraze
@@ -71,14 +71,11 @@ me.get(function(profile) {
 	this.patch({ email:'pfrazee@gmail.com' });
 	// -> PATCH https://api.github.com/users/pfraze { email:'pfrazee@gmail.com' }
 
-	github.collection('users', { since:profile.id }).get(function(users) {
+	github.collection('users', { since:profile.id }).get(function(res2) {
 		// -> GET https://api.github.com/users?since=123
 		//...
 	});
 });
-
-// alternative: if / provides a Link: </{collection}/{item}>; rel=item
-me = github.item('pfraze', { collection:'users' }));
 ```
 
 ## Further Documentation
