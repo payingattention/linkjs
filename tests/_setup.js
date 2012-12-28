@@ -17,6 +17,8 @@ function finishTest() {
 	console.log(Date.now() - startTime, 'ms');
 	done = true;
 }
+function printSuccessAndFinish(res) { printSuccess(res); finishTest(); }
+function printErrorAndFinish(err) { printError(err); finishTest(); }
 
 // local scaffold server
 

@@ -252,7 +252,7 @@
 			}
 			req = req || {};
 			req.method = m;
-			this.request(req, okCb, errCb);
+			return this.request(req, okCb, errCb);
 		};
 	});
 

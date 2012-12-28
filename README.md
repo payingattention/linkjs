@@ -51,8 +51,8 @@ Link.request({ method:'get', url:'httpl://localserver.api', accept:'text/html' }
 
 // subscribe to an event stream
 var events = Link.subscribe({ url:'httpl://localserver.api' });
-stream.on('hello', console.log); // => { event:'hello' data:'world' }
-stream.on('bye', console.log); // => { event:'bye' data:undefined }
+stream.on('hello', log); // => { event:'hello' data:'world' }
+stream.on('bye', log); // => { event:'bye' data:undefined }
 ```
 
 ## Navigator Usage
