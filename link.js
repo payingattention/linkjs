@@ -9,7 +9,9 @@ var Link = {};// promises
 var environment = {};
 if (typeof window !== "undefined") {
 	environment = window;
-}else if (typeof module !== "undefined") {
+} else if (typeof self !== "undefined") {
+	environment = self;
+} else if (typeof module !== "undefined") {
 	environment = module.exports;
 }
 
@@ -435,7 +437,7 @@ if (typeof define !== "undefined") {
 			// overwrite otherwise
 			this.body = data;
 		}
-		this.emit('data', data);
+		this.emit('data', this.body);
 	};
 	ClientResponse.prototype.end = function() {
 		// now that we have it all, try to deserialize the payload
@@ -491,11 +493,11 @@ if (typeof define !== "undefined") {
 		// write any remaining data
 		if (data) { this.write(data); }
 
-		// fulfill/reject now if we had been buffering the response
-		if (!this.isStreaming) { this.__fulfillPromise(); }
-
 		this.clientResponse.end();
 		this.emit('close');
+
+		// fulfill/reject now if we had been buffering the response
+		if (!this.isStreaming) { this.__fulfillPromise(); }
 
 		// unbind all listeners
 		this.removeAllListeners('close');
