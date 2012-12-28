@@ -129,7 +129,7 @@
 		// make http request
 		req.url = this.context.getUrl();
 		var self = this;
-		Link.request(req)
+		promise(Link.request(req))
 			.then(function(res) {
 				// we can now consider ourselves resolved (if we hadnt already)
 				self.context.resolveState = NavigatorContext.RESOLVED;

@@ -9,7 +9,9 @@ var Link = {};// promises
 var environment = {};
 if (typeof window !== "undefined") {
 	environment = window;
-}else if (typeof module !== "undefined") {
+} else if (typeof self !== "undefined") {
+	environment = self;
+} else if (typeof module !== "undefined") {
 	environment = module.exports;
 }
 
@@ -46,7 +48,11 @@ if (typeof window !== "undefined") {
 		try {
 			var value = fn.apply(p, [this.value].concat(args));
 			if (typeof value != 'undefined') {
-				p.fulfill(value);
+				if (value instanceof Error) {
+					p.reject(value);
+				} else {
+					p.fulfill(value);
+				}
 			}
 		}
 		catch (e) {
@@ -211,224 +217,191 @@ if (typeof define !== "undefined") {
 		return this._events[type];
 	};
 
-	// Notifier
-	// ========
-	// EXPORTED
-	// Manages a set of callbacks
-	// :TODO: remove?
-	function Notifier() {
-		this.__streams = [];
-	}
-
-	// adds a stream to the list of receivers
-	Notifier.prototype.addStream = function(stream) {
-		if (!(stream instanceof Stream)) {
-			throw "Stream type must be passed to Notifier.addStream";
-		}
-		this.__streams.push(stream);
-	};
-
-	// broadcasts an event
-	Notifier.prototype.broadcast = function(event, data) {
-		var chunk = { event:event };
-		if (data) { chunk.data = data; }
-		for (var i=0; i < this.__streams.length; i++) {
-			this.__streams[i].write(chunk);
-		}
-	};
-
-	// broadcasts an event to a particular stream
-	Notifier.prototype.broadcastTo = function(stream, event, data) {
-		var chunk = { event:event };
-		if (data) { chunk.data = data; }
-		stream.write(chunk);
-	};
-
 	// exports
 	exports.EventEmitter  = EventEmitter;
-	exports.Notifier = Notifier;
 })(Link);// Core
 // ====
 // :NOTE: currently, Firefox is not able to retrieve response headers over CORS
 (function(exports) {
 	// stores local server functions
 	var httpl_registry = {};
-	// keeps the current message id, used for tracking messages
-	var cur_mid = 1;
-	function gen_mid() { return cur_mid++; }
 	// request dispatcher func
 	// - used in workers to transport requests to the parent for routing
 	var customRequestDispatcher = null;
+
+	// custom error type, for promises
+	// EXPORTED
+	function ResponseError(response) {
+		this.message  = ''+response.status+': '+response.reason;
+		this.response = response;
+	}
+	ResponseError.prototype = new Error();
 
 	// request()
 	// =========
 	// EXPORTED
 	// HTTP request dispatcher
-	// - all parameters except `options` are optional
-	// - `options` param:
-	//   - requires `method` and the target url
+	// - `req` param:
+	//   - requires `method`, `body`, and the target url
 	//   - target url can be passed in options as `url`, or generated from `host` and `path`
 	//   - query parameters may be passed in `query`
 	//   - extra request headers may be specified in `headers`
-	//   - if `stream` is true, the callbacks will be called as soon as headers or data are received
-	// - when streaming, the third parameter of the callback will indicate if the stream is active
-	// - on success (status code 2xx), `okCb` is called with (payload, headers, isConnOpen)
-	// - on failure (status code 4xx,5xx), `errCb` is called with (payload, headers, isConnOpen)
-	// - all protocol (status code 1xx,3xx) is handled internally
-	function request(payload, options, okCb, errCb, cbContext) {
-
-		// were we passed (options, okCb, errCb, context)?
-		// :TODO: fix
-		/*if (typeof options === 'function') {
-			options = arguments[0];
-			okCb    = arguments[1];
-			errCb   = arguments[2];
-			context = arguments[3];
-			payload = null;
-		}*/
-		if (!options) { throw "no options provided to request"; }
+	//   - if `stream` is true, the ClientResponse 'data' events will be called as soon as headers or data are received
+	// - returns a `Promise` object
+	//   - on success (status code 2xx), the promise is fulfilled with a `ClientResponse` object
+	//   - on failure (status code 4xx,5xx), the promise is rejected with a `ClientResponse` object
+	//   - all protocol (status code 1xx,3xx) is handled internally
+	function request(req) {
+		// sanity check
+		if (!req) { throw "no req param provided to request"; }
 
 		// sane defaults
-		okCb  = okCb  || noop;
-		errCb = errCb || noop;
-		options.headers = options.headers || {};
+		req.headers = req.headers || {};
 
+		// dispatch behavior override
+		// (used by workers to send requests to the parent document for routing)
 		if (customRequestDispatcher) {
-			var response = new ServerResponse({ okCb:okCb, errCb:errCb, cbContext:cbContext, stream:options.stream });
-			return customRequestDispatcher(payload, options, response);
+			return customRequestDispatcher(req);
 		}
 
 		// parse the url
-		var urld;
-		if (options.url) {
-			urld = Link.parse.url(options.url);
+		// (urld = url description)
+		if (req.url) {
+			req.urld = Link.parse.url(req.url);
 		} else {
-			urld = Link.parse.url(__joinUrl(options.host, options.path));
+			req.urld = Link.parse.url(__joinUrl(req.host, req.path));
 		}
-		if (!urld) {
-			throw "no URL or host/path provided in request options";
+		if (!req.urld) {
+			throw "no URL or host/path provided in request";
 		}
 
-		// execute according to protocol
-		options.mid = gen_mid();
-		if (urld.protocol == 'httpl') {
-			setTimeout(function() { __requestLocal(payload, urld, options, okCb, errCb, cbContext); }, 0);
+		// execute according to protocol (asyncronously)
+		var resPromise = promise();
+		if (req.urld.protocol == 'httpl') {
+			setTimeout(function() { __requestLocal(req, resPromise); }, 0);
 		} else {
-			setTimeout(function() { __requestRemote(payload, urld, options, okCb, errCb, cbContext); }, 0);
+			setTimeout(function() { __requestRemote(req, resPromise); }, 0);
 		}
+		return resPromise;
 	}
 
 	// executes a request locally
-	function __requestLocal(payload, urld, options, okCb, errCb, cbContext) {
+	function __requestLocal(req, resPromise) {
 
 		// find the local server
-		var server = httpl_registry[urld.host];
+		var server = httpl_registry[req.urld.host];
 		if (!server) {
-			return errCb.call(cbContext, null, { status:404, reason:'server not found' }, false);
+			var res = new ClientResponse(404, 'server not found');
+			resPromise.reject(new ResponseError(res));
+			res.end();
+			return;
 		}
 
-		// build the request
-		var request = {
-			mid     : options.mid,
-			path    : urld.path,
-			method  : options.method,
-			query   : options.query || {},
-			headers : options.headers || {},
-			body    : payload
+		// rebuild the request
+		// :NOTE: could just pass `req`, but would rather be explicit about what a local server receives
+		var req2 = {
+			path    : req.urld.path,
+			method  : req.method,
+			query   : req.query || {},
+			headers : req.headers || {},
+			body    : req.body
 		};
 
 		// if the urld has query parameters, mix them into the request's query object
-		if (urld.query) {
-			var q = Link.contentTypes.deserialize(urld.query, 'application/x-www-form-urlencoded');
+		if (req.urld.query) {
+			var q = Link.contentTypes.deserialize(req.urld.query, 'application/x-www-form-urlencoded');
 			for (var k in q) {
-				request.query[k] = q[k];
+				req2.query[k] = q[k];
 			}
 		}
 
 		// pass on to the server
-		var response = new ServerResponse({ okCb:okCb, errCb:errCb, cbContext:cbContext, stream:options.stream });
-		server.fn.call(server.context, request, response);
+		server.fn.call(server.context, req2, new ServerResponse(resPromise, req.stream));
 	}
 
 	// executes a request remotely
-	function __requestRemote(payload, urld, options, okCb, errCb, cbContext) {
+	function __requestRemote(req, resPromise) {
 
-		// if a query was given in the options, add it to the urld
-		if (request.query) {
-			var q = Link.contentTypes.serialize(request.query, 'application/x-www-form-urlencoded');
+		// if a query was given in the options, mix it into the urld
+		if (req.query) {
+			var q = Link.contentTypes.serialize(req.query, 'application/x-www-form-urlencoded');
 			if (q) {
-				if (urld.query) {
-					urld.query    += '&' + q;
-					urld.relative += '&' + q;
+				if (req.urld.query) {
+					req.urld.query    += '&' + q;
+					req.urld.relative += '&' + q;
 				} else {
-					urld.query     =  q;
-					urld.relative += '?' + q;
+					req.urld.query     =  q;
+					req.urld.relative += '?' + q;
 				}
 			}
 		}
 
 		if (window) {
-			__requestRemoteBrowser(payload, urld, options, okCb, errCb, cbContext);
+			__requestRemoteBrowser(req, resPromise);
 		} else {
-			__requestRemoteNodejs(payload, urld, options, okCb, errCb, cbContext);
+			__requestRemoteNodejs(req, resPromise);
 		}
 	}
 
 	// executes a remote request in the browser
-	function __requestRemoteBrowser(payload, urld, options, okCb, errCb, cbContext) {
+	// :TODO: streaming
+	function __requestRemoteBrowser(req, resPromise) {
 
 		// assemble the final url
-		var url = (urld.protocol || 'http') + '://' + urld.authority + urld.relative;
+		var url = (req.urld.protocol || 'http') + '://' + req.urld.authority + req.urld.relative;
 
 		// make sure our payload is serialized
-		if (payload) {
-			options.headers['content-type'] = options.headers['content-type'] || 'application/json';
-			if (typeof payload !== 'string') {
-				payload = Link.contentTypes.serialize(payload, options.headers['content-type']);
+		if (req.body) {
+			req.headers['content-type'] = req.headers['content-type'] || 'application/json';
+			if (typeof req.body !== 'string') {
+				req.body = Link.contentTypes.serialize(req.body, req.headers['content-type']);
 			}
 		}
 
 		// create the request
 		var xhrRequest = new XMLHttpRequest();
-		xhrRequest.open(options.method, url, true);
+		xhrRequest.open(req.method, url, true);
 
-		for (var k in options.headers) {
-			if (options.headers[k] !== null) {
-				xhrRequest.setRequestHeader(k, options.headers[k]);
+		for (var k in req.headers) {
+			if (req.headers[k] !== null) {
+				xhrRequest.setRequestHeader(k, req.headers[k]);
 			}
 		}
 
 		xhrRequest.onreadystatechange = function() {
 			if (xhrRequest.readyState == 4) {
-				var responseHeaders = {
-					status:xhrRequest.status,
-					reason:xhrRequest.statusText
-				};
+				var response = new ClientResponse(xhrRequest.status, xhrRequest.statusText);
+
 				// :NOTE: a bug in firefox causes getAllResponseHeaders to return an empty string on CORS
 				// we either need to bug them, or iterate the headers we care about with getResponseHeader
 				xhrRequest.getAllResponseHeaders().split("\n").forEach(function(h) {
 					if (!h) { return; }
 					var kv = h.toLowerCase().replace('\r','').split(': ');
-					responseHeaders[kv[0]] = kv[1];
+					response.headers[kv[0]] = kv[1];
 				});
 
-				var responsePayload = Link.contentTypes.deserialize(xhrRequest.responseText, responseHeaders['content-type']);
+				response.body = Link.contentTypes.deserialize(xhrRequest.responseText, response.headers['content-type']);
 
-				if (responseHeaders.status >= 200 && responseHeaders.status < 300) {
-					okCb.call(cbContext, responsePayload, responseHeaders, false);
-				} else if (responseHeaders.status >= 400 && responseHeaders.status < 600) {
-					errCb.call(cbContext, responsePayload, responseHeaders, false);
+				if (response.status >= 200 && response.status < 300) {
+					resPromise.fulfill(response);
+				} else if (response.status >= 400 && response.status < 600) {
+					resPromise.reject(new ResponseError(response));
 				} else {
 					// :TODO: protocol handling
 				}
+
+				response.write(response.body);
+				response.end();
 			}
 		};
-		xhrRequest.send(payload);
+		xhrRequest.send(req.body);
 	}
 
 	// executes a remote request in a nodejs process
-	function __requestRemoteNodejs(payload, urld, options, okCb, errCb, cbContext) {
-		throw "request() has not yet been implemented for nodejs";
+	function __requestRemoteNodejs(req, resPromise) {
+		var res = new ClientResponse(0, 'request() has not yet been implemented for nodejs');
+		resPromise.reject(res);
+		res.end();
 	}
 
 	// EXPORTED
@@ -438,61 +411,80 @@ if (typeof define !== "undefined") {
 		customRequestDispatcher = fn;
 	}
 
+	// ClientResponse
+	// ==============
+	// EXPORTED
+	// Interface for receiving responses
+	// - generated internally and returned by `request`
+	// - emits 'data' events when a streaming request receives data
+	// - emits an 'end' event when the connection is ended
+	// - if the request is not streaming, the response body will be present in `body` (and no 'end' event is needed)
+	function ClientResponse(status, reason) {
+		Link.EventEmitter.call(this);
+
+		this.status = status;
+		this.reason = reason;
+		this.headers = {};
+		this.body = null;
+		this.isConnOpen = true;
+	}
+	ClientResponse.prototype = Object.create(Link.EventEmitter.prototype);
+	ClientResponse.prototype.write = function(data) {
+		if (typeof data == 'string' && typeof this.body == 'string') {
+			// add to the buffer if its a string
+			this.body += data;
+		} else {
+			// overwrite otherwise
+			this.body = data;
+		}
+		this.emit('data', data);
+	};
+	ClientResponse.prototype.end = function() {
+		// now that we have it all, try to deserialize the payload
+		this.body = Link.contentTypes.deserialize(this.body, this.headers['content-type']);
+
+		// close it up
+		this.isConnOpen = false;
+		this.emit('end');
+	};
+
 	// ServerResponse
 	// ==============
 	// EXPORTED
 	// Interface for responding to requests
 	// - generated internally and given to document-local servers
 	// - not given to clients; instead, will run client's callbacks as appropriate
-	// - reasons this exists:
-	//     1) to make it easier to reuse nodejs server code in local servers
-    //     2) for streaming, which requires some tracked state
-	function ServerResponse(options) {
+	function ServerResponse(resPromise, isStreaming) {
 		Link.EventEmitter.call(this);
 
-		this.cb          = options.cb    || noop;
-		this.okCb        = options.okCb  || noop;
-		this.errCb       = options.errCb || noop;
-		this.cbContext   = options.cbContext;
-		this.isStreaming = options.stream;
-		this.isOpen      = true;
-
-		this.headers = {};
-		this.status = 0;
-		this.reason = '';
-		this.payload = '';
+		this.resPromise  = resPromise;
+		this.isStreaming = isStreaming;
+		this.clientResponse = new ClientResponse();
 	}
 	ServerResponse.prototype = Object.create(Link.EventEmitter.prototype);
 
 	// writes the header to the response
 	// if streaming, will notify the client
 	ServerResponse.prototype.writeHead = function(status, reason, headers) {
-		this.statusCode = status;
+		this.clientResponse.status = status;
+		this.clientResponse.reason = reason;
 		for (var k in headers) {
 			this.setHeader(k, headers[k]);
 		}
-		this.status = status;
-		this.reason = reason;
 		if (this.isStreaming) {
 			this.__notify();
 		}
 	};
 
 	// header access/mutation fns
-	ServerResponse.prototype.setHeader    = function(k, v) { this.headers[k] = v; };
-	ServerResponse.prototype.getHeader    = function(k) { return this.headers[k]; };
-	ServerResponse.prototype.removeHeader = function(k) { delete this.headers[k]; };
+	ServerResponse.prototype.setHeader    = function(k, v) { this.clientResponse.headers[k] = v; };
+	ServerResponse.prototype.getHeader    = function(k) { return this.clientResponse.headers[k]; };
+	ServerResponse.prototype.removeHeader = function(k) { delete this.clientResponse.headers[k]; };
 
 	// writes data to the response
 	// if streaming, will notify the client
 	ServerResponse.prototype.write = function(data) {
-		if (typeof data === 'string') {
-			// add to the buffer if its a string
-			this.payload += data;
-		} else {
-			// overwrite otherwise
-			this.payload = data;
-		}
+		this.clientResponse.write(data);
 		if (this.isStreaming) {
 			this.__notify();
 		}
@@ -503,28 +495,38 @@ if (typeof define !== "undefined") {
 		// write any remaining data
 		if (data) { this.write(data); }
 
-		// now that we have it all, try to deserialize the payload
-		this.payload = Link.contentTypes.deserialize(this.payload, this.headers['content-type']);
-
-		this.isOpen = false;
+		this.clientResponse.end();
 		this.__notify();
 		this.emit('close');
 
 		// unbind all listeners
-		this.cb = this.okCb = this.errCb = noop;
+		this.removeAllListeners('close');
+		this.clientResponse.removeAllListeners('data');
+		this.clientResponse.removeAllListeners('end');
 	};
 
 	// internal, runs the callbacks provided during construction
 	ServerResponse.prototype.__notify = function() {
-		if (!this.status) { throw "Must write headers to response before ending"; }
-		var headers = { status:this.status, reason:this.reason, headers:this.headers };
-		this.cb.call(this.cbContext, this.payload, headers, this.isOpen);
-		if (this.status >= 200 && this.status < 300) {
-			this.okCb.call(this.cbContext, this.payload, headers, this.isOpen);
-		} else if (this.status >= 400 && this.status < 600) {
-			this.errCb.call(this.cbContext, this.payload, headers, this.isOpen);
+		if (!this.clientResponse.status) { throw "Must write headers to response before ending"; }
+
+		// fulfill the promise first (getting `clientResponse` into the requester's hands)
+		if (this.resPromise.isUnfulfilled()) {
+			if (this.clientResponse.status >= 200 && this.clientResponse.status < 300) {
+				this.resPromise.fulfill(this.clientResponse);
+			} else if (this.clientResponse.status >= 400 && this.clientResponse.status < 600) {
+				this.resPromise.reject(new ResponseError(this.clientResponse));
+			} else {
+				// :TODO: protocol handling
+			}
+		}
+
+		// emit events according to stream status
+		if (this.clientResponse.isConnOpen) {
+			if (this.clientResponse.body) {
+				this.clientResponse.emit('data', this.clientResponse.body);
+			}
 		} else {
-			// :TODO: protocol handling
+			this.clientResponse.emit('end');
 		}
 	};
 
@@ -577,10 +579,12 @@ if (typeof define !== "undefined") {
 		
 	}
 
+	exports.ResponseError        = ResponseError;
 	exports.request              = request;
 	exports.registerLocal        = registerLocal;
 	exports.unregisterLocal      = unregisterLocal;
 	exports.setRequestDispatcher = setRequestDispatcher;
+	exports.ClientResponse       = ClientResponse;
 	exports.ServerResponse       = ServerResponse;
 })(Link);// Events
 // ======
@@ -592,73 +596,67 @@ if (typeof define !== "undefined") {
 	// EXPORTED
 	// Establishes a connection and begins an event stream
 	// - sends a GET request with 'text/event-stream' as the Accept header
-	// - `options` param:
+	// - `req` param:
 	//   - requires the target url
-	//   - target url can be passed in options as `url`, or generated from `host` and `path`
-	// - on success (status code 2xx), `okCb` is called with (payload, headers)
-	// - on failure (status code 4xx,5xx), `errCb` is called with (payload, headers)
-	function subscribe(options) {
+	//   - target url can be passed in req as `url`, or generated from `host` and `path`
+	// - returns a `EventStream` object
+	function subscribe(req) {
 
-		if (!options) { throw "no options provided to subscribe"; }
+		if (!req) { throw "no options provided to subscribe"; }
 
 		// parse the url
-		var urld;
-		if (options.url) {
-			urld = Link.parse.url(options.url);
+		if (req.url) {
+			req.urld = Link.parse.url(req.url);
 		} else {
-			urld = Link.parse.url(__joinUrl(options.host, options.path));
+			req.urld = Link.parse.url(__joinUrl(req.host, req.path));
 		}
-		if (!urld) {
-			throw "no URL or host/path provided in subscribe options";
+		if (!req.urld) {
+			throw "no URL or host/path provided to subscribe";
 		}
 
 		// execute according to protocol
-		if (urld.protocol == 'httpl') {
-			return __subscribeLocal(urld, options);
+		if (req.urld.protocol == 'httpl') {
+			return __subscribeLocal(req);
 		} else {
-			return __subscribeRemote(urld, options);
+			return __subscribeRemote(req);
 		}
 	}
 
 	// subscribes to a local host
-	function __subscribeLocal(urld, options) {
-
-		// set up options
-		var reqOpts = {
-			method  : 'get',
-			url     : (urld.protocol || 'http') + '://' + urld.authority + urld.relative,
-			headers : { accept : 'text/event-stream' },
-			stream  : true
-		};
+	function __subscribeLocal(req) {
 
 		// initiate the event stream
-		var stream = new LocalEventStream();
-		Link.request(null, reqOpts, stream.okCb, stream.errCb, stream);
+		var stream = new LocalEventStream(Link.request({
+			method  : 'get',
+			url     : 'httpl://' + req.urld.authority + req.urld.relative,
+			headers : { accept : 'text/event-stream' },
+			stream  : true
+		}));
 		return stream;
 	}
 
 	// subscribes to a remote host
-	function __subscribeRemote(urld, options) {
+	function __subscribeRemote(req) {
 		if (window) {
-			return __subscribeRemoteBrowser(urld, options);
+			return __subscribeRemoteBrowser(req);
 		} else {
-			return __subscribeRemoteNodejs(urld, options);
+			return __subscribeRemoteNodejs(req);
 		}
 	}
 
 	// subscribes to a remote host in the browser
-	function __subscribeRemoteBrowser(urld, options) {
+	function __subscribeRemoteBrowser(req) {
 
 		// assemble the final url
-		var url = (urld.protocol || 'http') + '://' + urld.authority + urld.relative;
+		var url = (req.urld.protocol || 'http') + '://' + req.urld.authority + req.urld.relative;
 
 		// initiate the event stream
 		return new BrowserRemoteEventStream(url);
 	}
 
 	// subscribes to a remote host in a nodejs process
-	function __requestRemoteNodejs(urld, options, okCb, errCb, cbContext) {
-		throw "request() has not yet been implemented for nodejs";
+	function __subscribeRemoteNodejs(req) {
+		throw "subscribe() has not yet been implemented for nodejs";
 	}
 
 	// EventStream
@@ -667,11 +665,11 @@ if (typeof define !== "undefined") {
 	// Provided by subscribe() to manage the events
 	function EventStream() {
 		Link.EventEmitter.call(this);
-		this.isOpen = true;
+		this.isConnOpen = true;
 	}
 	EventStream.prototype = Object.create(Link.EventEmitter.prototype);
 	EventStream.prototype.close = function() {
-		this.isOpen = false;
+		this.isConnOpen = false;
 		this.removeAllListeners();
 	};
 	EventStream.prototype.__emitError = function(e) {
@@ -687,28 +685,31 @@ if (typeof define !== "undefined") {
 	// ================
 	// INTERNAL
 	// Descendent of EventStream
-	function LocalEventStream() {
+	function LocalEventStream(resPromise) {
 		EventStream.call(this);
 
-		// :TODO:
+		// wait for the promise
+		var self = this;
+		resPromise
+			.then(function(response) {
+				// begin emitting
+				response.on('data', function(payload) {
+					self.__emitEvent(payload);
+				});
+				response.on('end', function() {
+					self.close();
+				});
+			})
+			.except(function(response) {
+				// fail town
+				self.__emitError({ event:'error', data:response });
+				self.close();
+			});
 	}
 	LocalEventStream.prototype = Object.create(EventStream.prototype);
-	LocalEventStream.prototype.okCb = function(payload, headers, isConnOpen) {
-		if (!isConnOpen) {
-			this.close();
-		}
-		else if (payload && typeof payload === 'object') {
-			this.__emitEvent(payload);
-		}
-	};
-	LocalEventStream.prototype.errCb = function(payload, headers, isConnOpen) {
-		if (payload && typeof payload === 'object') {
-			this.__emitError({ event:'error', data:undefined });
-		}
-		this.close();
-	};
 	LocalEventStream.prototype.close = function() {
-		this.__emitError({ event:'error', data:undefined });
+		this.__emitError({ event:'error', data:undefined }); // :NOTE: emulating the behavior of EventSource
+		// :TODO: would be great if close didn't emit the above error
 		EventStream.prototype.close.call(this);
 	};
 
@@ -776,19 +777,18 @@ if (typeof define !== "undefined") {
 	//  - may be "absolute" if described by a URI
 	// :NOTE: absolute contexts may have a URI without being resolved, so don't take the presence of a URI as a sign that the resource exists
 	function NavigatorContext(rel, relparams, url) {
-		this.rel          = rel;
-		this.relparams    = relparams;
-		this.url          = url;
+		this.rel           = rel;
+		this.relparams     = relparams;
+		this.url           = url;
 
-		this.resolveState = NavigatorContext.UNRESOLVED;
-		this.error        = null;
+		this.resolveState  = NavigatorContext.UNRESOLVED;
+		this.errorResponse = null;
 	}
 	NavigatorContext.UNRESOLVED = 0;
 	NavigatorContext.RESOLVED   = 1;
 	NavigatorContext.NOTFOUND   = 2;
 	NavigatorContext.prototype.isResolved = function() { return this.resolveState === NavigatorContext.RESOLVED; };
 	NavigatorContext.prototype.isBad      = function() { return this.resolveState > 1; };
-	NavigatorContext.prototype.getError   = function() { return this.error; };
 	NavigatorContext.prototype.isRelative = function() { return (!this.url && !!this.rel); };
 	NavigatorContext.prototype.isAbsolute = function() { return (!!this.url); };
 	NavigatorContext.prototype.getUrl     = function() { return this.url; };
@@ -801,11 +801,11 @@ if (typeof define !== "undefined") {
 		return this.host;
 	};
 	NavigatorContext.prototype.resolve    = function(url) {
-		this.error        = null;
-		this.resolveState = NavigatorContext.RESOLVED;
-		this.url          = url;
-		var urld          = Link.parse.url(this.url);
-		this.host         = (urld.protocol || 'http') + '://' + urld.authority;
+		this.errorResponse = null;
+		this.resolveState  = NavigatorContext.RESOLVED;
+		this.url           = url;
+		var urld           = Link.parse.url(this.url);
+		this.host          = (urld.protocol || 'http') + '://' + urld.authority;
 	};
 
 	// Navigator
@@ -821,7 +821,7 @@ if (typeof define !== "undefined") {
 	var github = new Navigator('https://api.github.com');
 	var me = github.collection('users').item('pfraze');
 
-	me.get(function(profile) {
+	me.get(function(res) {
 		// -> HEAD https://api.github.com
 		// -> HEAD https://api.github.com/users
 		// -> GET  https://api.github.com/users/pfraze
@@ -829,14 +829,11 @@ if (typeof define !== "undefined") {
 		this.patch({ email:'pfrazee@gmail.com' });
 		// -> PATCH https://api.github.com/users/pfraze { email:'pfrazee@gmail.com' }
 
-		github.collection('users', { since:profile.id }).get(function(users) {
+		github.collection('users', { since:profile.id }).get(function(res2) {
 			// -> GET https://api.github.com/users?since=123
 			//...
 		});
 	});
-
-	// alternative: if / provides a Link: </{collection}/{item}>; rel=item
-	me = github.item('pfraze', { collection:'users' }));
 	*/
 	function Navigator(context, parentNavigator) {
 		this.context         = context         || null;
@@ -844,7 +841,7 @@ if (typeof define !== "undefined") {
 		this.links           = null;
 
 		// were we passed a url?
-		if (typeof this.context === 'string') {
+		if (typeof this.context == 'string') {
 			// absolute context
 			this.context = new NavigatorContext(null, null, context);
 		} else {
@@ -856,68 +853,55 @@ if (typeof define !== "undefined") {
 	}
 
 	// executes an HTTP request to our context
-	Navigator.prototype.request = function Navigator__request(payload, options, okCb, errCb) {
-		// were we passed (options, okCb, errCb)?
-		if (typeof options !== 'object') {
-			options = arguments[0];
-			okCb    = arguments[1];
-			errCb   = arguments[2];
-			payload = null;
-		}
-		if (!options || !options.method) { throw "request options not provided"; }
+	Navigator.prototype.request = function Navigator__request(req, okCb, errCb) {
+		if (!req || !req.method) { throw "request options not provided"; }
+
 		// sane defaults
 		okCb  = okCb  || noop;
 		errCb = errCb || noop;
 
 		// are we a bad context?
 		if (this.context.isBad()) {
-			return errCb.call(this, null, this.context.getError(), false);
+			return errCb.call(this, this.context.errorResponse);
 		}
 
 		// are we an unresolved relation?
 		if (this.context.isResolved() === false && this.context.isRelative()) {
 			// yes, ask our parent to resolve us
 			this.parentNavigator.__resolve(this,
-				function() { this.request(payload, options, okCb, errCb); }, // we're resolved, start over
-				function() { errCb.call(this, null, this.context.getError(), false); }
+				function() { this.request(req, okCb, errCb); }, // we're resolved, start over
+				function() { errCb.call(this, this.context.errorResponse); }
 			);
 			return this;
 		}
 		// :NOTE: an unresolved absolute context doesnt need prior resolution, as the request is what will resolve it
 
-		var firstResponse = true;
-		var onRequestSucceed = function(payload, headers, connIsOpen) {
-			if (firstResponse) {
-				// we can now consider ourselves resolved (if we hadnt already)
-				this.context.resolveState = NavigatorContext.RESOLVED;
-				// cache the links
-				if (headers.link) {
-					this.links = Link.parse.linkHeader(headers.link);
-				} else {
-					this.links = []; // the resource doesn't give links -- cache an empty list so we dont keep trying during resolution
-				}
-				firstResponse = false;
-			}
-			// pass back to caller
-			okCb.call(this, payload, headers, connIsOpen);
-		};
-
-		var onRequestFail = function(payload, headers, connIsOpen) {
-			if (firstResponse) {
-				// is the context bad?
-				if (headers.status === 404) {
-					// store that knowledge
-					this.context.resolveState = NavigatorContext.NOTFOUND;
-					this.context.error        = headers;
-				}
-			}
-			// pass back to caller
-			errCb.call(this, payload, headers, connIsOpen);
-		};
-
 		// make http request
-		options.url = this.context.getUrl();
-		Link.request(payload, options, onRequestSucceed, onRequestFail, this);
+		req.url = this.context.getUrl();
+		var self = this;
+		Link.request(req)
+			.then(function(res) {
+				// we can now consider ourselves resolved (if we hadnt already)
+				self.context.resolveState = NavigatorContext.RESOLVED;
+				// cache the links
+				if (res.headers.link) {
+					self.links = Link.parse.linkHeader(res.headers.link);
+				} else {
+					self.links = self.links || []; // the resource doesn't give links -- cache an empty list so we dont keep trying during resolution
+				}
+				// pass back to caller
+				okCb.call(self, res);
+			})
+			.except(function(res) {
+				// is the context bad?
+				if (res.status === 404) {
+					// store that knowledge
+					self.context.resolveState  = NavigatorContext.NOTFOUND;
+					self.context.errorResponse = res;
+				}
+				// pass back to caller
+				errCb.call(self, res);
+			});
 
 		return this;
 	};
@@ -938,13 +922,13 @@ if (typeof define !== "undefined") {
 		var restartResolve = function() { self.__resolve(childNav, okCb, errCb); }; // used when we have to handle something async before proceeding
 		var failResolve = function() {
 			// we're bad, and all children are bad as well
-			childNav.context.resolveState = self.context.resolveState;
-			childNav.context.error        = self.context.error;
+			childNav.context.resolveState  = self.context.resolveState;
+			childNav.context.errorResponse = self.context.errorResponse;
 			errCb.call(childNav);
 		};
 
-		// how can you remove the mote of dust... (before we can resolve the child's context, we need to ensure our own context is valid)
-		// are we a bad context?
+		// how can you remove the mote of dust...
+		// (before we can resolve the child's context, we need to ensure our own context is valid)
 		if (this.context.isBad()) {
 			return failResolve();
 		}
@@ -964,8 +948,9 @@ if (typeof define !== "undefined") {
 			childNav.context.resolve(url);
 			okCb.call(childNav);
 		} else {
-			childNav.context.resolveState = NavigatorContext.NOTFOUND;
-			childNav.context.error        = { status:404, reason:'Link relation not found' };
+			childNav.context.resolveState  = NavigatorContext.NOTFOUND;
+			childNav.context.errorResponse = new ClientResponse(404, 'Link relation not found');
+			childNav.context.errorResponse.end();
 			errCb.call(childNav);
 		}
 	};
@@ -1008,23 +993,16 @@ if (typeof define !== "undefined") {
 
 	// add navigator request sugars
 	NAV_REQUEST_FNS.forEach(function (m) {
-		Navigator.prototype[m] = function(payload, options, okCb, errCb) {
+		Navigator.prototype[m] = function(req, okCb, errCb) {
 			// were we passed (okCb, errCb)?
-			if (typeof payload === 'function') {
-				okCb    = arguments[0];
-				errCb   = arguments[1];
-				payload = null;
-				options = {};
+			if (typeof req === 'function') {
+				okCb  = arguments[0];
+				errCb = arguments[1];
+				req   = {};
 			}
-			// were we passed (payload, okCb, errCb)?
-			else if (typeof options === 'function') {
-				okCb    = arguments[1];
-				errCb   = arguments[2];
-				options = {};
-			}
-			options = options || {};
-			options.method = m;
-			this.request(payload, options, okCb, errCb);
+			req = req || {};
+			req.method = m;
+			this.request(req, okCb, errCb);
 		};
 	});
 
