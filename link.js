@@ -230,6 +230,7 @@ if (typeof define !== "undefined") {
 	var customRequestDispatcher = null;
 
 	// custom error type, for promises
+	// EXPORTED
 	function ResponseError(response) {
 		this.message  = ''+response.status+': '+response.reason;
 		this.response = response;
@@ -428,8 +429,24 @@ if (typeof define !== "undefined") {
 		this.isConnOpen = true;
 	}
 	ClientResponse.prototype = Object.create(Link.EventEmitter.prototype);
-	ClientResponse.prototype.write = function() { this.emit.apply(this, ['data'].concat(arguments)); };
-	ClientResponse.prototype.end = function() { this.emit.apply(this, ['end'].concat(arguments)); };
+	ClientResponse.prototype.write = function(data) {
+		if (typeof data == 'string' && typeof this.body == 'string') {
+			// add to the buffer if its a string
+			this.body += data;
+		} else {
+			// overwrite otherwise
+			this.body = data;
+		}
+		this.emit('data', data);
+	};
+	ClientResponse.prototype.end = function() {
+		// now that we have it all, try to deserialize the payload
+		this.body = Link.contentTypes.deserialize(this.body, this.headers['content-type']);
+
+		// close it up
+		this.isConnOpen = false;
+		this.emit('end');
+	};
 
 	// ServerResponse
 	// ==============
@@ -467,13 +484,7 @@ if (typeof define !== "undefined") {
 	// writes data to the response
 	// if streaming, will notify the client
 	ServerResponse.prototype.write = function(data) {
-		if (typeof data == 'string' && typeof this.clientResponse.body == 'string') {
-			// add to the buffer if its a string
-			this.clientResponse.body += data;
-		} else {
-			// overwrite otherwise
-			this.clientResponse.body = data;
-		}
+		this.clientResponse.write(data);
 		if (this.isStreaming) {
 			this.__notify();
 		}
@@ -484,10 +495,7 @@ if (typeof define !== "undefined") {
 		// write any remaining data
 		if (data) { this.write(data); }
 
-		// now that we have it all, try to deserialize the payload
-		this.clientResponse.body = Link.contentTypes.deserialize(this.clientResponse.body, this.clientResponse.headers['content-type']);
-
-		this.clientResponse.isConnOpen = false;
+		this.clientResponse.end();
 		this.__notify();
 		this.emit('close');
 
@@ -571,6 +579,7 @@ if (typeof define !== "undefined") {
 		
 	}
 
+	exports.ResponseError        = ResponseError;
 	exports.request              = request;
 	exports.registerLocal        = registerLocal;
 	exports.unregisterLocal      = unregisterLocal;
