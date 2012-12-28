@@ -9,9 +9,7 @@ var Link = {};// promises
 var environment = {};
 if (typeof window !== "undefined") {
 	environment = window;
-} else if (typeof self !== "undefined") {
-	environment = self;
-} else if (typeof module !== "undefined") {
+}else if (typeof module !== "undefined") {
 	environment = module.exports;
 }
 
@@ -466,14 +464,15 @@ if (typeof define !== "undefined") {
 	// writes the header to the response
 	// if streaming, will notify the client
 	ServerResponse.prototype.writeHead = function(status, reason, headers) {
+		// setup client response
 		this.clientResponse.status = status;
 		this.clientResponse.reason = reason;
 		for (var k in headers) {
 			this.setHeader(k, headers[k]);
 		}
-		if (this.isStreaming) {
-			this.__notify();
-		}
+
+		// fulfill/reject
+		if (this.isStreaming) { this.__fulfillPromise(); }
 	};
 
 	// header access/mutation fns
@@ -485,9 +484,6 @@ if (typeof define !== "undefined") {
 	// if streaming, will notify the client
 	ServerResponse.prototype.write = function(data) {
 		this.clientResponse.write(data);
-		if (this.isStreaming) {
-			this.__notify();
-		}
 	};
 
 	// ends the response, optionally writing any final data
@@ -495,8 +491,10 @@ if (typeof define !== "undefined") {
 		// write any remaining data
 		if (data) { this.write(data); }
 
+		// fulfill/reject now if we had been buffering the response
+		if (!this.isStreaming) { this.__fulfillPromise(); }
+
 		this.clientResponse.end();
-		this.__notify();
 		this.emit('close');
 
 		// unbind all listeners
@@ -505,30 +503,16 @@ if (typeof define !== "undefined") {
 		this.clientResponse.removeAllListeners('end');
 	};
 
-	// internal, runs the callbacks provided during construction
-	ServerResponse.prototype.__notify = function() {
-		if (!this.clientResponse.status) { throw "Must write headers to response before ending"; }
-
-		// fulfill the promise first (getting `clientResponse` into the requester's hands)
-		if (this.resPromise.isUnfulfilled()) {
-			if (this.clientResponse.status >= 200 && this.clientResponse.status < 300) {
-				this.resPromise.fulfill(this.clientResponse);
-			} else if (this.clientResponse.status >= 400 && this.clientResponse.status < 600) {
-				this.resPromise.reject(new ResponseError(this.clientResponse));
-			} else {
-				// :TODO: protocol handling
-			}
-		}
-
-		// emit events according to stream status
-		if (this.clientResponse.isConnOpen) {
-			if (this.clientResponse.body) {
-				this.clientResponse.emit('data', this.clientResponse.body);
-			}
+	// fills the response promise with our clientResponse interface
+	ServerResponse.prototype.__fulfillPromise = function() {
+		if (this.clientResponse.status >= 200 && this.clientResponse.status < 300) {
+			this.resPromise.fulfill(this.clientResponse);
+		} else if (this.clientResponse.status >= 400 && this.clientResponse.status < 600) {
+			this.resPromise.reject(new ResponseError(this.clientResponse));
 		} else {
-			this.clientResponse.emit('end');
+			// :TODO: protocol handling
 		}
-	};
+	}
 
 	// functions added just to compat with nodejs
 	ServerResponse.prototype.writeContinue = noop;
@@ -879,7 +863,7 @@ if (typeof define !== "undefined") {
 		// make http request
 		req.url = this.context.getUrl();
 		var self = this;
-		Link.request(req)
+		promise(Link.request(req))
 			.then(function(res) {
 				// we can now consider ourselves resolved (if we hadnt already)
 				self.context.resolveState = NavigatorContext.RESOLVED;
@@ -1002,7 +986,7 @@ if (typeof define !== "undefined") {
 			}
 			req = req || {};
 			req.method = m;
-			this.request(req, okCb, errCb);
+			return this.request(req, okCb, errCb);
 		};
 	});
 

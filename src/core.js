@@ -216,7 +216,7 @@
 			// overwrite otherwise
 			this.body = data;
 		}
-		this.emit('data', data);
+		this.emit('data', this.body);
 	};
 	ClientResponse.prototype.end = function() {
 		// now that we have it all, try to deserialize the payload
@@ -245,14 +245,15 @@
 	// writes the header to the response
 	// if streaming, will notify the client
 	ServerResponse.prototype.writeHead = function(status, reason, headers) {
+		// setup client response
 		this.clientResponse.status = status;
 		this.clientResponse.reason = reason;
 		for (var k in headers) {
 			this.setHeader(k, headers[k]);
 		}
-		if (this.isStreaming) {
-			this.__notify();
-		}
+
+		// fulfill/reject
+		if (this.isStreaming) { this.__fulfillPromise(); }
 	};
 
 	// header access/mutation fns
@@ -264,9 +265,6 @@
 	// if streaming, will notify the client
 	ServerResponse.prototype.write = function(data) {
 		this.clientResponse.write(data);
-		if (this.isStreaming) {
-			this.__notify();
-		}
 	};
 
 	// ends the response, optionally writing any final data
@@ -275,8 +273,10 @@
 		if (data) { this.write(data); }
 
 		this.clientResponse.end();
-		this.__notify();
 		this.emit('close');
+
+		// fulfill/reject now if we had been buffering the response
+		if (!this.isStreaming) { this.__fulfillPromise(); }
 
 		// unbind all listeners
 		this.removeAllListeners('close');
@@ -284,30 +284,16 @@
 		this.clientResponse.removeAllListeners('end');
 	};
 
-	// internal, runs the callbacks provided during construction
-	ServerResponse.prototype.__notify = function() {
-		if (!this.clientResponse.status) { throw "Must write headers to response before ending"; }
-
-		// fulfill the promise first (getting `clientResponse` into the requester's hands)
-		if (this.resPromise.isUnfulfilled()) {
-			if (this.clientResponse.status >= 200 && this.clientResponse.status < 300) {
-				this.resPromise.fulfill(this.clientResponse);
-			} else if (this.clientResponse.status >= 400 && this.clientResponse.status < 600) {
-				this.resPromise.reject(new ResponseError(this.clientResponse));
-			} else {
-				// :TODO: protocol handling
-			}
-		}
-
-		// emit events according to stream status
-		if (this.clientResponse.isConnOpen) {
-			if (this.clientResponse.body) {
-				this.clientResponse.emit('data', this.clientResponse.body);
-			}
+	// fills the response promise with our clientResponse interface
+	ServerResponse.prototype.__fulfillPromise = function() {
+		if (this.clientResponse.status >= 200 && this.clientResponse.status < 300) {
+			this.resPromise.fulfill(this.clientResponse);
+		} else if (this.clientResponse.status >= 400 && this.clientResponse.status < 600) {
+			this.resPromise.reject(new ResponseError(this.clientResponse));
 		} else {
-			this.clientResponse.emit('end');
+			// :TODO: protocol handling
 		}
-	};
+	}
 
 	// functions added just to compat with nodejs
 	ServerResponse.prototype.writeContinue = noop;
