@@ -83,7 +83,8 @@
 			method  : req.method,
 			query   : req.query || {},
 			headers : req.headers || {},
-			body    : req.body
+			body    : req.body,
+			stream  : req.stream
 		};
 
 		// if the urld has query parameters, mix them into the request's query object
