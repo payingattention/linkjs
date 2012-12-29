@@ -272,11 +272,11 @@
 		// write any remaining data
 		if (data) { this.write(data); }
 
-		this.clientResponse.end();
-		this.emit('close');
-
 		// fulfill/reject now if we had been buffering the response
 		if (!this.isStreaming) { this.__fulfillPromise(); }
+
+		this.clientResponse.end();
+		this.emit('close');
 
 		// unbind all listeners
 		this.removeAllListeners('close');
