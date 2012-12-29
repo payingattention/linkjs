@@ -300,7 +300,7 @@
 		} else {
 			// :TODO: protocol handling
 		}
-	}
+	};
 
 	// functions added just to compat with nodejs
 	ServerResponse.prototype.writeContinue = noop;
