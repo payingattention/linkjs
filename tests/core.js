@@ -60,7 +60,7 @@ success
       {href: "/{collection}", rel: "collection"}
     ]
   },
-  isConnOpen: false,
+  isConnOpen: true,
   reason: "ok",
   status: 200
 }

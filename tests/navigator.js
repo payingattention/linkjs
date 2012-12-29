@@ -101,7 +101,7 @@ success
       {href: "/foo/{item}", rel: "item"}
     ]
   },
-  isConnOpen: false,
+  isConnOpen: true,
   reason: "ok",
   status: 200
 }
@@ -121,7 +121,7 @@ success
       {href: "/foo/blah", rel: "next"}
     ]
   },
-  isConnOpen: false,
+  isConnOpen: true,
   reason: "ok",
   status: 200
 }

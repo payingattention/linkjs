@@ -220,11 +220,15 @@
 	};
 	ClientResponse.prototype.end = function() {
 		// now that we have it all, try to deserialize the payload
-		this.body = Link.contentTypes.deserialize(this.body, this.headers['content-type']);
-
-		// close it up
+		this.__deserialize();
 		this.isConnOpen = false;
 		this.emit('end');
+	};
+	// this helper is called when the data finishes coming down
+	ClientResponse.prototype.__deserialize = function() {
+		// convert from string to an object (if we have a deserializer available)
+		if (typeof this.body == 'string')
+			this.body = Link.contentTypes.deserialize(this.body, this.headers['content-type']);
 	};
 
 	// ServerResponse
@@ -273,7 +277,10 @@
 		if (data) { this.write(data); }
 
 		// fulfill/reject now if we had been buffering the response
-		if (!this.isStreaming) { this.__fulfillPromise(); }
+		if (!this.isStreaming) {
+			this.clientResponse.__deserialize(); // go ahead and deserialize
+			this.__fulfillPromise();
+		}
 
 		this.clientResponse.end();
 		this.emit('close');
