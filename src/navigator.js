@@ -27,16 +27,16 @@
 	//  - may be "absolute" if described by a URI
 	// :NOTE: absolute contexts may have a URI without being resolved, so don't take the presence of a URI as a sign that the resource exists
 	function NavigatorContext(rel, relparams, url) {
-		this.rel           = rel;
-		this.relparams     = relparams;
-		this.url           = url;
+		this.rel          = rel;
+		this.relparams    = relparams;
+		this.url          = url;
 
-		this.resolveState  = NavigatorContext.UNRESOLVED;
-		this.errorResponse = null;
+		this.resolveState = NavigatorContext.UNRESOLVED;
+		this.error        = null;
 	}
 	NavigatorContext.UNRESOLVED = 0;
 	NavigatorContext.RESOLVED   = 1;
-	NavigatorContext.NOTFOUND   = 2;
+	NavigatorContext.FAILED     = 2;
 	NavigatorContext.prototype.isResolved = function() { return this.resolveState === NavigatorContext.RESOLVED; };
 	NavigatorContext.prototype.isBad      = function() { return this.resolveState > 1; };
 	NavigatorContext.prototype.isRelative = function() { return (!this.url && !!this.rel); };
@@ -51,11 +51,11 @@
 		return this.host;
 	};
 	NavigatorContext.prototype.resolve    = function(url) {
-		this.errorResponse = null;
-		this.resolveState  = NavigatorContext.RESOLVED;
-		this.url           = url;
-		var urld           = Link.parse.url(this.url);
-		this.host          = (urld.protocol || 'http') + '://' + urld.authority;
+		this.error        = null;
+		this.resolveState = NavigatorContext.RESOLVED;
+		this.url          = url;
+		var urld          = Link.parse.url(this.url);
+		this.host         = (urld.protocol || 'http') + '://' + urld.authority;
 	};
 
 	// Navigator
@@ -105,6 +105,7 @@
 	// executes an HTTP request to our context
 	Navigator.prototype.request = function Navigator__request(req, okCb, errCb) {
 		if (!req || !req.method) { throw "request options not provided"; }
+		var self = this;
 
 		// sane defaults
 		okCb  = okCb  || noop;
@@ -112,46 +113,49 @@
 
 		// are we a bad context?
 		if (this.context.isBad()) {
-			return errCb.call(this, this.context.errorResponse);
+			return errCb.call(this, this.context.error);
 		}
 
 		// are we an unresolved relation?
 		if (this.context.isResolved() === false && this.context.isRelative()) {
 			// yes, ask our parent to resolve us
-			this.parentNavigator.__resolve(this,
-				function() { this.request(req, okCb, errCb); }, // we're resolved, start over
-				function() { errCb.call(this, this.context.errorResponse); }
-			);
+			this.parentNavigator.__resolve(this)
+				.then(function() { self.request(req, okCb, errCb); }) // we're resolved, start over
+				.except(function() { errCb.call(self, self.context.error); }); // failure, pass on
 			return this;
 		}
 		// :NOTE: an unresolved absolute context doesnt need prior resolution, as the request is what will resolve it
 
 		// make http request
 		req.url = this.context.getUrl();
-		var self = this;
-		promise(Link.request(req))
-			.then(function(res) {
-				// we can now consider ourselves resolved (if we hadnt already)
-				self.context.resolveState = NavigatorContext.RESOLVED;
-				// cache the links
-				if (res.headers.link) {
-					self.links = Link.parse.linkHeader(res.headers.link);
-				} else {
-					self.links = self.links || []; // the resource doesn't give links -- cache an empty list so we dont keep trying during resolution
-				}
-				// pass back to caller
-				okCb.call(self, res);
-			})
-			.except(function(res) {
-				// is the context bad?
-				if (res.status === 404) {
-					// store that knowledge
-					self.context.resolveState  = NavigatorContext.NOTFOUND;
-					self.context.errorResponse = res;
-				}
-				// pass back to caller
-				errCb.call(self, res);
-			});
+		var response = promise(Link.request(req));
+
+		// successful request
+		response.then(function(res) {
+			// we can now consider ourselves resolved (if we hadnt already)
+			self.context.resolveState = NavigatorContext.RESOLVED;
+			// cache the links
+			if (res.headers.link) {
+				self.links = Link.parse.linkHeader(res.headers.link);
+			} else {
+				self.links = self.links || []; // the resource doesn't give links -- cache an empty list so we dont keep trying during resolution
+			}
+			// pass it on
+			okCb.call(self, res);
+			return res;
+		});
+
+		// unsuccessful request
+		response.except(function(err) {
+			// is the context bad?
+			if (err.response.status === 404) {
+				// store that knowledge
+				self.context.resolveState = NavigatorContext.FAILED;
+				self.context.error        = err;
+			}
+			// pass it on
+			errCb.call(self, err);
+		});
 
 		return this;
 	};
@@ -167,42 +171,46 @@
 	};
 
 	// resolves a child navigator's context relative to our own
-	Navigator.prototype.__resolve = function Navigator__resolve(childNav, okCb, errCb) {
+	Navigator.prototype.__resolve = function Navigator__resolve(childNav) {
 		var self = this;
-		var restartResolve = function() { self.__resolve(childNav, okCb, errCb); }; // used when we have to handle something async before proceeding
-		var failResolve = function() {
+		var resolvedPromise = promise();
+		var restartResolve = function() { self.__resolve(childNav).chain(resolvedPromise); }; // used when we have to handle something async before proceeding
+		var failResolve = function(error) {
 			// we're bad, and all children are bad as well
-			childNav.context.resolveState  = self.context.resolveState;
-			childNav.context.errorResponse = self.context.errorResponse;
-			errCb.call(childNav);
+			childNav.context.resolveState = NavigatorContext.FAILED;
+			childNav.context.error        = error;
+			return error;
 		};
+		resolvedPromise.except(failResolve);
 
 		// how can you remove the mote of dust...
 		// (before we can resolve the child's context, we need to ensure our own context is valid)
 		if (this.context.isBad()) {
-			return failResolve();
+			resolvedPromise.reject(this.context.error);
+			return resolvedPromise;
 		}
 		// are we an unresolved relation?
 		if (this.context.isResolved() === false && this.context.isRelative()) {
-			return this.parentNavigator.__resolve(this, restartResolve, failResolve);
+			this.parentNavigator.__resolve(this).then(restartResolve).except(failResolve);
+			return resolvedPromise;
 		}
 		// are we an unresolved absolute? || do we need to fetch our links?
 		if ((this.context.isResolved() === false && this.context.isAbsolute()) || (this.links === null)) {
-			// make a head request (the `request` function will resolve us on success and mark us bad on failure)
-			return this.head(restartResolve, failResolve);
+			// make a head request on ourselves first
+			// (the `request` function will resolve us on success and mark us bad on failure)
+			this.head(restartResolve, failResolve);
+			return resolvedPromise;
 		}
 
 		// ok, our context is good -- lets resolve the child
 		var url = this.__lookupLink(childNav.context);
 		if (url) {
 			childNav.context.resolve(url);
-			okCb.call(childNav);
+			resolvedPromise.fulfill(true);
 		} else {
-			childNav.context.resolveState  = NavigatorContext.NOTFOUND;
-			childNav.context.errorResponse = new ClientResponse(404, 'Link relation not found');
-			childNav.context.errorResponse.end();
-			errCb.call(childNav);
+			resolvedPromise.reject(new Link.ResponseError({ status:404, reason:'link relation not found' }));
 		}
+		return resolvedPromise;
 	};
 
 	// looks up a link in the cache and generates the URI

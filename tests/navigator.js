@@ -7,14 +7,11 @@ var testServer = new Link.Navigator('http://linkapjs.com:8080');
 done = false;
 startTime = Date.now();
 testServer.collection('foo').get(
-	function(res) {
-		printSuccess(res);
-		this.item('baz').get(
-			function(res) { printSuccess(res); finishTest(); },
-			function(err) { printError(err); finishTest(); }
-		);
-	},
-	function(res) { printError(err); finishTest(); }
+  function(res) {
+    printSuccess(res);
+    this.item('baz').get(printSuccessAndFinish, printErrorAndFinish);
+  },
+  printErrorAndFinish
 );
 wait(function () { return done; });
 
