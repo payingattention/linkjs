@@ -179,6 +179,7 @@
 			// we're bad, and all children are bad as well
 			childNav.context.resolveState = NavigatorContext.FAILED;
 			childNav.context.error        = error;
+			resolvedPromise.reject(error);
 			return error;
 		};
 		resolvedPromise.except(failResolve);
@@ -223,6 +224,7 @@
 		var match;
 		for (var i=0, ii=this.links.length; i < ii; i++) {
 			var link = this.links[i];
+			if (!link) { continue; }
 			// find all links with a matching rel
 			if (link.rel && link.rel.indexOf(context.rel) !== -1) {
 				// look for a title match to the primary parameter
@@ -254,8 +256,8 @@
 		Navigator.prototype[m] = function(req, okCb, errCb) {
 			// were we passed (okCb, errCb)?
 			if (typeof req === 'function') {
-				okCb  = arguments[0];
 				errCb = arguments[1];
+				okCb  = arguments[0];
 				req   = {};
 			}
 			req = req || {};

@@ -45,7 +45,8 @@ if (typeof window !== "undefined") {
 
 	// helper function to execute `then` or `except` functions
 	function doThen(p, fn, args) {
-		try {
+		// :DEBUG: exception-catching temporarily disabled pending annoyance review
+		// try {
 			var value = fn.apply(p, [this.value].concat(args));
 			if (typeof value != 'undefined') {
 				if (value instanceof Error) {
@@ -54,12 +55,12 @@ if (typeof window !== "undefined") {
 					p.fulfill(value);
 				}
 			}
-		}
-		catch (e) {
-			var err = e;
-			if (!(err instanceof Error)) { err = new Error(e); }
-			p.reject(err);
-		}
+		// }
+		// catch (e) {
+		// 	var err = e;
+		// 	if (!(err instanceof Error)) { err = new Error(e); }
+		// 	p.reject(err);
+		// }
 	}
 
 	// add a 'non-error' function to the sequence
@@ -936,6 +937,7 @@ if (typeof define !== "undefined") {
 			// we're bad, and all children are bad as well
 			childNav.context.resolveState = NavigatorContext.FAILED;
 			childNav.context.error        = error;
+			resolvedPromise.reject(error);
 			return error;
 		};
 		resolvedPromise.except(failResolve);
@@ -980,6 +982,7 @@ if (typeof define !== "undefined") {
 		var match;
 		for (var i=0, ii=this.links.length; i < ii; i++) {
 			var link = this.links[i];
+			if (!link) { continue; }
 			// find all links with a matching rel
 			if (link.rel && link.rel.indexOf(context.rel) !== -1) {
 				// look for a title match to the primary parameter
@@ -1011,8 +1014,8 @@ if (typeof define !== "undefined") {
 		Navigator.prototype[m] = function(req, okCb, errCb) {
 			// were we passed (okCb, errCb)?
 			if (typeof req === 'function') {
-				okCb  = arguments[0];
 				errCb = arguments[1];
+				okCb  = arguments[0];
 				req   = {};
 			}
 			req = req || {};
