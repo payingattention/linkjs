@@ -112,9 +112,9 @@
 					self.close();
 				});
 			})
-			.except(function(response) {
+			.except(function(err) {
 				// fail town
-				self.__emitError({ event:'error', data:response });
+				self.__emitError({ event:'error', data:err });
 				self.close();
 			});
 	}
