@@ -489,7 +489,9 @@ if (typeof define !== "undefined") {
 		this.clientResponse.status = status;
 		this.clientResponse.reason = reason;
 		for (var k in headers) {
-			this.setHeader(k, headers[k]);
+			if (headers.hasOwnProperty(k)) {
+				this.setHeader(k, headers[k]);
+			}
 		}
 
 		// fulfill/reject
