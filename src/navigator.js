@@ -274,6 +274,12 @@
 		};
 	});
 
+	// wrap helper
+	function navigator(url) {
+		return (url instanceof Navigator) ? url : new Navigator(url);
+	}
+
 	// exports
+	exports.navigator = navigator;
 	exports.Navigator = Navigator;
 })(Link);
