@@ -1091,10 +1091,10 @@ if (typeof define !== "undefined") {
 		return this;
 	};
 
-	// sets the Auth header
+	// sets the Authorization header
 	// - `auth` must include a `scheme`, and any other vital parameters for the given scheme
 	Headerer.prototype.addAuth = function(auth) {
-		this.auth = auth;
+		this.authorization = auth;
 		return this;
 	};
 
@@ -1103,20 +1103,20 @@ if (typeof define !== "undefined") {
 		if (this.link && Array.isArray(this.link)) {
 			// :TODO:
 		}
-		if (this.auth && typeof this.auth == 'object') {
-			if (!this.auth.scheme) { throw "`scheme` required for auth headers"; }
+		if (this.authorization && typeof this.authorization == 'object') {
+			if (!this.authorization.scheme) { throw "`scheme` required for auth headers"; }
 			var auth;
-			switch (this.auth.scheme.toLowerCase()) {
+			switch (this.authorization.scheme.toLowerCase()) {
 				case 'basic':
-					auth = 'Basic '+/*toBase64 :TODO:*/(this.auth.name+':'+this.auth.password);
+					auth = 'Basic '+/*toBase64 :TODO:*/(this.authorization.name+':'+this.authorization.password);
 					break;
 				case 'persona':
-					auth = 'Persona name='+this.auth.name+' assertion='+this.auth.assertion;
+					auth = 'Persona name='+this.authorization.name+' assertion='+this.authorization.assertion;
 					break;
 				default:
-					throw "unknown auth sceme: "+this.auth.scheme;
+					throw "unknown auth sceme: "+this.authorization.scheme;
 			}
-			this.auth = auth;
+			this.authorization = auth;
 		}
 		return this;
 	};
