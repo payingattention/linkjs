@@ -23,6 +23,11 @@
 	};
 
 	EventEmitter.prototype.addListener = function(type, listener) {
+		if (Array.isArray(type)) {
+			type.forEach(function(t) { this.addListener(t, listener); }, this);
+			return;
+		}
+
 		if ('function' !== typeof listener) {
 			throw new Error('addListener only takes instances of Function');
 		}

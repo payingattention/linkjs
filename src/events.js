@@ -15,6 +15,9 @@
 	function subscribe(req) {
 
 		if (!req) { throw "no options provided to subscribe"; }
+		if (typeof req == 'string') {
+			req = { url:req };
+		}
 
 		// parse the url
 		if (req.url) {
@@ -140,6 +143,10 @@
 	}
 	BrowserRemoteEventStream.prototype = Object.create(EventStream.prototype);
 	BrowserRemoteEventStream.prototype.addListener = function(type, listener) {
+		if (Array.isArray(type)) {
+			type.forEach(function(t) { this.addListener(t, listener); }, this);
+			return;
+		}
 		if (!this._events[type]) {
 			// if this is the first add to the event stream, register our interest with the event source
 			var self = this;

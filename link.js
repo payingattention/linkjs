@@ -178,6 +178,11 @@ if (typeof define !== "undefined") {
 	};
 
 	EventEmitter.prototype.addListener = function(type, listener) {
+		if (Array.isArray(type)) {
+			type.forEach(function(t) { this.addListener(t, listener); }, this);
+			return;
+		}
+
 		if ('function' !== typeof listener) {
 			throw new Error('addListener only takes instances of Function');
 		}
@@ -243,7 +248,7 @@ if (typeof define !== "undefined") {
 	// - used in workers to transport requests to the parent for routing
 	var customRequestDispatcher = null;
 
-	// custom error type, for promises
+	// custom error type, for use in promises
 	// EXPORTED
 	function ResponseError(response) {
 		this.message  = ''+response.status+': '+response.reason;
@@ -366,6 +371,7 @@ if (typeof define !== "undefined") {
 		var url = (req.urld.protocol || 'http') + '://' + req.urld.authority + req.urld.relative;
 
 		// make sure our payload is serialized
+		req.headers = Link.headerer(req.headers).serialize();
 		if (req.body) {
 			req.headers['content-type'] = req.headers['content-type'] || 'application/json';
 			if (typeof req.body !== 'string') {
@@ -378,7 +384,7 @@ if (typeof define !== "undefined") {
 		xhrRequest.open(req.method, url, true);
 
 		for (var k in req.headers) {
-			if (req.headers[k] !== null) {
+			if (req.headers[k] !== null && req.headers.hasOwnProperty(k)) {
 				xhrRequest.setRequestHeader(k, req.headers[k]);
 			}
 		}
@@ -399,7 +405,7 @@ if (typeof define !== "undefined") {
 
 				if (response.status >= 200 && response.status < 300) {
 					resPromise.fulfill(response);
-				} else if (response.status >= 400 && response.status < 600) {
+				} else if (response.status >= 400 && response.status < 600 || !response.status) {
 					resPromise.reject(new ResponseError(response));
 				} else {
 					// :TODO: protocol handling
@@ -613,6 +619,9 @@ if (typeof define !== "undefined") {
 	function subscribe(req) {
 
 		if (!req) { throw "no options provided to subscribe"; }
+		if (typeof req == 'string') {
+			req = { url:req };
+		}
 
 		// parse the url
 		if (req.url) {
@@ -738,6 +747,10 @@ if (typeof define !== "undefined") {
 	}
 	BrowserRemoteEventStream.prototype = Object.create(EventStream.prototype);
 	BrowserRemoteEventStream.prototype.addListener = function(type, listener) {
+		if (Array.isArray(type)) {
+			type.forEach(function(t) { this.addListener(t, listener); }, this);
+			return;
+		}
 		if (!this._events[type]) {
 			// if this is the first add to the event stream, register our interest with the event source
 			var self = this;
@@ -1045,6 +1058,74 @@ if (typeof define !== "undefined") {
 })(Link);// Helpers
 // =======
 (function(exports) {
+
+	// Headerer
+	// ========
+	// EXPORTED
+	// a utility for building request and response headers
+	// - may be passed to `response.writeHead()`
+	function Headerer(init) {
+		// copy out any initial values
+		if (init && typeof init == 'object') {
+			for (var k in init) {
+				if (init.hasOwnProperty(k)) {
+					this[k] = init[k];
+				}
+			}
+		}
+	}
+
+	// adds an entry to the Link header
+	// - `href` may be a relative path for the context's domain
+	// - `rel` should be a value found in http://www.iana.org/assignments/link-relations/link-relations.xml
+	// - `rel` may contain more than on value, separated by spaces
+	// - `other` is an optional object of other KVs for the header
+	Headerer.prototype.addLink = function(href, rel, other) {
+		var entry = other || {};
+		entry.href = href;
+		entry.rel = rel;
+		if (!this.link) {
+			this.link = [];
+		}
+		this.link.push(entry);
+		return this;
+	};
+
+	// sets the Auth header
+	// - `auth` must include a `scheme`, and any other vital parameters for the given scheme
+	Headerer.prototype.addAuth = function(auth) {
+		this.auth = auth;
+		return this;
+	};
+
+	// converts the headers into string forms for transfer over HTTP
+	Headerer.prototype.serialize = function() {
+		if (this.link && Array.isArray(this.link)) {
+			// :TODO:
+		}
+		if (this.auth && typeof this.auth == 'object') {
+			if (!this.auth.scheme) { throw "`scheme` required for auth headers"; }
+			var auth;
+			switch (this.auth.scheme.toLowerCase()) {
+				case 'basic':
+					auth = 'Basic '+/*toBase64 :TODO:*/(this.auth.name+':'+this.auth.password);
+					break;
+				case 'persona':
+					auth = 'Persona name='+this.auth.name+' assertion='+this.auth.assertion;
+					break;
+				default:
+					throw "unknown auth sceme: "+this.auth.scheme;
+			}
+			this.auth = auth;
+		}
+		return this;
+	};
+
+	// wrap helper
+	function headerer(h) {
+		return (h instanceof Headerer) ? h : new Headerer(h);
+	}
+
 	// format
 	// ======
 	// EXPORTED
@@ -1270,6 +1351,8 @@ if (typeof define !== "undefined") {
 		}
 	);
 
+	exports.Headerer     = Headerer;
+	exports.headerer     = headerer;
 	exports.format       = format;
 	exports.parse        = parse;
 	exports.contentTypes = contentTypes;

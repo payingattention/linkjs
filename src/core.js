@@ -8,7 +8,7 @@
 	// - used in workers to transport requests to the parent for routing
 	var customRequestDispatcher = null;
 
-	// custom error type, for promises
+	// custom error type, for use in promises
 	// EXPORTED
 	function ResponseError(response) {
 		this.message  = ''+response.status+': '+response.reason;
@@ -131,6 +131,7 @@
 		var url = (req.urld.protocol || 'http') + '://' + req.urld.authority + req.urld.relative;
 
 		// make sure our payload is serialized
+		req.headers = Link.headerer(req.headers).serialize();
 		if (req.body) {
 			req.headers['content-type'] = req.headers['content-type'] || 'application/json';
 			if (typeof req.body !== 'string') {
@@ -143,7 +144,7 @@
 		xhrRequest.open(req.method, url, true);
 
 		for (var k in req.headers) {
-			if (req.headers[k] !== null) {
+			if (req.headers[k] !== null && req.headers.hasOwnProperty(k)) {
 				xhrRequest.setRequestHeader(k, req.headers[k]);
 			}
 		}
@@ -164,7 +165,7 @@
 
 				if (response.status >= 200 && response.status < 300) {
 					resPromise.fulfill(response);
-				} else if (response.status >= 400 && response.status < 600) {
+				} else if (response.status >= 400 && response.status < 600 || !response.status) {
 					resPromise.reject(new ResponseError(response));
 				} else {
 					// :TODO: protocol handling
