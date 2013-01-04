@@ -161,7 +161,8 @@
 					response.headers[kv[0]] = kv[1];
 				});
 
-				response.body = Link.contentTypes.deserialize(xhrRequest.responseText, response.headers['content-type']);
+				// set the body that we have now so its available on fulfill
+				var body = response.body = Link.contentTypes.deserialize(xhrRequest.responseText, response.headers['content-type']);
 
 				if (response.status >= 200 && response.status < 300) {
 					resPromise.fulfill(response);
@@ -171,7 +172,9 @@
 					// :TODO: protocol handling
 				}
 
-				response.write(response.body);
+				// do proper write of the body now
+				response.body = null;
+				response.write(body);
 				response.end();
 			}
 		};
@@ -352,13 +355,34 @@
 		if (httpl_registry[urld.host]) {
 			delete httpl_registry[urld.host];
 		}
-		
+	}
+
+	// getLocal()
+	// ==========
+	// EXPORTED
+	// retrieves a server from the httpl registry
+	function getLocal(domain) {
+		var urld = Link.parse.url(domain);
+		if (!urld.host) {
+			throw "invalid domain provided toun registerLocal";
+		}
+		return httpl_registry[urld.host];
+	}
+
+	// getLocal()
+	// ==========
+	// EXPORTED
+	// retrieves the httpl registry
+	function getLocalRegistry() {
+		return httpl_registry;
 	}
 
 	exports.ResponseError        = ResponseError;
 	exports.request              = request;
 	exports.registerLocal        = registerLocal;
 	exports.unregisterLocal      = unregisterLocal;
+	exports.getLocal             = getLocal;
+	exports.getLocalRegistry     = getLocalRegistry;
 	exports.setRequestDispatcher = setRequestDispatcher;
 	exports.ClientResponse       = ClientResponse;
 	exports.ServerResponse       = ServerResponse;

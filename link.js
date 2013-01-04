@@ -28,8 +28,8 @@ if (typeof window !== "undefined") {
 	// - `then` and `except` functions are called with `this` bound to the new promise
 	//   this allows asyncronous fulfillment/rejection with `this.fulfill` and `this.reject`
 	function Promise(value) {
-		this.fulfillCBs = [];
-		this.exceptCBs = [];
+		this.fulfillCBs = []; // used to notify about fulfillments
+		this.exceptCBs = []; // used to notify about rejections
 		this.value = undefined;
 		if (value) {
 			if (value instanceof Error) {
@@ -45,22 +45,14 @@ if (typeof window !== "undefined") {
 
 	// helper function to execute `then` or `except` functions
 	function doThen(p, fn, args) {
-		// :DEBUG: exception-catching temporarily disabled pending annoyance review
-		// try {
-			var value = fn.apply(p, [this.value].concat(args));
-			if (typeof value != 'undefined') {
-				if (value instanceof Error) {
-					p.reject(value);
-				} else {
-					p.fulfill(value);
-				}
+		var value = fn.apply(p, [this.value].concat(args));
+		if (typeof value != 'undefined') {
+			if (value instanceof Error) {
+				p.reject(value);
+			} else {
+				p.fulfill(value);
 			}
-		// }
-		// catch (e) {
-		// 	var err = e;
-		// 	if (!(err instanceof Error)) { err = new Error(e); }
-		// 	p.reject(err);
-		// }
+		}
 	}
 
 	// add a 'non-error' function to the sequence
@@ -126,6 +118,33 @@ if (typeof window !== "undefined") {
 			this.fulfillCBs.length = 0;
 			this.exceptCBs.length = 0;
 		}
+	};
+
+	// works as `fulfill` and `reject` do, but decides based on whether `err` is truthy
+	// - for use with the (err, result) callback pattern that's often used in nodejs
+	Promise.prototype.fulfillOrReject = function(err, value) {
+		if (err) {
+			return this.reject(err);
+		} else {
+			return this.fulfill((typeof value == 'undefined') ? null : value);
+		}
+	};
+
+	// releases all of the remaining references in the prototype chain
+	// - to be used in situations where promise handling will not continue, and memory needs to be freed
+	Promise.prototype.cancel = function() {
+		// propagate the command to promises later in the chain
+		for (var i=0; i < this.fulfillCBs.length; i++) {
+			var cb = this.fulfillCBs[i];
+			cb.p.cancel();
+		}
+		for (var i=0; i < this.exceptCBs.length; i++) {
+			var cb = this.exceptCBs[i];
+			cb.p.cancel();
+		}
+		// free up memory
+		this.fulfillCBs.length = 0;
+		this.exceptCBs.length = 0;
 	};
 
 	// sets up the given promise to fulfill/reject upon the method-owner's fulfill/reject
@@ -401,7 +420,8 @@ if (typeof define !== "undefined") {
 					response.headers[kv[0]] = kv[1];
 				});
 
-				response.body = Link.contentTypes.deserialize(xhrRequest.responseText, response.headers['content-type']);
+				// set the body that we have now so its available on fulfill
+				var body = response.body = Link.contentTypes.deserialize(xhrRequest.responseText, response.headers['content-type']);
 
 				if (response.status >= 200 && response.status < 300) {
 					resPromise.fulfill(response);
@@ -411,7 +431,9 @@ if (typeof define !== "undefined") {
 					// :TODO: protocol handling
 				}
 
-				response.write(response.body);
+				// do proper write of the body now
+				response.body = null;
+				response.write(body);
 				response.end();
 			}
 		};
@@ -592,13 +614,34 @@ if (typeof define !== "undefined") {
 		if (httpl_registry[urld.host]) {
 			delete httpl_registry[urld.host];
 		}
-		
+	}
+
+	// getLocal()
+	// ==========
+	// EXPORTED
+	// retrieves a server from the httpl registry
+	function getLocal(domain) {
+		var urld = Link.parse.url(domain);
+		if (!urld.host) {
+			throw "invalid domain provided toun registerLocal";
+		}
+		return httpl_registry[urld.host];
+	}
+
+	// getLocal()
+	// ==========
+	// EXPORTED
+	// retrieves the httpl registry
+	function getLocalRegistry() {
+		return httpl_registry;
 	}
 
 	exports.ResponseError        = ResponseError;
 	exports.request              = request;
 	exports.registerLocal        = registerLocal;
 	exports.unregisterLocal      = unregisterLocal;
+	exports.getLocal             = getLocal;
+	exports.getLocalRegistry     = getLocalRegistry;
 	exports.setRequestDispatcher = setRequestDispatcher;
 	exports.ClientResponse       = ClientResponse;
 	exports.ServerResponse       = ServerResponse;
