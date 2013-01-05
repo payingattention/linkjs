@@ -116,7 +116,7 @@
 			}
 		}
 
-		if (window) {
+		if (typeof window != 'undefined') {
 			__requestRemoteBrowser(req, resPromise);
 		} else {
 			__requestRemoteNodejs(req, resPromise);

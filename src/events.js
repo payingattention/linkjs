@@ -2,6 +2,9 @@
 // ======
 // :NOTE: currently, Chrome does not support event streams with CORS
 (function(exports) {
+	// event subscriber func
+	// - used in workers to transport subscribes to the parent for routing
+	var customEventSubscriber = null;
 
 	// subscribe()
 	// =========
@@ -17,6 +20,12 @@
 		if (!req) { throw "no options provided to subscribe"; }
 		if (typeof req == 'string') {
 			req = { url:req };
+		}
+
+		// subscribe behavior override
+		// (used by workers to send subscribes to the parent document for routing)
+		if (customEventSubscriber) {
+			return customEventSubscriber(req);
 		}
 
 		// parse the url
@@ -52,7 +61,7 @@
 
 	// subscribes to a remote host
 	function __subscribeRemote(req) {
-		if (window) {
+		if (typeof window != 'undefined') {
 			return __subscribeRemoteBrowser(req);
 		} else {
 			return __subscribeRemoteNodejs(req);
@@ -74,10 +83,17 @@
 		throw "subscribe() has not yet been implemented for nodejs";
 	}
 
+	// EXPORTED
+	// allows the API consumer to handle subscribes with their own code
+	// - mainly for workers to submit subscribes to the document for routing
+	function setEventSubscriber(fn) {
+		customEventSubscriber = fn;
+	}
+
 	// EventStream
 	// ===========
-	// INTERNAL
-	// Provided by subscribe() to manage the events
+	// EXPORTED
+	// provided by subscribe() to manage the events
 	function EventStream() {
 		Link.EventEmitter.call(this);
 		this.isConnOpen = true;
@@ -99,7 +115,7 @@
 	// LocalEventStream
 	// ================
 	// INTERNAL
-	// Descendent of EventStream
+	// descendent of EventStream
 	function LocalEventStream(resPromise) {
 		EventStream.call(this);
 
@@ -131,7 +147,7 @@
 	// BrowserRemoteEventStream
 	// ========================
 	// INTERNAL
-	// Descendent of EventStream, abstracts over EventSource
+	// descendent of EventStream, abstracts over EventSource
 	function BrowserRemoteEventStream(url) {
 		EventStream.call(this);
 
@@ -139,7 +155,11 @@
 		this.eventSource = new EventSource(url);
 		// wire it up to our functions
 		var self = this;
-		this.eventSource.onerror = function(e) { self.close(); };
+		this.eventSource.onerror = function(e) {
+			if (e.target.readyState == EventSource.CLOSED) {
+				self.close();
+			}
+		};
 	}
 	BrowserRemoteEventStream.prototype = Object.create(EventStream.prototype);
 	BrowserRemoteEventStream.prototype.addListener = function(type, listener) {
@@ -166,5 +186,7 @@
 		EventStream.prototype.close.call(this);
 	};
 
-	exports.subscribe       = subscribe;
+	exports.subscribe          = subscribe;
+	exports.setEventSubscriber = setEventSubscriber;
+	exports.EventStream        = EventStream;
 })(Link);
