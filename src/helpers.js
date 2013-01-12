@@ -36,7 +36,7 @@
 
 	// sets the Authorization header
 	// - `auth` must include a `scheme`, and any other vital parameters for the given scheme
-	Headerer.prototype.addAuth = function(auth) {
+	Headerer.prototype.setAuth = function(auth) {
 		this.authorization = auth;
 		return this;
 	};

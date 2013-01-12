@@ -1159,7 +1159,7 @@ if (typeof define !== "undefined") {
 
 	// sets the Authorization header
 	// - `auth` must include a `scheme`, and any other vital parameters for the given scheme
-	Headerer.prototype.addAuth = function(auth) {
+	Headerer.prototype.setAuth = function(auth) {
 		this.authorization = auth;
 		return this;
 	};
@@ -1174,7 +1174,7 @@ if (typeof define !== "undefined") {
 			var auth;
 			switch (this.authorization.scheme.toLowerCase()) {
 				case 'basic':
-					auth = 'Basic '+btoa(this.authorization.name+':'+this.authorization.password);
+					auth = 'Basic '+/*toBase64 :TODO:*/(this.authorization.name+':'+this.authorization.password);
 					break;
 				case 'persona':
 					auth = 'Persona name='+this.authorization.name+' assertion='+this.authorization.assertion;
