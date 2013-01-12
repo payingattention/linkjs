@@ -4,8 +4,6 @@ LinkJS is an Ajax library that allows local functions to respond to requests.
 
 **Why?** It allows local code to behave like remote servers. HTML links and forms can target in-document scripts, and isolated modules can route messages via URLs and other REST features.
 
-LinkJS is particularly built for scenarios with strong separation between javascript, as in the case of [LinkAP](https://github.com/pfraze/link-ap).
-
 Other Features:
 
  - Event subscription to servers

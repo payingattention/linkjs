@@ -421,7 +421,7 @@ if (typeof define !== "undefined") {
 				});
 
 				// set the body that we have now so its available on fulfill
-				var body = response.body = Link.contentTypes.deserialize(xhrRequest.responseText, response.headers['content-type']);
+				//var body = response.body = Link.contentTypes.deserialize(xhrRequest.responseText, response.headers['content-type']);
 
 				if (response.status >= 200 && response.status < 300) {
 					resPromise.fulfill(response);
@@ -432,7 +432,8 @@ if (typeof define !== "undefined") {
 				}
 
 				// do proper write of the body now
-				response.body = null;
+				//response.body = null;
+				var body = Link.contentTypes.deserialize(xhrRequest.responseText, response.headers['content-type']);
 				response.write(body);
 				response.end();
 			}
@@ -1173,7 +1174,7 @@ if (typeof define !== "undefined") {
 			var auth;
 			switch (this.authorization.scheme.toLowerCase()) {
 				case 'basic':
-					auth = 'Basic '+/*toBase64 :TODO:*/(this.authorization.name+':'+this.authorization.password);
+					auth = 'Basic '+btoa(this.authorization.name+':'+this.authorization.password);
 					break;
 				case 'persona':
 					auth = 'Persona name='+this.authorization.name+' assertion='+this.authorization.assertion;

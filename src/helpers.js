@@ -51,7 +51,7 @@
 			var auth;
 			switch (this.authorization.scheme.toLowerCase()) {
 				case 'basic':
-					auth = 'Basic '+/*toBase64 :TODO:*/(this.authorization.name+':'+this.authorization.password);
+					auth = 'Basic '+btoa(this.authorization.name+':'+this.authorization.password);
 					break;
 				case 'persona':
 					auth = 'Persona name='+this.authorization.name+' assertion='+this.authorization.assertion;

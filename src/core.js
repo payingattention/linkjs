@@ -162,7 +162,7 @@
 				});
 
 				// set the body that we have now so its available on fulfill
-				var body = response.body = Link.contentTypes.deserialize(xhrRequest.responseText, response.headers['content-type']);
+				//var body = response.body = Link.contentTypes.deserialize(xhrRequest.responseText, response.headers['content-type']);
 
 				if (response.status >= 200 && response.status < 300) {
 					resPromise.fulfill(response);
@@ -173,7 +173,8 @@
 				}
 
 				// do proper write of the body now
-				response.body = null;
+				//response.body = null;
+				var body = Link.contentTypes.deserialize(xhrRequest.responseText, response.headers['content-type']);
 				response.write(body);
 				response.end();
 			}
