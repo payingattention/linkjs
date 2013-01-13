@@ -1135,7 +1135,7 @@ if (typeof define !== "undefined") {
 	// navigator sugar functions
 	// =========================
 	// these constants specify which sugars to add to the navigator
-	var NAV_REQUEST_FNS = ['head','get','post','put','patch','delete'];
+	var NAV_REQUEST_FNS = ['head',/*'get',*/'post','put','patch','delete']; // get is added separately
 	var NAV_GET_TYPES = {
 		'Json':'application/json','Html':'text/html','Xml':'text/xml',
 		'Events':'text/event-stream','Eventstream':'text/event-stream',
@@ -1396,15 +1396,20 @@ if (typeof define !== "undefined") {
 		};
 	});
 
+	// add get sugar
+	Navigator.prototype.get = function(type, headers, options) {
+		var req = options || {};
+		req.headers = headers || {};
+		req.method = 'get';
+		req.headers.accept = type;
+		return this.request(req);
+	};
+
 	// add get* request sugars
 	for (var t in NAV_GET_TYPES) {
 		var mimetype = NAV_GET_TYPES[t];
 		Navigator.prototype['get'+t] = function(headers, options) {
-			var req = options || {};
-			req.headers = headers || {};
-			req.method = 'get';
-			req.headers.accept = mimetype;
-			return this.request(req);
+			return this.get(mimetype, headers, options);
 		};
 	}
 
