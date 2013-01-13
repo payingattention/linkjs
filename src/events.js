@@ -30,9 +30,9 @@
 
 		// parse the url
 		if (req.url) {
-			req.urld = Link.parse.url(req.url);
+			req.urld = Link.parseUri(req.url);
 		} else {
-			req.urld = Link.parse.url(__joinUrl(req.host, req.path));
+			req.urld = Link.parseUri(Link.joinUrl(req.host, req.path));
 		}
 		if (!req.urld) {
 			throw "no URL or host/path provided to subscribe";

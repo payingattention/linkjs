@@ -45,7 +45,7 @@
 	NavigatorContext.prototype.getHost    = function() {
 		if (!this.host) {
 			if (!this.url) { return null; }
-			var urld  = Link.parse.url(this.url);
+			var urld  = Link.parseUri(this.url);
 			this.host = (urld.protocol || 'http') + '://' + urld.authority;
 		}
 		return this.host;
@@ -54,7 +54,7 @@
 		this.error        = null;
 		this.resolveState = NavigatorContext.RESOLVED;
 		this.url          = url;
-		var urld          = Link.parse.url(this.url);
+		var urld          = Link.parseUri(this.url);
 		this.host         = (urld.protocol || 'http') + '://' + urld.authority;
 	};
 
@@ -136,7 +136,7 @@
 			self.context.resolveState = NavigatorContext.RESOLVED;
 			// cache the links
 			if (res.headers.link) {
-				self.links = Link.parse.linkHeader(res.headers.link);
+				self.links = Link.parseLinkHeader(res.headers.link);
 			} else {
 				self.links = self.links || []; // the resource doesn't give links -- cache an empty list so we dont keep trying during resolution
 			}
@@ -241,8 +241,8 @@
 		}
 		
 		if (match) {
-			var url = Link.format.uriTemplate(match.href, context.relparams);
-			var urld = Link.parse.url(url);
+			var url = Link.UriTemplate.parse(match.href).expand(context.relparams);
+			var urld = Link.parseUri(url);
 			if (!urld.host) { // handle relative URLs
 				url = this.context.getHost() + urld.relative;
 			}

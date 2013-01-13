@@ -3,11 +3,10 @@ lib = lib/
 link-js-files =\
 	${src}_compiled_header.js\
 	${lib}promises/promises.js\
-	${src}tools.js\
+	${src}helpers.js\
 	${src}core.js\
 	${src}events.js\
 	${src}navigator.js\
-	${src}helpers.js\
 	${src}uri-template.js\
 	${src}_compiled_trailer.js
 

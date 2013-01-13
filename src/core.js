@@ -46,9 +46,9 @@
 		// parse the url
 		// (urld = url description)
 		if (req.url) {
-			req.urld = Link.parse.url(req.url);
+			req.urld = Link.parseUri(req.url);
 		} else {
-			req.urld = Link.parse.url(__joinUrl(req.host, req.path));
+			req.urld = Link.parseUri(Link.joinUrl(req.host, req.path));
 		}
 		if (!req.urld) {
 			throw "no URL or host/path provided in request";
@@ -161,8 +161,10 @@
 					response.headers[kv[0]] = kv[1];
 				});
 
-				// set the body that we have now so its available on fulfill
-				//var body = response.body = Link.contentTypes.deserialize(xhrRequest.responseText, response.headers['content-type']);
+				// if not streaming, set the body that we have now so its available on fulfill
+				if (!req.stream) {
+					response.body = Link.contentTypes.deserialize(xhrRequest.responseText, response.headers['content-type']);
+				}
 
 				if (response.status >= 200 && response.status < 300) {
 					resPromise.fulfill(response);
@@ -172,10 +174,11 @@
 					// :TODO: protocol handling
 				}
 
-				// do proper write of the body now
-				//response.body = null;
-				var body = Link.contentTypes.deserialize(xhrRequest.responseText, response.headers['content-type']);
-				response.write(body);
+				// if streaming, do a write of the body now
+				if (req.stream) {
+					var body = Link.contentTypes.deserialize(xhrRequest.responseText, response.headers['content-type']);
+					response.write(body);
+				}
 				response.end();
 			}
 		};
@@ -315,23 +318,12 @@
 	ServerResponse.prototype.addTrailers   = noop;
 	ServerResponse.prototype.sendDate      = noop; // :TODO: is this useful?
 
-	// joins url segments while avoiding double slashes
-	function __joinUrl() {
-		var parts = Array.prototype.map.call(arguments, function(arg) {
-			var lo = 0, hi = arg.length;
-			if (arg.charAt(0) === '/')      { lo += 1; }
-			if (arg.charAt(hi - 1) === '/') { hi -= 1; }
-			return arg.substring(lo, hi);
-		});
-		return parts.join('/');
-	}
-
 	// registerLocal()
 	// ===============
 	// EXPORTED
 	// adds a server to the httpl registry
 	function registerLocal(domain, server, serverContext) {
-		var urld = Link.parse.url(domain);
+		var urld = Link.parseUri(domain);
 		if (urld.protocol && urld.protocol !== 'httpl') {
 			throw "registerLocal can only add servers to the httpl protocol";
 		}
@@ -349,7 +341,7 @@
 	// EXPORTED
 	// removes a server from the httpl registry
 	function unregisterLocal(domain) {
-		var urld = Link.parse.url(domain);
+		var urld = Link.parseUri(domain);
 		if (!urld.host) {
 			throw "invalid domain provided toun registerLocal";
 		}
@@ -363,7 +355,7 @@
 	// EXPORTED
 	// retrieves a server from the httpl registry
 	function getLocal(domain) {
-		var urld = Link.parse.url(domain);
+		var urld = Link.parseUri(domain);
 		if (!urld.host) {
 			throw "invalid domain provided toun registerLocal";
 		}

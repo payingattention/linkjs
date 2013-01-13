@@ -2,6 +2,87 @@
 // =======
 (function(exports) {
 
+	// EventEmitter
+	// ============
+	// EXPORTED
+	// A minimal event emitter, based on the NodeJS api
+	// initial code borrowed from https://github.com/tmpvar/node-eventemitter (thanks tmpvar)
+	function EventEmitter() {
+		this._events = {};
+	}
+
+	EventEmitter.prototype.emit = function(type) {
+		var handlers = this._events[type];
+		if (!handlers) return false;
+
+		var args = Array.prototype.slice.call(arguments, 1);
+		for (var i = 0, l = handlers.length; i < l; i++) {
+			handlers[i].apply(this, args);
+		}
+		return true;
+	};
+
+	EventEmitter.prototype.addListener = function(type, listener) {
+		if (Array.isArray(type)) {
+			type.forEach(function(t) { this.addListener(t, listener); }, this);
+			return;
+		}
+
+		if ('function' !== typeof listener) {
+			throw new Error('addListener only takes instances of Function');
+		}
+
+		// To avoid recursion in the case that type == "newListeners"! Before
+		// adding it to the listeners, first emit "newListeners".
+		this.emit('newListener', type, listener);
+
+		if (!this._events[type]) {
+			this._events[type] = [listener];
+		} else {
+			this._events[type].push(listener);
+		}
+
+		return this;
+	};
+
+	EventEmitter.prototype.on = EventEmitter.prototype.addListener;
+
+	EventEmitter.prototype.once = function(type, listener) {
+		var self = this;
+		self.on(type, function g() {
+			self.removeListener(type, g);
+			listener.apply(this, arguments);
+		});
+	};
+
+	EventEmitter.prototype.removeListener = function(type, listener) {
+		if ('function' !== typeof listener) {
+			throw new Error('removeListener only takes instances of Function');
+		}
+		if (!this._events[type]) return this;
+
+		var list = this._events[type];
+		var i = list.indexOf(listener);
+		if (i < 0) return this;
+		list.splice(i, 1);
+		if (list.length === 0) {
+			delete this._events[type];
+		}
+
+		return this;
+	};
+
+	EventEmitter.prototype.removeAllListeners = function(type) {
+		if (type && this._events[type]) this._events[type] = null;
+		return this;
+	};
+
+	EventEmitter.prototype.listeners = function(type) {
+		return this._events[type];
+	};
+
+	exports.EventEmitter  = EventEmitter;
+
 	// Headerer
 	// ========
 	// EXPORTED
@@ -45,6 +126,7 @@
 	Headerer.prototype.serialize = function() {
 		if (this.link && Array.isArray(this.link)) {
 			// :TODO:
+			throw "Link header serialization is not yet implemented";
 		}
 		if (this.authorization && typeof this.authorization == 'object') {
 			if (!this.authorization.scheme) { throw "`scheme` required for auth headers"; }
@@ -69,31 +151,13 @@
 		return (h instanceof Headerer) ? h : new Headerer(h);
 	}
 
-	// format
-	// ======
-	// EXPORTED
-	// string formatting according to various schemas
-	var format = {
-		uriTemplate : format__uriTemplate
-	};
+	exports.Headerer     = Headerer;
+	exports.headerer     = headerer;
 
-	// http://tools.ietf.org/html/rfc6570
-	function format__uriTemplate(template, params) {
-		return Link.UriTemplate.parse(template).expand(params);
-	}
-
-	// parse
-	// =====
-	// EXPORTED
-	// string parsing according to various schemas
-	var parse = {
-		linkHeader : parse__linkHeader,
-		url        : parse__url
-	};
-
+	// Link.parseLinkHeader
 	// EXPORTED
 	// breaks a link header into a javascript object
-	function parse__linkHeader(headerStr) {
+	exports.parseLinkHeader = function(headerStr) {
 		if (typeof headerStr !== 'string') {
 			return headerStr;
 		}
@@ -117,12 +181,28 @@
 			});
 			return link;
 		});
-	}
+	};
+
+	// EXPORTED
+	// correctly joins together to url segments
+	exports.joinUrl = function() {
+		var parts = Array.prototype.map.call(arguments, function(arg) {
+			var lo = 0, hi = arg.length;
+			if (arg.charAt(0) === '/')      { lo += 1; }
+			if (arg.charAt(hi - 1) === '/') { hi -= 1; }
+			return arg.substring(lo, hi);
+		});
+		return parts.join('/');
+	};
 
 	// EXPORTED
 	// parseUri 1.2.2, (c) Steven Levithan <stevenlevithan.com>, MIT License
-	function parse__url(str) {
-		var	o   = parse__url.options,
+	exports.parseUri = function(str) {
+		if (typeof str === 'object') {
+			if (str.url) { str = str.url; }
+			else if (str.host || str.path) { str = Link.joinUrl(req.host, req.path); }
+		}
+		var	o   = exports.parseUri.options,
 			m   = o.parser[o.strictMode ? "strict" : "loose"].exec(str),
 			uri = {},
 			i   = 14;
@@ -135,9 +215,9 @@
 		});
 
 		return uri;
-	}
+	};
 
-	parse__url.options = {
+	exports.parseUri.options = {
 		strictMode: false,
 		key: ["source","protocol","authority","userInfo","user","password","host","port","relative","path","directory","file","query","anchor"],
 		q:   {
@@ -294,9 +374,5 @@
 		}
 	);
 
-	exports.Headerer     = Headerer;
-	exports.headerer     = headerer;
-	exports.format       = format;
-	exports.parse        = parse;
 	exports.contentTypes = contentTypes;
 })(Link);
