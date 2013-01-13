@@ -6,13 +6,15 @@ var testServer = new Link.Navigator('http://linkapjs.com:8080');
 
 done = false;
 startTime = Date.now();
-testServer.collection('foo').get(
-  function(res) {
-    printSuccess(res);
-    this.item('baz').get(printSuccessAndFinish, printErrorAndFinish);
-  },
-  printErrorAndFinish
-);
+var fooCollection = testServer.collection('foo');
+fooCollection.getJson()
+  .then(printSuccess)
+  .except(printErrorAndFinish)
+  .then(function(res) {
+    fooCollection.item('baz').get()
+      .then(printSuccessAndFinish)
+      .except(printErrorAndFinish);
+  });
 wait(function () { return done; });
 
 /* =>
@@ -23,7 +25,11 @@ success
   headers: {
     allow: "options, head, get",
     "content-type": "application/json",
-    link: "</>; rel=\"up via service\", </foo>; rel=\"self current\", </foo/{item}>; rel=\"item\""
+    link: [
+      {href: "/", rel: "up via service"},
+      {href: "/foo", rel: "self current"},
+      {href: "/foo/{item}", rel: "item"}
+    ]
   },
   isConnOpen: true,
   reason: "Ok",
@@ -36,7 +42,15 @@ success
   headers: {
     allow: "options, head, get",
     "content-type": "application/json",
-    link: "</>; rel=\"via service\", </foo>; rel=\"up collection index\", </foo/baz>; rel=\"self current\", </foo/bar>; rel=\"first\", </foo/blah>; rel=\"last\", </foo/bar>; rel=\"prev\", </foo/blah>; rel=\"next\""
+    link: [
+      {href: "/", rel: "via service"},
+      {href: "/foo", rel: "up collection index"},
+      {href: "/foo/baz", rel: "self current"},
+      {href: "/foo/bar", rel: "first"},
+      {href: "/foo/blah", rel: "last"},
+      {href: "/foo/bar", rel: "prev"},
+      {href: "/foo/blah", rel: "next"}
+    ]
   },
   isConnOpen: true,
   reason: "Ok",
@@ -48,10 +62,15 @@ success
 
 done = false;
 startTime = Date.now();
-testServer.collection('foo').item('bar').up().via().self().collection('foo').get(
-	function(res) { printSuccess(res); finishTest(); },
-	function(err) { printError(err); finishTest(); }
-);
+testServer
+  .collection('foo')
+  .item('bar')
+  .up()
+  .via()
+  .self()
+  .collection('foo').get()
+    .then(printSuccessAndFinish)
+    .except(printErrorAndFinish);
 wait(function () { return done; });
 
 /* =>
@@ -62,7 +81,11 @@ success
   headers: {
     allow: "options, head, get",
     "content-type": "application/json",
-    link: "</>; rel=\"up via service\", </foo>; rel=\"self current\", </foo/{item}>; rel=\"item\""
+    link: [
+      {href: "/", rel: "up via service"},
+      {href: "/foo", rel: "self current"},
+      {href: "/foo/{item}", rel: "item"}
+    ]
   },
   isConnOpen: true,
   reason: "Ok",
@@ -70,19 +93,19 @@ success
 }
 */
 
+// local server navigation
+
 done = false;
 startTime = Date.now();
 var testLocal = new Link.Navigator('httpl://test.com');
-testLocal.collection('foo').get(
-	function(res) {
-		printSuccess(res);
-		this.item('baz').get(
-			function(res) { printSuccess(res); finishTest(); },
-			function(err) { printError(err); finishTest(); }
-		);
-	},
-	function(err) { printError(err); finishTest(); }
-);
+testLocal.collection('foo').getJson()
+  .then(printSuccess)
+  .except(printErrorAndFinish)
+  .then(function(res) {
+    fooCollection.item('baz').get()
+      .then(printSuccessAndFinish)
+      .except(printErrorAndFinish);
+  });
 wait(function () { return done; });
 
 /* =>
@@ -107,6 +130,7 @@ success
   _events: {},
   body: "baz",
   headers: {
+    allow: "options, head, get",
     "content-type": "application/json",
     link: [
       {href: "/", rel: "via service"},
@@ -119,7 +143,7 @@ success
     ]
   },
   isConnOpen: true,
-  reason: "ok",
+  reason: "Ok",
   status: 200
 }
 */
@@ -129,9 +153,9 @@ success
 done = false;
 startTime = Date.now();
 var testLocal = new Link.Navigator('httpl://test.com');
-testLocal.collection('foo').get({ stream:true },
-	function(res) {
-		printSuccess(res);
+testLocal.collection('foo').getJson(null, { stream:true })
+  .then(printSuccess)
+  .then(function(res) {
 		print('---');
 		res.on('data', function(payload) {
 			print(payload);
@@ -142,9 +166,8 @@ testLocal.collection('foo').get({ stream:true },
 			print(res.isConnOpen ? 'connection open' : 'connection closed');
 			finishTest();
 		});
-	},
-	function(err) { printError(err); finishTest(); }
-);
+	})
+  .except(printErrorAndFinish);
 wait(function () { return done; });
 
 /* =>

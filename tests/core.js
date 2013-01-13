@@ -16,7 +16,11 @@ success
   headers: {
     allow: "options, head, get",
     "content-type": "application/json",
-    link: "</>; rel=\"self current\", </foo>; rel=\"collection\"; title=\"foo\", </{collection}>; rel=\"collection\""
+    link: [
+      {href: "/", rel: "self current"},
+      {href: "/foo", rel: "collection", title: "foo"},
+      {href: "/{collection}", rel: "collection"}
+    ]
   },
   isConnOpen: true,
   reason: "Ok",

@@ -161,6 +161,11 @@
 					response.headers[kv[0]] = kv[1];
 				});
 
+				// parse any headers we need
+				if (response.headers.link) {
+					response.headers.link = Link.parseLinkHeader(response.headers.link);
+				}
+
 				// if not streaming, set the body that we have now so its available on fulfill
 				if (!req.stream) {
 					response.body = Link.contentTypes.deserialize(xhrRequest.responseText, response.headers['content-type']);

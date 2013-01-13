@@ -102,6 +102,7 @@ if (typeof window !== "undefined") {
 			this.fulfillCBs.length = 0;
 			this.exceptCBs.length = 0;
 		}
+		return this;
 	};
 
 	// sets the promise value, enters 'error' mode, and executes any queued `except` functions
@@ -118,6 +119,7 @@ if (typeof window !== "undefined") {
 			this.fulfillCBs.length = 0;
 			this.exceptCBs.length = 0;
 		}
+		return this;
 	};
 
 	// works as `fulfill` and `reject` do, but decides based on whether `err` is truthy
@@ -145,6 +147,7 @@ if (typeof window !== "undefined") {
 		// free up memory
 		this.fulfillCBs.length = 0;
 		this.exceptCBs.length = 0;
+		return this;
 	};
 
 	// sets up the given promise to fulfill/reject upon the method-owner's fulfill/reject
@@ -300,6 +303,7 @@ if (typeof define !== "undefined") {
 	Headerer.prototype.serialize = function() {
 		if (this.link && Array.isArray(this.link)) {
 			// :TODO:
+			throw "Link header serialization is not yet implemented";
 		}
 		if (this.authorization && typeof this.authorization == 'object') {
 			if (!this.authorization.scheme) { throw "`scheme` required for auth headers"; }
@@ -710,6 +714,11 @@ if (typeof define !== "undefined") {
 					var kv = h.toLowerCase().replace('\r','').split(': ');
 					response.headers[kv[0]] = kv[1];
 				});
+
+				// parse any headers we need
+				if (response.headers.link) {
+					response.headers.link = Link.parseLinkHeader(response.headers.link);
+				}
 
 				// if not streaming, set the body that we have now so its available on fulfill
 				if (!req.stream) {
@@ -1127,6 +1136,11 @@ if (typeof define !== "undefined") {
 	// =========================
 	// these constants specify which sugars to add to the navigator
 	var NAV_REQUEST_FNS = ['head','get','post','put','patch','delete'];
+	var NAV_GET_TYPES = {
+		'Json':'application/json','Html':'text/html','Xml':'text/xml',
+		'Events':'text/event-stream','Eventstream':'text/event-stream',
+		'Plain':'text/plain', 'Text':'text/plain'
+	};
 	// http://www.iana.org/assignments/link-relations/link-relations.xml
 	// (I've commented out the relations which are probably not useful enough to make sugars for)
 	var NAV_RELATION_FNS = [
@@ -1193,19 +1207,20 @@ if (typeof define !== "undefined") {
 	var github = new Navigator('https://api.github.com');
 	var me = github.collection('users').item('pfraze');
 
-	me.get(function(res) {
+	me.getJson()
 		// -> HEAD https://api.github.com
 		// -> HEAD https://api.github.com/users
 		// -> GET  https://api.github.com/users/pfraze
+		.then(function(myData, headers, status) {
+			myData.email = 'pfrazee@gmail.com';
+			me.put(myData);
+			// -> PUT https://api.github.com/users/pfraze { email:'pfrazee@gmail.com', ...}
 
-		this.patch({ email:'pfrazee@gmail.com' });
-		// -> PATCH https://api.github.com/users/pfraze { email:'pfrazee@gmail.com' }
-
-		github.collection('users', { since:profile.id }).get(function(res2) {
-			// -> GET https://api.github.com/users?since=123
-			//...
+			github.collection('users', { since:profile.id }).getJson(function(usersData) {
+				// -> GET https://api.github.com/users?since=123
+				//...
+			});
 		});
-	});
 	*/
 	function Navigator(context, parentNavigator) {
 		this.context         = context         || null;
@@ -1225,26 +1240,23 @@ if (typeof define !== "undefined") {
 	}
 
 	// executes an HTTP request to our context
-	Navigator.prototype.request = function Navigator__request(req, okCb, errCb) {
+	Navigator.prototype.request = function Navigator__request(req) {
 		if (!req || !req.method) { throw "request options not provided"; }
 		var self = this;
 
-		// sane defaults
-		okCb  = okCb  || noop;
-		errCb = errCb || noop;
-
 		// are we a bad context?
 		if (this.context.isBad()) {
-			return errCb.call(this, this.context.error);
+			return promise().reject(this.context.error);
 		}
 
 		// are we an unresolved relation?
 		if (this.context.isResolved() === false && this.context.isRelative()) {
 			// yes, ask our parent to resolve us
+			var resPromise = promise();
 			this.parentNavigator.__resolve(this)
-				.then(function() { self.request(req, okCb, errCb); }) // we're resolved, start over
-				.except(function() { errCb.call(self, self.context.error); }); // failure, pass on
-			return this;
+				.then(function() { self.request(req).chain(resPromise); }) // we're resolved, start over
+				.except(function() { resPromise.reject(self.context.error); }); // failure, pass on
+			return resPromise;
 		}
 		// :NOTE: an unresolved absolute context doesnt need prior resolution, as the request is what will resolve it
 
@@ -1258,12 +1270,11 @@ if (typeof define !== "undefined") {
 			self.context.resolveState = NavigatorContext.RESOLVED;
 			// cache the links
 			if (res.headers.link) {
-				self.links = Link.parseLinkHeader(res.headers.link);
+				self.links = res.headers.link;
 			} else {
 				self.links = self.links || []; // the resource doesn't give links -- cache an empty list so we dont keep trying during resolution
 			}
 			// pass it on
-			okCb.call(self, res);
 			return res;
 		});
 
@@ -1276,10 +1287,10 @@ if (typeof define !== "undefined") {
 				self.context.error        = err;
 			}
 			// pass it on
-			errCb.call(self, err);
+			return err;
 		});
 
-		return this;
+		return response;
 	};
 
 	// follows a link relation from our context, generating a new navigator
@@ -1321,7 +1332,7 @@ if (typeof define !== "undefined") {
 		if ((this.context.isResolved() === false && this.context.isAbsolute()) || (this.links === null)) {
 			// make a head request on ourselves first
 			// (the `request` function will resolve us on success and mark us bad on failure)
-			this.head(restartResolve, failResolve);
+			this.head().then(restartResolve).except(failResolve);
 			return resolvedPromise;
 		}
 
@@ -1375,18 +1386,27 @@ if (typeof define !== "undefined") {
 
 	// add navigator request sugars
 	NAV_REQUEST_FNS.forEach(function (m) {
-		Navigator.prototype[m] = function(req, okCb, errCb) {
-			// were we passed (okCb, errCb)?
-			if (typeof req === 'function') {
-				errCb = arguments[1];
-				okCb  = arguments[0];
-				req   = {};
-			}
-			req = req || {};
+		Navigator.prototype[m] = function(body, type, headers, options) {
+			var req = options || {};
+			req.headers = headers || {};
 			req.method = m;
-			return this.request(req, okCb, errCb);
+			req.headers['content-type'] = type || (typeof body == 'object' ? 'application/json' : 'text/plain');
+			req.body = body;
+			return this.request(req);
 		};
 	});
+
+	// add get* request sugars
+	for (var t in NAV_GET_TYPES) {
+		var mimetype = NAV_GET_TYPES[t];
+		Navigator.prototype['get'+t] = function(headers, options) {
+			var req = options || {};
+			req.headers = headers || {};
+			req.method = 'get';
+			req.headers.accept = mimetype;
+			return this.request(req);
+		};
+	}
 
 	// add navigator relation sugars
 	NAV_RELATION_FNS.forEach(function (r) {
