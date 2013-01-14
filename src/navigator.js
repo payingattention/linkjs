@@ -276,10 +276,11 @@
 
 	// add get* request sugars
 	for (var t in NAV_GET_TYPES) {
-		var mimetype = NAV_GET_TYPES[t];
-		Navigator.prototype['get'+t] = function(headers, options) {
-			return this.get(mimetype, headers, options);
-		};
+		(function(t, mimetype) {
+			Navigator.prototype['get'+t] = function(headers, options) {
+				return this.get(mimetype, headers, options);
+			};
+		})(t, NAV_GET_TYPES[t]);
 	}
 
 	// add navigator relation sugars
