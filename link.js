@@ -731,6 +731,7 @@ if (typeof define !== "undefined") {
 					resPromise.reject(new ResponseError(response));
 				} else {
 					// :TODO: protocol handling
+					resPromise.reject(new ResponseError(response));
 				}
 
 				// if streaming, do a write of the body now
@@ -869,6 +870,7 @@ if (typeof define !== "undefined") {
 			this.resPromise.reject(new ResponseError(this.clientResponse));
 		} else {
 			// :TODO: protocol handling
+			this.resPromise.reject(new ResponseError(this.clientResponse));
 		}
 	};
 
