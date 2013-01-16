@@ -6,16 +6,16 @@ var Link = {};// promises
 // ========
 // pfraze 2012
 
-var environment = {};
-if (typeof window !== "undefined") {
-	environment = window;
-} else if (typeof self !== "undefined") {
-	environment = self;
-} else if (typeof module !== "undefined") {
-	environment = module.exports;
-}
+(function () {
+	var exports = this;
+	if (typeof window !== "undefined") {
+		exports = window;
+	} else if (typeof self !== "undefined") {
+		exports = self;
+	} else if (typeof module !== "undefined") {
+		exports = module.exports;
+	}
 
-(function (exports) {
 	function passThrough(v) { return v; }
 
 	// Promise
@@ -169,11 +169,11 @@ if (typeof window !== "undefined") {
 
 	exports.Promise = Promise;
 	exports.promise = promise;
-})(environment);
+})();
 
 if (typeof define !== "undefined") {
 	define([], function() {
-		return environment;
+		return Promise;
 	});
 }// Helpers
 // =======
