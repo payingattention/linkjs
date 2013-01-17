@@ -16,7 +16,7 @@
 	}
 	ResponseError.prototype = new Error();
 
-	// request()
+	// dispatch()
 	// =========
 	// EXPORTED
 	// HTTP request dispatcher
@@ -30,7 +30,7 @@
 	//   - on success (status code 2xx), the promise is fulfilled with a `ClientResponse` object
 	//   - on failure (status code 4xx,5xx), the promise is rejected with a `ClientResponse` object
 	//   - all protocol (status code 1xx,3xx) is handled internally
-	function request(req) {
+	function dispatch(req) {
 		// sanity check
 		if (!req) { throw "no req param provided to request"; }
 
@@ -57,15 +57,15 @@
 		// execute according to protocol (asyncronously)
 		var resPromise = promise();
 		if (req.urld.protocol == 'httpl') {
-			setTimeout(function() { __requestLocal(req, resPromise); }, 0);
+			setTimeout(function() { __dispatchLocal(req, resPromise); }, 0);
 		} else {
-			setTimeout(function() { __requestRemote(req, resPromise); }, 0);
+			setTimeout(function() { __dispatchRemote(req, resPromise); }, 0);
 		}
 		return resPromise;
 	}
 
 	// executes a request locally
-	function __requestLocal(req, resPromise) {
+	function __dispatchLocal(req, resPromise) {
 
 		// find the local server
 		var server = httpl_registry[req.urld.host];
@@ -100,7 +100,7 @@
 	}
 
 	// executes a request remotely
-	function __requestRemote(req, resPromise) {
+	function __dispatchRemote(req, resPromise) {
 
 		// if a query was given in the options, mix it into the urld
 		if (req.query) {
@@ -117,15 +117,15 @@
 		}
 
 		if (typeof window != 'undefined') {
-			__requestRemoteBrowser(req, resPromise);
+			__dispatchRemoteBrowser(req, resPromise);
 		} else {
-			__requestRemoteNodejs(req, resPromise);
+			__dispatchRemoteNodejs(req, resPromise);
 		}
 	}
 
 	// executes a remote request in the browser
 	// :TODO: streaming
-	function __requestRemoteBrowser(req, resPromise) {
+	function __dispatchRemoteBrowser(req, resPromise) {
 
 		// assemble the final url
 		var url = (req.urld.protocol || 'http') + '://' + req.urld.authority + req.urld.relative;
@@ -192,8 +192,8 @@
 	}
 
 	// executes a remote request in a nodejs process
-	function __requestRemoteNodejs(req, resPromise) {
-		var res = new ClientResponse(0, 'request() has not yet been implemented for nodejs');
+	function __dispatchRemoteNodejs(req, resPromise) {
+		var res = new ClientResponse(0, 'dispatch() has not yet been implemented for nodejs');
 		resPromise.reject(res);
 		res.end();
 	}
@@ -378,7 +378,7 @@
 	}
 
 	exports.ResponseError        = ResponseError;
-	exports.request              = request;
+	exports.dispatch             = dispatch;
 	exports.registerLocal        = registerLocal;
 	exports.unregisterLocal      = unregisterLocal;
 	exports.getLocal             = getLocal;

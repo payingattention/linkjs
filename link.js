@@ -570,7 +570,7 @@ if (typeof define !== "undefined") {
 	}
 	ResponseError.prototype = new Error();
 
-	// request()
+	// dispatch()
 	// =========
 	// EXPORTED
 	// HTTP request dispatcher
@@ -584,7 +584,7 @@ if (typeof define !== "undefined") {
 	//   - on success (status code 2xx), the promise is fulfilled with a `ClientResponse` object
 	//   - on failure (status code 4xx,5xx), the promise is rejected with a `ClientResponse` object
 	//   - all protocol (status code 1xx,3xx) is handled internally
-	function request(req) {
+	function dispatch(req) {
 		// sanity check
 		if (!req) { throw "no req param provided to request"; }
 
@@ -611,15 +611,15 @@ if (typeof define !== "undefined") {
 		// execute according to protocol (asyncronously)
 		var resPromise = promise();
 		if (req.urld.protocol == 'httpl') {
-			setTimeout(function() { __requestLocal(req, resPromise); }, 0);
+			setTimeout(function() { __dispatchLocal(req, resPromise); }, 0);
 		} else {
-			setTimeout(function() { __requestRemote(req, resPromise); }, 0);
+			setTimeout(function() { __dispatchRemote(req, resPromise); }, 0);
 		}
 		return resPromise;
 	}
 
 	// executes a request locally
-	function __requestLocal(req, resPromise) {
+	function __dispatchLocal(req, resPromise) {
 
 		// find the local server
 		var server = httpl_registry[req.urld.host];
@@ -654,7 +654,7 @@ if (typeof define !== "undefined") {
 	}
 
 	// executes a request remotely
-	function __requestRemote(req, resPromise) {
+	function __dispatchRemote(req, resPromise) {
 
 		// if a query was given in the options, mix it into the urld
 		if (req.query) {
@@ -671,15 +671,15 @@ if (typeof define !== "undefined") {
 		}
 
 		if (typeof window != 'undefined') {
-			__requestRemoteBrowser(req, resPromise);
+			__dispatchRemoteBrowser(req, resPromise);
 		} else {
-			__requestRemoteNodejs(req, resPromise);
+			__dispatchRemoteNodejs(req, resPromise);
 		}
 	}
 
 	// executes a remote request in the browser
 	// :TODO: streaming
-	function __requestRemoteBrowser(req, resPromise) {
+	function __dispatchRemoteBrowser(req, resPromise) {
 
 		// assemble the final url
 		var url = (req.urld.protocol || 'http') + '://' + req.urld.authority + req.urld.relative;
@@ -746,8 +746,8 @@ if (typeof define !== "undefined") {
 	}
 
 	// executes a remote request in a nodejs process
-	function __requestRemoteNodejs(req, resPromise) {
-		var res = new ClientResponse(0, 'request() has not yet been implemented for nodejs');
+	function __dispatchRemoteNodejs(req, resPromise) {
+		var res = new ClientResponse(0, 'dispatch() has not yet been implemented for nodejs');
 		resPromise.reject(res);
 		res.end();
 	}
@@ -932,7 +932,7 @@ if (typeof define !== "undefined") {
 	}
 
 	exports.ResponseError        = ResponseError;
-	exports.request              = request;
+	exports.dispatch             = dispatch;
 	exports.registerLocal        = registerLocal;
 	exports.unregisterLocal      = unregisterLocal;
 	exports.getLocal             = getLocal;
@@ -992,7 +992,7 @@ if (typeof define !== "undefined") {
 	function __subscribeLocal(req) {
 
 		// initiate the event stream
-		var stream = new LocalEventStream(Link.request({
+		var stream = new LocalEventStream(Link.dispatch({
 			method  : 'get',
 			url     : 'httpl://' + req.urld.authority + req.urld.relative,
 			headers : { accept : 'text/event-stream' },
@@ -1242,7 +1242,7 @@ if (typeof define !== "undefined") {
 	}
 
 	// executes an HTTP request to our context
-	Navigator.prototype.request = function Navigator__request(req) {
+	Navigator.prototype.dispatch = function Navigator__dispatch(req) {
 		if (!req || !req.method) { throw "request options not provided"; }
 		var self = this;
 
@@ -1256,7 +1256,7 @@ if (typeof define !== "undefined") {
 			// yes, ask our parent to resolve us
 			var resPromise = promise();
 			this.parentNavigator.__resolve(this)
-				.then(function() { self.request(req).chain(resPromise); }) // we're resolved, start over
+				.then(function() { self.dispatch(req).chain(resPromise); }) // we're resolved, start over
 				.except(function() { resPromise.reject(self.context.error); }); // failure, pass on
 			return resPromise;
 		}
@@ -1264,7 +1264,7 @@ if (typeof define !== "undefined") {
 
 		// make http request
 		req.url = this.context.getUrl();
-		var response = promise(Link.request(req));
+		var response = promise(Link.dispatch(req));
 
 		// successful request
 		response.then(function(res) {
@@ -1386,7 +1386,7 @@ if (typeof define !== "undefined") {
 		return null;
 	};
 
-	// add navigator request sugars
+	// add navigator dispatch sugars
 	NAV_REQUEST_FNS.forEach(function (m) {
 		Navigator.prototype[m] = function(body, type, headers, options) {
 			var req = options || {};
@@ -1394,7 +1394,7 @@ if (typeof define !== "undefined") {
 			req.method = m;
 			req.headers['content-type'] = type || (typeof body == 'object' ? 'application/json' : 'text/plain');
 			req.body = body;
-			return this.request(req);
+			return this.dispatch(req);
 		};
 	});
 
@@ -1404,7 +1404,7 @@ if (typeof define !== "undefined") {
 		req.headers = headers || {};
 		req.method = 'get';
 		req.headers.accept = type;
-		return this.request(req);
+		return this.dispatch(req);
 	};
 
 	// add get* request sugars

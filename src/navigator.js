@@ -109,7 +109,7 @@
 	}
 
 	// executes an HTTP request to our context
-	Navigator.prototype.request = function Navigator__request(req) {
+	Navigator.prototype.dispatch = function Navigator__dispatch(req) {
 		if (!req || !req.method) { throw "request options not provided"; }
 		var self = this;
 
@@ -123,7 +123,7 @@
 			// yes, ask our parent to resolve us
 			var resPromise = promise();
 			this.parentNavigator.__resolve(this)
-				.then(function() { self.request(req).chain(resPromise); }) // we're resolved, start over
+				.then(function() { self.dispatch(req).chain(resPromise); }) // we're resolved, start over
 				.except(function() { resPromise.reject(self.context.error); }); // failure, pass on
 			return resPromise;
 		}
@@ -131,7 +131,7 @@
 
 		// make http request
 		req.url = this.context.getUrl();
-		var response = promise(Link.request(req));
+		var response = promise(Link.dispatch(req));
 
 		// successful request
 		response.then(function(res) {
@@ -253,7 +253,7 @@
 		return null;
 	};
 
-	// add navigator request sugars
+	// add navigator dispatch sugars
 	NAV_REQUEST_FNS.forEach(function (m) {
 		Navigator.prototype[m] = function(body, type, headers, options) {
 			var req = options || {};
@@ -261,7 +261,7 @@
 			req.method = m;
 			req.headers['content-type'] = type || (typeof body == 'object' ? 'application/json' : 'text/plain');
 			req.body = body;
-			return this.request(req);
+			return this.dispatch(req);
 		};
 	});
 
@@ -271,7 +271,7 @@
 		req.headers = headers || {};
 		req.method = 'get';
 		req.headers.accept = type;
-		return this.request(req);
+		return this.dispatch(req);
 	};
 
 	// add get* request sugars

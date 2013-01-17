@@ -38,7 +38,7 @@ From a client:
 
 ```javascript
 // dispatch a GET request
-Link.request({ method:'get', url:'httpl://localserver.api', accept:'text/html' })
+Link.dispatch({ method:'get', url:'httpl://localserver.api', accept:'text/html' })
 	// responses are handled via promises:
 	.then(function(response) {
 		myDiv.innerHTML = response.body;

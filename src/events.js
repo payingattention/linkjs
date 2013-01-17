@@ -50,7 +50,7 @@
 	function __subscribeLocal(req) {
 
 		// initiate the event stream
-		var stream = new LocalEventStream(Link.request({
+		var stream = new LocalEventStream(Link.dispatch({
 			method  : 'get',
 			url     : 'httpl://' + req.urld.authority + req.urld.relative,
 			headers : { accept : 'text/event-stream' },
