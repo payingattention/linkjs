@@ -168,6 +168,7 @@
 			linkStr.trim().split(';').forEach(function(attrStr) {
 				// ['</foo/bar>', 'rel="baz"', 'title="blah"']
 				attrStr = attrStr.trim();
+				if (!attrStr) { return; }
 				if (attrStr.charAt(0) === '<') {
 					// '</foo/bar>'
 					link.href = attrStr.trim().slice(1, -1);
@@ -310,14 +311,14 @@
 			try {
 				return JSON.stringify(obj);
 			} catch (e) {
-				return '';
+				return e.message;
 			}
 		},
 		function (str) {
 			try {
 				return JSON.parse(str);
 			} catch (e) {
-				return null;
+				return e.message;
 			}
 		}
 	);
