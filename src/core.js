@@ -127,7 +127,7 @@
 	function __dispatchRemoteBrowser(req, resPromise) {
 
 		// assemble the final url
-		var url = (req.urld.protocol || 'http') + '://' + req.urld.authority + req.urld.relative;
+		var url = ((req.urld.protocol) ? (req.urld.protocol + '://') : '') + req.urld.authority + req.urld.relative;
 
 		// make sure our payload is serialized
 		req.headers = Link.headerer(req.headers).serialize();
