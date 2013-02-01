@@ -36,6 +36,7 @@
 
 		// sane defaults
 		req.headers = req.headers || {};
+		req.query = req.query || {};
 
 		// dispatch behavior override
 		// (used by workers to send requests to the parent document for routing)
@@ -58,8 +59,10 @@
 		var resPromise = promise();
 		if (req.urld.protocol == 'httpl') {
 			setTimeout(function() { __dispatchLocal(req, resPromise); }, 0);
-		} else {
+		} else if (req.urld.protocol == 'http' || req.urld.protocol == 'https') {
 			setTimeout(function() { __dispatchRemote(req, resPromise); }, 0);
+		} else {
+			resPromise.fulfill(new ResponseError({ status:0, reason:'invalid protocol' }));
 		}
 		return resPromise;
 	}
