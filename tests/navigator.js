@@ -28,7 +28,7 @@ success
     link: [
       {href: "/", rel: "up via service"},
       {href: "/foo", rel: "self current"},
-      {href: "/foo/{item}", rel: "item"}
+      {href: "/foo/{title}", rel: "item"}
     ]
   },
   isConnOpen: true,
@@ -84,7 +84,7 @@ success
     link: [
       {href: "/", rel: "up via service"},
       {href: "/foo", rel: "self current"},
-      {href: "/foo/{item}", rel: "item"}
+      {href: "/foo/{title}", rel: "item"}
     ]
   },
   isConnOpen: true,
@@ -118,7 +118,7 @@ success
     link: [
       {href: "/", rel: "up via service"},
       {href: "/foo", rel: "self current"},
-      {href: "/foo/{item}", rel: "item"}
+      {href: "/foo/{title}", rel: "item"}
     ]
   },
   isConnOpen: true,
@@ -180,7 +180,7 @@ success
     link: [
       {href: "/", rel: "up via service"},
       {href: "/foo", rel: "self current"},
-      {href: "/foo/{item}", rel: "item"}
+      {href: "/foo/{title}", rel: "item"}
     ]
   },
   isConnOpen: true,
@@ -191,16 +191,16 @@ success
 [
 string
 connection open
-["bar"
+"bar"
 string
 connection open
-["bar","baz"
+,"baz"
 string
 connection open
-["bar","baz","blah"
+,"blah"
 string
 connection open
-["bar","baz","blah"]
+]
 string
 connection open
 connection closed

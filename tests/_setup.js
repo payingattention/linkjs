@@ -32,7 +32,7 @@ Link.registerLocal('test.com', function(request, response) {
 		linkHeader = [
 			{ rel:'self current', href:'/' },
 			{ rel:'collection', href:'/foo', title:'foo' },
-			{ rel:'collection', href:'/{collection}' }
+			{ rel:'collection', href:'/{title}' }
 		];
 		response.writeHead(200, 'ok', { 'content-type':'text/plain', 'link':linkHeader });
 		response.end(payload);
@@ -44,7 +44,7 @@ Link.registerLocal('test.com', function(request, response) {
 		linkHeader = [
 			{ rel:'up via service', href:'/' },
 			{ rel:'self current', href:'/foo' },
-			{ rel:'item', href:'/foo/{item}' }
+			{ rel:'item', href:'/foo/{title}' }
 		];
 		response.writeHead(200, 'ok', { 'content-type':'application/json', 'link':linkHeader });
 		// so we can experiment with streaming, write the json in bits:

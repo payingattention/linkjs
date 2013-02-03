@@ -185,6 +185,38 @@
 	};
 
 	// EXPORTED
+	// looks up a link in the cache and generates the URI
+	//  - first looks for a matching rel and title
+	//    eg lookupLink(links, 'item', 'foobar'), Link: <http://example.com/some/foobar>; rel="item"; title="foobar" -> http://example.com/some/foobar
+	//  - then looks for a matching rel with no title and uses that to generate the link
+	//    eg lookupLink(links, 'item', 'foobar'), Link: <http://example.com/some/{title}>; rel="item" -> http://example.com/some/foobar
+	exports.lookupLink = function(links, rel, title) {
+		title = title.toLowerCase();
+
+		// try to find the link with a title equal to the param we were given
+		var match = null;
+		for (var i=0, ii=links.length; i < ii; i++) {
+			var link = links[i];
+			if (!link) { continue; }
+			// find all links with a matching rel
+			if (link.rel && link.rel.indexOf(rel) !== -1) {
+				// look for a title match to the primary parameter
+				if (link.title) {
+					if (link.title.toLowerCase() === title) {
+						match = link;
+						break;
+					}
+				} else {
+					// no title attribute -- it's the template URI, so hold onto it
+					match = link;
+				}
+			}
+		}
+		
+		return match;
+	};
+
+	// EXPORTED
 	// correctly joins together to url segments
 	exports.joinUrl = function() {
 		var parts = Array.prototype.map.call(arguments, function(arg) {

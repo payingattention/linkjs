@@ -19,7 +19,7 @@ success
     link: [
       {href: "/", rel: "self current"},
       {href: "/foo", rel: "collection", title: "foo"},
-      {href: "/{collection}", rel: "collection"}
+      {href: "/{title}", rel: "collection"}
     ]
   },
   isConnOpen: true,
@@ -61,7 +61,7 @@ success
     link: [
       {href: "/", rel: "self current"},
       {href: "/foo", rel: "collection", title: "foo"},
-      {href: "/{collection}", rel: "collection"}
+      {href: "/{title}", rel: "collection"}
     ]
   },
   isConnOpen: true,
