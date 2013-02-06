@@ -191,11 +191,14 @@
 	//  - then looks for a matching rel with no title and uses that to generate the link
 	//    eg lookupLink(links, 'item', 'foobar'), Link: <http://example.com/some/{title}>; rel="item" -> http://example.com/some/foobar
 	exports.lookupLink = function(links, rel, title) {
+		var len = links ? links.length : 0;
+		if (!len) { return null; }
+
 		title = title.toLowerCase();
 
 		// try to find the link with a title equal to the param we were given
 		var match = null;
-		for (var i=0, ii=links.length; i < ii; i++) {
+		for (var i=0; i < len; i++) {
 			var link = links[i];
 			if (!link) { continue; }
 			// find all links with a matching rel
@@ -213,7 +216,7 @@
 			}
 		}
 		
-		return match;
+		return match ? match.href : null;
 	};
 
 	// EXPORTED

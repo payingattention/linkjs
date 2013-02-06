@@ -227,10 +227,10 @@
 	//    eg item('foobar') -> Link: <http://example.com/some/{item}>; rel="item" -> http://example.com/some/foobar
 	Navigator.prototype.__lookupLink = function Navigator__lookupLink(context) {
 		// try to find the link with a title equal to the param we were given
-		var match = Link.lookupLink(this.links, context.rel, context.relparams.title);
+		var href = Link.lookupLink(this.links, context.rel, context.relparams.title);
 		
-		if (match) {
-			var url = Link.UriTemplate.parse(match.href).expand(context.relparams);
+		if (href) {
+			var url = Link.UriTemplate.parse(href).expand(context.relparams);
 			var urld = Link.parseUri(url);
 			if (!urld.host) { // handle relative URLs
 				url = this.context.getHost() + urld.relative;
