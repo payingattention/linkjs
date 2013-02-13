@@ -62,7 +62,7 @@
 		} else if (req.urld.protocol == 'http' || req.urld.protocol == 'https') {
 			setTimeout(function() { __dispatchRemote(req, resPromise); }, 0);
 		} else {
-			resPromise.fulfill(new ResponseError({ status:0, reason:'invalid protocol' }));
+			resPromise.fulfill(new ResponseError({ status:0, reason:'unsupported protocol "'+req.urld.protocol+'"' }));
 		}
 		return resPromise;
 	}
@@ -173,8 +173,10 @@
 					// fulfill ahead of final response
 					if (clientResponse.status >= 200 && clientResponse.status < 300) {
 						resPromise.fulfill(clientResponse);
-					} else if (clientResponse.status >= 400 && clientResponse.status < 600 || !clientResponse.status) {
+					} else if (clientResponse.status >= 400 && clientResponse.status < 600) {
 						resPromise.reject(new ResponseError(clientResponse));
+					} else if (clientResponse.status === 0) {
+						resPromise.reject(new ResponseError({ code:0, reason:'Remote connection refused by the host' }));
 					} else {
 						// :TODO: protocol handling
 						resPromise.reject(new ResponseError(clientResponse));
@@ -207,8 +209,10 @@
 					// fulfill after final response
 					if (clientResponse.status >= 200 && clientResponse.status < 300) {
 						resPromise.fulfill(clientResponse);
-					} else if (clientResponse.status >= 400 && clientResponse.status < 600 || !clientResponse.status) {
+					} else if (clientResponse.status >= 400 && clientResponse.status < 600) {
 						resPromise.reject(new ResponseError(clientResponse));
+					} else if (clientResponse.status === 0) {
+						resPromise.reject(new ResponseError({ code:0, reason:'Remote connection refused by the host' }));
 					} else {
 						// :TODO: protocol handling
 						resPromise.reject(new ResponseError(clientResponse));
