@@ -1440,6 +1440,7 @@ if (typeof define !== "undefined") {
 			}
 			return url;
 		}
+		console.log('Failed to find a link to resolve context', context, this);
 		return null;
 	};
 
