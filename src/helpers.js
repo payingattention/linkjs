@@ -162,7 +162,7 @@
 			return headerStr;
 		}
 		// '</foo/bar>; rel="baz"; title="blah", </foo/bar>; rel="baz"; title="blah", </foo/bar>; rel="baz"; title="blah"'
-		return headerStr.split(',').map(function(linkStr) {
+		return headerStr.replace(/,[\s]*</g, '|||<').split('|||').map(function(linkStr) {
 			// ['</foo/bar>; rel="baz"; title="blah"', '</foo/bar>; rel="baz"; title="blah"']
 			var link = {};
 			linkStr.trim().split(';').forEach(function(attrStr) {
