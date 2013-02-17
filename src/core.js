@@ -55,6 +55,12 @@
 			throw "no URL or host/path provided in request";
 		}
 
+		// prepend host on relative path
+		if (!req.urld.protocol) {
+			req.url = window.location.origin + req.url;
+			req.urld = Link.parseUri(req.url);
+		}
+
 		// execute according to protocol (asyncronously)
 		var resPromise = promise();
 		if (req.urld.protocol == 'httpl') {
