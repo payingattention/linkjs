@@ -57,7 +57,7 @@
 
 		// prepend host on relative path
 		if (!req.urld.protocol) {
-			req.url = window.location.origin + req.url;
+			req.url = window.location.protocol + "//" + window.location.host + req.url;
 			req.urld = Link.parseUri(req.url);
 		}
 
