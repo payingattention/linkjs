@@ -78,4 +78,4 @@ me.get(function(res) {
 
 ## Further Documentation
 
-...is forthcoming.
+Can be found at [http://grimwire.com/local/docs.html#lib/linkjs.md](http://grimwire.com/local/docs.html#lib/linkjs.md)
